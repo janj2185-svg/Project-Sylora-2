@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Sylora">
+  <defs>
+    <linearGradient id="a" x1="20" y1="18" x2="138" y2="142" gradientUnits="userSpaceOnUse"><stop stop-color="#ffe6aa"/><stop offset=".24" stop-color="#d39a3d"/><stop offset=".47" stop-color="#b89aef"/><stop offset=".7" stop-color="#72d7db"/><stop offset=".88" stop-color="#8c70dc"/><stop offset="1" stop-color="#f1b66f"/></linearGradient>
+    <linearGradient id="b" x1="124" y1="18" x2="30" y2="142" gradientUnits="userSpaceOnUse"><stop stop-color="#fff8dd"/><stop offset=".28" stop-color="#eeae61"/><stop offset=".54" stop-color="#7bd6d4"/><stop offset=".78" stop-color="#8165d5"/><stop offset="1" stop-color="#f4caca"/></linearGradient>
+    <radialGradient id="p"><stop stop-color="#fff"/><stop offset=".55" stop-color="#fffaf2"/><stop offset="1" stop-color="#f8eef9"/></radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="x"/><feColorMatrix in="x" values="1 0 0 0 .3 0 1 0 0 .15 0 0 1 0 .45 0 0 0 .45 0"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <circle cx="80" cy="80" r="71" fill="url(#p)" stroke="#eacb91" stroke-opacity=".38"/>
+  <circle cx="80" cy="80" r="62" fill="none" stroke="url(#a)" stroke-opacity=".25" stroke-width="2"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
+    <path d="M121 43C99 24 59 27 42 48 26 68 43 82 67 86l21 4c17 3 20 15 10 23-14 12-45 7-60-8" stroke="url(#a)" stroke-width="14"/>
+    <path d="M39 117c22 19 62 16 79-5 16-20-1-34-25-38l-21-4c-17-3-20-15-10-23 14-12 45-7 60 8" stroke="url(#b)" stroke-width="8"/>
+    <path d="M47 43c18-13 46-17 68-3" stroke="#fff" stroke-opacity=".78" stroke-width="2.4"/>
+    <path d="M45 117c19 13 48 15 68 1" stroke="#fff" stroke-opacity=".68" stroke-width="2"/>
+  </g>
+  <circle cx="123" cy="43" r="3" fill="#fff7cc"/><path d="M25 80h10M30 75v10" stroke="#e8b960" stroke-linecap="round" opacity=".85"/>
+</svg>

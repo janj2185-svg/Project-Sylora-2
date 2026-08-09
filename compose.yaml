@@ -1,0 +1,54 @@
+services:
+  sylora:
+    build: .
+    ports: ["8787:8787"]
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      PORT: 8787
+      NODE_ENV: production
+      SYLORA_DATA_FILE: /app/data/sylora.json
+      DATABASE_URL: postgresql://sylora:${POSTGRES_PASSWORD:-sylora_dev_only}@postgres:5432/sylora
+      REDIS_URL: redis://redis:6379
+    command: ["sh", "-c", "node scripts/migrate.mjs && node src/server.mjs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - sylora-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: sylora
+      POSTGRES_USER: sylora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sylora_dev_only}
+    volumes:
+      - sylora-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sylora -d sylora"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - sylora-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  sylora-data:
+  sylora-postgres:
+  sylora-redis:
