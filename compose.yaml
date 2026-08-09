@@ -1,7 +1,7 @@
 services:
   sylora:
     build: .
-    ports: ["8787:8787"]
+    ports: ["127.0.0.1:8787:8787"]
     env_file:
       - path: .env.local
         required: false
