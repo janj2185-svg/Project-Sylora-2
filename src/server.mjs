@@ -432,7 +432,7 @@ function staticFile(req, res, url) {
 }
 
 export const server = http.createServer(async (req, res) => {
-  try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED'}); await api(req,res,url); } else staticFile(req,res,url); }
+  try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED'}); await api(req,res,url); } else staticFile(req,res,url); }
   catch (e) { console.error(e); if (!res.headersSent) json(res, e.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: e.message || 'BAD_REQUEST' }); else res.end(); }
 });
 
