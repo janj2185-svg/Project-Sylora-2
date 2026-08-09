@@ -7,6 +7,7 @@ COPY src ./src
 COPY public ./public
 COPY scripts ./scripts
 COPY infra ./infra
+COPY tests ./tests
 RUN mkdir -p data
 ENV PORT=8787
 EXPOSE 8787
