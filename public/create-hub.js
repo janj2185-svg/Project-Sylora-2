@@ -8,7 +8,7 @@ export function createHubActions({authed,canLive=true,canStudio=true}={}){
     {id:'project',labelKey:'createProject',view:'business',needsAuth:true,enabled:authed,intent:'project'},
     {id:'community',labelKey:'createCommunity',view:'communities',needsAuth:true,enabled:authed},
     {id:'course',labelKey:'createCourse',view:'learning',needsAuth:true,enabled:authed},
-    {id:'event',labelKey:'createEvent',view:'live',needsAuth:true,enabled:false,reason:'comingSoon'},
+    {id:'event',labelKey:'createEvent',view:'live',needsAuth:true,enabled:authed,intent:'event'},
     {id:'studio',labelKey:'studio',view:'studio',needsAuth:true,enabled:authed&&canStudio}
   ];
 }

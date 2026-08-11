@@ -22,13 +22,13 @@ test('i18n covers priority UI locales and humanError hides provider codes', asyn
   assert.ok(mod.PRIORITY_VOICE_LOCALES.includes('uk'));
 });
 
-test('create hub is permission-aware and does not invent dead event destinations as enabled', () => {
+test('create hub is permission-aware; events are wired when authenticated', () => {
   const guest = createHubActions({ authed: false });
   assert.ok(guest.every(a => !a.enabled || !a.needsAuth));
   const user = createHubActions({ authed: true });
   assert.ok(user.find(a => a.id === 'post')?.enabled);
-  assert.equal(user.find(a => a.id === 'event')?.enabled, false);
-  assert.equal(user.find(a => a.id === 'event')?.reason, 'comingSoon');
+  assert.equal(user.find(a => a.id === 'event')?.enabled, true);
+  assert.equal(user.find(a => a.id === 'event')?.intent, 'event');
 });
 
 test('shell IA: Inbox+Profile dock, gifts off primary, create hub CSS linked', () => {

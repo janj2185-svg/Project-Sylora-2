@@ -1,8 +1,10 @@
 import { ACTION_LEVELS, assertActionLevel, criticalActionRequiresConfirmation } from './permissions.mjs';
+import { getTool, TOOL_CATALOG } from './sylora-tools.mjs';
 
 /**
  * Universal AI Action Engine.
  * Every action records actor, agent, permission, confirmation, result, audit.
+ * Tools never receive raw DB handles — callers execute via typed service methods.
  */
 export function createActionRecord({
   id,
@@ -15,14 +17,18 @@ export function createActionRecord({
   permission = null,
   context = 'command_center'
 }) {
-  const needsConfirmation = level !== ACTION_LEVELS.EXECUTE_ALLOWED || criticalActionRequiresConfirmation(type);
+  const tool = getTool(type);
+  const effectiveLevel = tool?.level || level;
+  const needsConfirmation = effectiveLevel !== ACTION_LEVELS.EXECUTE_ALLOWED || criticalActionRequiresConfirmation(type);
   return {
     id,
     userId,
     agentId,
     actorType,
     type,
-    level,
+    level: effectiveLevel,
+    toolClass: tool?.class || 'CUSTOM',
+    schema: tool?.schema || null,
     input,
     output: null,
     permission,
@@ -32,9 +38,23 @@ export function createActionRecord({
     confirmedAt: null,
     result: null,
     error: null,
+    auditTrail: [{ at: new Date().toISOString(), event: 'proposed' }],
     createdAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString()
   };
+}
+
+export function validateToolInput(type, input = {}) {
+  const tool = getTool(type);
+  if (!tool) return { ok: false, error: 'UNKNOWN_TOOL' };
+  const errors = [];
+  for (const [key, kind] of Object.entries(tool.schema || {})) {
+    const val = input[key];
+    if (val == null || val === '') continue;
+    if (kind === 'string' && typeof val !== 'string') errors.push(`${key}:string`);
+  }
+  if (errors.length) return { ok: false, error: 'VALIDATION_FAILED', errors };
+  return { ok: true, tool };
 }
 
 export function canExecute(action, grantedLevel) {
@@ -50,19 +70,26 @@ export function canExecute(action, grantedLevel) {
 }
 
 export function markConfirmed(action, at = new Date().toISOString()) {
-  return { ...action, status: 'confirmed', confirmedAt: at };
+  const trail = [...(action.auditTrail || []), { at, event: 'confirmed' }];
+  return { ...action, status: 'confirmed', confirmedAt: at, auditTrail: trail };
 }
 
 export function markCompleted(action, result = {}, at = new Date().toISOString()) {
-  return { ...action, status: 'completed', result, output: result, completedAt: at, error: null };
+  const trail = [...(action.auditTrail || []), { at, event: 'completed' }];
+  return { ...action, status: 'completed', result, output: result, completedAt: at, error: null, auditTrail: trail };
 }
 
 export function markFailed(action, error) {
-  return { ...action, status: 'failed', error: String(error || 'ACTION_FAILED') };
+  const at = new Date().toISOString();
+  const trail = [...(action.auditTrail || []), { at, event: 'failed', error: String(error || 'ACTION_FAILED') }];
+  return { ...action, status: 'failed', error: String(error || 'ACTION_FAILED'), auditTrail: trail };
 }
 
 export const BUILTIN_ACTIONS = Object.freeze([
+  ...TOOL_CATALOG.map(t => t.name),
   'create', 'search', 'analyze', 'schedule', 'send', 'publish', 'prepare',
   'translate', 'moderate', 'generate', 'update', 'notify', 'control_live',
-  'remember', 'export_memory', 'install_agent'
+  'remember', 'export_memory', 'install_agent', 'prepare_content_pack'
 ]);
+
+export { TOOL_CATALOG };

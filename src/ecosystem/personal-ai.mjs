@@ -42,7 +42,8 @@ export function classifyMemoryTier(input = {}) {
   return tier;
 }
 
-export function createMemoryRecord({ id, userId, agentId, label, value, tier = 'long', source = 'user', contextSources = [] }) {
+export function createMemoryRecord({ id, userId, agentId, label, value, tier = 'long', source = 'user', contextSources = [], category = 'preferences' }) {
+  const allowed = ['conversation', 'preferences', 'people', 'projects', 'professional', 'learning'];
   return {
     id,
     userId,
@@ -50,6 +51,7 @@ export function createMemoryRecord({ id, userId, agentId, label, value, tier = '
     label: String(label || '').slice(0, 80),
     value: String(value || '').slice(0, 2000),
     tier: classifyMemoryTier({ tier }),
+    category: allowed.includes(category) ? category : 'preferences',
     source,
     contextSources,
     createdAt: new Date().toISOString()

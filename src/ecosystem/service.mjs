@@ -2,7 +2,7 @@ import { createPersonalAgent, createActivityEntry, permissionDashboard, contextR
 import { mergeAiPermissions as mergePerms, ACTION_LEVELS, DEFAULT_AI_PERMISSIONS } from './permissions.mjs';
 import { defaultIdentity, patchIdentity, publicIdentityView } from './identity.mjs';
 import { createNode, createEdge, visibleNodes, graphSummary, KG_NODE_TYPES, KG_EDGE_TYPES } from './knowledge-graph.mjs';
-import { createActionRecord, canExecute, markConfirmed, markCompleted, BUILTIN_ACTIONS } from './action-engine.mjs';
+import { createActionRecord, canExecute, markConfirmed, markCompleted, markFailed, validateToolInput, BUILTIN_ACTIONS } from './action-engine.mjs';
 import { createAgentManifest, installRecord, STARTER_CATALOG } from './agents.mjs';
 import { createDeveloperApp, generateApiKey, createApiKeyRecord, hashApiKey, OAUTH_DOC, scopeAllows } from './developer-platform.mjs';
 import { createTranslationJob, localDetectLanguage, localTranslateStub, VOICE_POLICY } from './translation.mjs';
@@ -10,7 +10,7 @@ import { createOrganization, createMembership, rbacAllows, defaultEnterpriseCont
 import { emptyReputation, applyEvidence, openDispute } from './reputation.mjs';
 import { createProvenance, createSecurityCenterView, privacyRequest } from './trust.mjs';
 import { createCommerceItem, sandboxCheckout } from './commerce.mjs';
-import { structuredSearch, planAiSearch } from './search.mjs';
+import { structuredSearch, planAiSearch, semanticSearchFallback } from './search.mjs';
 import { createMetricsRegistry, aiUsageEvent } from './observability.mjs';
 import { defaultUserBudget, consume } from './cost-control.mjs';
 import { defaultRevenueShares } from './economy.mjs';
@@ -34,6 +34,11 @@ import {
   adaptiveLearningState,
   homeHubPayload
 } from './domain-intelligence.mjs';
+import { buildCommandPlan, buildPlatformStatus, MEMORY_CATEGORIES, honestyLabel, modelRouteFor } from './platform-core.mjs';
+import { resolveFlags } from './feature-flags.mjs';
+import { providerSnapshot } from './providers.mjs';
+import { listSpacesForUser, getSpace, SPACE_CAPABILITIES } from './spaces.mjs';
+import { getTool } from './sylora-tools.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -65,6 +70,19 @@ function ensureCollections(store) {
   d.aiBudgets ||= [];
   d.aiUsage ||= [];
   d.studioAiPlans ||= [];
+  d.platformEvents ||= [];
+  d.calendarItems ||= [];
+  d.projects ||= [];
+  d.projectMembers ||= [];
+  d.projectTasks ||= [];
+  d.projectMilestones ||= [];
+  d.collaborativeDocuments ||= [];
+  d.contentAttributions ||= [];
+  d.verificationRequests ||= [];
+  d.featureFlagOverrides ||= [];
+  d.continuitySessions ||= [];
+  d.smartNotificationBundles ||= [];
+  d.toolAudit ||= [];
   d.audit ||= d.audit || [];
 }
 
@@ -269,17 +287,31 @@ export class EcosystemService {
   // —— Action Engine ——
   proposeAction(user, input) {
     const agent = this.ensurePersonalAgent(user);
+    if (agent.privacyControls?.aiActions === false) {
+      throw new Error('AI_ACTIONS_DISABLED');
+    }
+    const type = input.type;
+    const toolCheck = getTool(type) ? validateToolInput(type, input.input || {}) : { ok: true };
+    if (!toolCheck.ok) throw new Error(toolCheck.error || 'VALIDATION_FAILED');
     const action = createActionRecord({
       id: this.store.id(),
       userId: user.id,
       agentId: agent.id,
-      type: input.type,
+      type,
       level: input.level || ACTION_LEVELS.REQUEST_CONFIRMATION,
       input: input.input || {},
       permission: input.permission || null,
       context: input.context || 'command_center'
     });
     this.store.data.ecosystemActions.push(action);
+    this.store.data.toolAudit.unshift({
+      id: this.store.id(),
+      userId: user.id,
+      tool: type,
+      event: 'proposed',
+      inputKeys: Object.keys(action.input || {}),
+      createdAt: this.store.now()
+    });
     this.store.save();
     this.recordActivity(user, {
       kind: 'action_proposed',
@@ -291,21 +323,585 @@ export class EcosystemService {
     return action;
   }
 
+  /** Execute a confirmed tool against store APIs (no raw DB for AI). */
+  executeTool(user, type, input = {}) {
+    ensureCollections(this.store);
+    const budget = this.consumeBudget(user, 'aiRequests', 1);
+    if (!budget.ok) return { ok: false, error: budget.error };
+
+    switch (type) {
+      case 'search_platform':
+      case 'search_people': {
+        const collections = this._searchCollections(user);
+        const out = type === 'search_people'
+          ? { ...structuredSearch(input.q || '', { users: collections.users }), filtered: 'people' }
+          : this.universalSearch(user, input.q || '');
+        return { ok: true, result: out };
+      }
+      case 'manage_notifications': {
+        const notes = (this.store.data.notifications || []).filter(n => n.userId === user.id && !n.read);
+        return { ok: true, result: { unread: notes.length, items: notes.slice(0, 20), view: 'messages' } };
+      }
+      case 'summarize_content': {
+        const text = String(input.text || '').slice(0, 8000);
+        const sentences = text.split(/(?<=[.!?…])\s+/).filter(Boolean);
+        return {
+          ok: true,
+          result: {
+            summary: sentences.slice(0, 3).join(' ').slice(0, 600) || text.slice(0, 280),
+            mode: 'extractive_local',
+            honesty: honestyLabel({ configured: !!process.env.OPENAI_API_KEY, mock: !process.env.OPENAI_API_KEY })
+          }
+        };
+      }
+      case 'translate_content': {
+        const job = this.translate(user, { text: input.text || input.raw || '', targetLang: input.targetLang || 'en', mode: 'text' });
+        return { ok: true, result: { job, original: input.text || input.raw || '' } };
+      }
+      case 'create_post': {
+        const text = String(input.text || '').slice(0, 4000);
+        if (text.length < 1) return { ok: false, error: 'TEXT_REQUIRED' };
+        const post = { id: this.store.id(), userId: user.id, text, kind: 'text', createdAt: this.store.now(), provenance: 'original_upload' };
+        this.store.data.posts.unshift(post);
+        this.addProvenance(user, { contentId: post.id, contentType: 'post', origin: 'human', creationMethod: 'command', aiInvolved: true });
+        return { ok: true, result: { post } };
+      }
+      case 'create_live': {
+        const title = String(input.title || `${user.displayName} LIVE`).slice(0, 120);
+        const live = {
+          id: this.store.id(), hostId: user.id, title, status: 'live', viewerCount: 0,
+          createdAt: this.store.now(), endedAt: null, source: 'action_engine'
+        };
+        this.store.data.liveRooms.unshift(live);
+        this.upsertCalendarItem(user, {
+          kind: 'live', title, startsAt: this.store.now(), refType: 'live', refId: live.id
+        });
+        return { ok: true, result: { live } };
+      }
+      case 'schedule_live': {
+        const title = String(input.title || 'Scheduled LIVE').slice(0, 120);
+        const startsAt = String(input.startsAt || 'tomorrow 20:00').slice(0, 80);
+        const live = {
+          id: this.store.id(), hostId: user.id, title, status: 'scheduled', viewerCount: 0,
+          scheduledFor: startsAt, createdAt: this.store.now(), endedAt: null, source: 'action_engine'
+        };
+        this.store.data.liveRooms.unshift(live);
+        const cal = this.upsertCalendarItem(user, {
+          kind: 'live', title, startsAt, refType: 'live', refId: live.id
+        });
+        return { ok: true, result: { live, calendarItem: cal } };
+      }
+      case 'create_project': {
+        const name = String(input.name || 'New project').slice(0, 120);
+        const project = this.createProject(user, { name, description: input.description || '' });
+        return { ok: true, result: { project } };
+      }
+      case 'create_room': {
+        const title = String(input.title || 'Meeting').slice(0, 120);
+        const kind = input.kind === 'science' ? 'science' : 'business';
+        const room = {
+          id: this.store.id(), ownerId: user.id, kind, title,
+          description: String(input.description || '').slice(0, 800),
+          syloraEnabled: false, status: 'open', createdAt: this.store.now()
+        };
+        this.store.data.conferenceRooms.push(room);
+        this.store.data.conferenceMembers.push({ roomId: room.id, userId: user.id, role: 'owner', joinedAt: this.store.now() });
+        this.upsertCalendarItem(user, { kind: 'meeting', title, startsAt: this.store.now(), refType: 'conference', refId: room.id });
+        return { ok: true, result: { room } };
+      }
+      case 'create_event': {
+        const event = this.createEvent(user, {
+          title: input.title || 'Event',
+          startsAt: input.startsAt || this.store.now(),
+          mode: input.mode || 'online',
+          description: input.description || ''
+        });
+        return { ok: true, result: { event } };
+      }
+      case 'create_clip': {
+        const clip = {
+          id: this.store.id(),
+          userId: user.id,
+          title: String(input.title || 'Clip').slice(0, 120),
+          liveId: input.liveId || null,
+          status: 'draft',
+          createdAt: this.store.now(),
+          note: 'Clip job queued — media pipeline required for render'
+        };
+        this.store.data.videos.unshift(clip);
+        this.addProvenance(user, { contentId: clip.id, contentType: 'clip', origin: 'human', creationMethod: 'clip_from_live', aiInvolved: true });
+        return { ok: true, result: { clip, honesty: honestyLabel({ configured: false, mock: true }) } };
+      }
+      case 'send_message': {
+        const text = String(input.text || '').slice(0, 2000);
+        const otherId = input.userId;
+        if (!text || !otherId) return { ok: false, error: 'MESSAGE_REQUIRED' };
+        let c = this.store.data.conversations.find(x => x.memberIds?.length === 2 && x.memberIds.includes(user.id) && x.memberIds.includes(otherId));
+        if (!c) {
+          c = { id: this.store.id(), memberIds: [user.id, otherId], createdAt: this.store.now() };
+          this.store.data.conversations.push(c);
+        }
+        const msg = { id: this.store.id(), conversationId: c.id, userId: user.id, text, createdAt: this.store.now(), editedAt: null };
+        this.store.data.messages.push(msg);
+        this.store.notify(otherId, 'message', user.id, { conversationId: c.id });
+        return { ok: true, result: { message: msg, conversationId: c.id } };
+      }
+      case 'invite_user': {
+        const username = String(input.username || '').replace(/^@/, '').trim();
+        const target = this.store.data.users.find(u => u.username === username);
+        if (!target) return { ok: false, error: 'USER_NOT_FOUND' };
+        this.store.notify(target.id, 'invite', user.id, {
+          targetType: input.targetType || 'space',
+          targetId: input.targetId || null
+        });
+        return { ok: true, result: { invitedUserId: target.id, username } };
+      }
+      default:
+        return { ok: true, result: { accepted: true, type, note: 'No dedicated executor — marked complete' } };
+    }
+  }
+
   confirmEcosystemAction(user, id) {
     const action = this.store.data.ecosystemActions.find(a => a.id === id && a.userId === user.id);
     if (!action) return { ok: false, error: 'ACTION_NOT_FOUND' };
-    const gate = canExecute({ ...action, status: 'confirmed' }, ACTION_LEVELS.EXECUTE_ALLOWED);
-    const confirmed = markConfirmed(action);
-    Object.assign(action, confirmed);
-    const completed = markCompleted(action, { accepted: true });
-    Object.assign(action, completed);
+    if (action.status === 'completed') return { ok: true, action, already: true };
+    if (new Date(action.expiresAt).getTime() <= Date.now()) {
+      action.status = 'expired';
+      this.store.save();
+      return { ok: false, error: 'ACTION_EXPIRED' };
+    }
+    Object.assign(action, markConfirmed(action));
+    const gate = canExecute(action, ACTION_LEVELS.EXECUTE_ALLOWED);
+    if (!gate.ok) {
+      Object.assign(action, markFailed(action, gate.error));
+      this.store.save();
+      return { ok: false, error: gate.error, action, gate };
+    }
+    const executed = this.executeTool(user, action.type, action.input || {});
+    if (!executed.ok) {
+      Object.assign(action, markFailed(action, executed.error));
+      this.store.save();
+      audit(this.store, user.id, 'action.failed', 'ecosystem_action', id, { type: action.type, error: executed.error });
+      return { ok: false, error: executed.error, action };
+    }
+    Object.assign(action, markCompleted(action, executed.result));
+    this.store.data.toolAudit.unshift({
+      id: this.store.id(), userId: user.id, tool: action.type, event: 'executed',
+      actionId: id, createdAt: this.store.now()
+    });
     this.store.save();
-    audit(this.store, user.id, 'action.confirmed', 'ecosystem_action', id, { type: action.type });
-    return { ok: true, action, gate };
+    audit(this.store, user.id, 'action.executed', 'ecosystem_action', id, { type: action.type });
+    this.recordActivity(user, {
+      kind: 'action_executed',
+      summary: `Executed ${action.type}`,
+      dataUsed: Object.keys(action.input || {}),
+      reason: 'User confirmed action',
+      context: action.context
+    });
+    return { ok: true, action, result: executed.result, gate };
   }
 
   listActions(user) {
     return this.store.data.ecosystemActions.filter(a => a.userId === user.id).slice(-50);
+  }
+
+  // —— Universal Command ——
+  universalCommand(user, text, { locale, executeReads = true } = {}) {
+    const plan = buildCommandPlan(text, { locale: locale || user.locale || 'uk' });
+    const tool = getTool(plan.tool);
+    this.recordActivity(user, {
+      kind: 'universal_command',
+      summary: `Command: ${plan.intent}`,
+      dataUsed: ['intent_detection', 'tool_catalog'],
+      reason: String(text || '').slice(0, 200),
+      context: plan.view || 'command_center'
+    });
+
+    if (!tool) {
+      return { plan, status: 'needs_clarification', message: 'Sylora needs a clearer request.' };
+    }
+
+    if (!plan.requiresConfirmation && executeReads) {
+      const executed = this.executeTool(user, plan.tool, plan.slots || {});
+      return { plan, status: executed.ok ? 'executed' : 'failed', ...executed };
+    }
+
+    const action = this.proposeAction(user, {
+      type: plan.tool,
+      level: tool.level,
+      input: plan.slots || {},
+      context: plan.view || 'command_center',
+      reason: `Universal Command: ${plan.intent}`
+    });
+    return {
+      plan,
+      status: 'pending_confirmation',
+      action,
+      message: 'Confirm this action for Sylora to execute it with platform tools.'
+    };
+  }
+
+  _searchCollections(user) {
+    ensureCollections(this.store);
+    const myConvIds = new Set(
+      (this.store.data.conversations || [])
+        .filter(c => (c.memberIds || []).includes(user.id))
+        .map(c => c.id)
+    );
+    return {
+      users: (this.store.data.users || []).map(u => this.store.publicUser(u)),
+      posts: this.store.data.posts || [],
+      communities: this.store.data.communities || [],
+      courses: (this.store.data.courses || []).filter(c => c.published),
+      businesses: this.store.data.businesses || [],
+      organizations: this.listOrgs(user),
+      agents: this.listAgents(),
+      lives: (this.store.data.liveRooms || []).filter(x => x.status === 'live' || x.status === 'scheduled'),
+      videos: this.store.data.videos || [],
+      messages: (this.store.data.messages || []).filter(m => myConvIds.has(m.conversationId)),
+      documents: [
+        ...(this.store.data.orgDocuments || []).filter(d => this.listOrgs(user).some(o => o.id === d.orgId)),
+        ...(this.store.data.collaborativeDocuments || []).filter(d => d.ownerId === user.id || (d.memberIds || []).includes(user.id))
+      ],
+      projects: (this.store.data.projects || []).filter(p => p.ownerId === user.id || (this.store.data.projectMembers || []).some(m => m.projectId === p.id && m.userId === user.id)),
+      events: (this.store.data.platformEvents || []).filter(e => e.ownerId === user.id || (e.participantIds || []).includes(user.id)),
+      research: (this.store.data.courses || []).filter(c => c.kind === 'research' || c.track === 'science')
+    };
+  }
+
+  universalSearch(user, query) {
+    const collections = this._searchCollections(user);
+    const structured = structuredSearch(query, collections);
+    const semantic = semanticSearchFallback(query, collections);
+    return {
+      query,
+      structured: structured.results,
+      semantic: semantic.results,
+      semanticHonesty: semantic.honesty,
+      plan: planAiSearch(query),
+      types: ['people', 'posts', 'videos', 'live', 'messages', 'communities', 'projects', 'companies', 'courses', 'research', 'files', 'events']
+    };
+  }
+
+  // —— Memory Center ——
+  memoryCenter(user) {
+    const agent = this.ensurePersonalAgent(user);
+    const memories = (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const byCategory = Object.fromEntries(MEMORY_CATEGORIES.map(c => [c, []]));
+    for (const m of memories) {
+      const cat = MEMORY_CATEGORIES.includes(m.category) ? m.category : 'preferences';
+      byCategory[cat].push(m);
+    }
+    return {
+      enabled: agent.privacyControls?.memory !== false,
+      categories: MEMORY_CATEGORIES,
+      byCategory,
+      memories,
+      controls: {
+        canView: true,
+        canEdit: true,
+        canDelete: true,
+        canDisable: true,
+        canExport: true
+      },
+      honesty: 'AI does not secretly accumulate personal data — all durable memories are listed here.'
+    };
+  }
+
+  updateMemory(user, id, patch = {}) {
+    const memory = (this.store.data.aiMemories || []).find(m => m.id === id && m.userId === user.id);
+    if (!memory) return null;
+    if (patch.label != null) memory.label = String(patch.label).slice(0, 80);
+    if (patch.value != null) memory.value = sanitizeMemoryValue(String(patch.value).slice(0, 2000));
+    if (patch.category && MEMORY_CATEGORIES.includes(patch.category)) memory.category = patch.category;
+    if (patch.tier === 'short' || patch.tier === 'long') memory.tier = patch.tier;
+    memory.updatedAt = this.store.now();
+    this.store.save();
+    audit(this.store, user.id, 'memory.updated', 'ai_memory', id);
+    return memory;
+  }
+
+  setMemoryEnabled(user, enabled) {
+    const agent = this.ensurePersonalAgent(user);
+    agent.privacyControls = { ...(agent.privacyControls || {}), memory: !!enabled };
+    agent.updatedAt = this.store.now();
+    this.store.save();
+    return { enabled: !!enabled };
+  }
+
+  // —— Events / Calendar / Projects / Spaces ——
+  createEvent(user, input = {}) {
+    ensureCollections(this.store);
+    const event = {
+      id: this.store.id(),
+      ownerId: user.id,
+      title: String(input.title || 'Event').slice(0, 160),
+      description: String(input.description || '').slice(0, 2000),
+      mode: input.mode === 'offline' ? 'offline' : 'online',
+      startsAt: String(input.startsAt || this.store.now()).slice(0, 80),
+      endsAt: input.endsAt || null,
+      registrationOpen: input.registrationOpen !== false,
+      participantIds: [user.id],
+      speakers: input.speakers || [],
+      ticketMode: input.ticketMode || 'free',
+      liveId: input.liveId || null,
+      schedule: input.schedule || [],
+      notifications: true,
+      recording: input.recording || null,
+      createdAt: this.store.now()
+    };
+    this.store.data.platformEvents.unshift(event);
+    this.upsertCalendarItem(user, {
+      kind: 'event', title: event.title, startsAt: event.startsAt, refType: 'event', refId: event.id
+    });
+    this.store.save();
+    audit(this.store, user.id, 'event.created', 'platform_event', event.id);
+    return event;
+  }
+
+  listEvents(user) {
+    ensureCollections(this.store);
+    return this.store.data.platformEvents.filter(
+      e => e.ownerId === user.id || (e.participantIds || []).includes(user.id)
+    );
+  }
+
+  registerForEvent(user, eventId) {
+    const event = this.store.data.platformEvents.find(e => e.id === eventId);
+    if (!event) return { ok: false, error: 'EVENT_NOT_FOUND' };
+    if (!event.registrationOpen) return { ok: false, error: 'REGISTRATION_CLOSED' };
+    event.participantIds = event.participantIds || [];
+    if (!event.participantIds.includes(user.id)) event.participantIds.push(user.id);
+    this.upsertCalendarItem(user, {
+      kind: 'event', title: event.title, startsAt: event.startsAt, refType: 'event', refId: event.id
+    });
+    this.store.save();
+    return { ok: true, event };
+  }
+
+  upsertCalendarItem(user, input = {}) {
+    ensureCollections(this.store);
+    const existing = this.store.data.calendarItems.find(
+      c => c.userId === user.id && c.refType === input.refType && c.refId === input.refId
+    );
+    if (existing) {
+      Object.assign(existing, {
+        title: String(input.title || existing.title).slice(0, 160),
+        startsAt: String(input.startsAt || existing.startsAt).slice(0, 80),
+        kind: input.kind || existing.kind,
+        updatedAt: this.store.now()
+      });
+      this.store.save();
+      return existing;
+    }
+    const item = {
+      id: this.store.id(),
+      userId: user.id,
+      kind: input.kind || 'custom',
+      title: String(input.title || 'Item').slice(0, 160),
+      startsAt: String(input.startsAt || this.store.now()).slice(0, 80),
+      endsAt: input.endsAt || null,
+      refType: input.refType || null,
+      refId: input.refId || null,
+      createdAt: this.store.now(),
+      updatedAt: this.store.now()
+    };
+    this.store.data.calendarItems.push(item);
+    this.store.save();
+    return item;
+  }
+
+  listCalendar(user) {
+    ensureCollections(this.store);
+    return this.store.data.calendarItems
+      .filter(c => c.userId === user.id)
+      .sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)));
+  }
+
+  createCalendarItem(user, input = {}) {
+    // Calendar mutations always require explicit user intent (caller / confirm path).
+    return this.upsertCalendarItem(user, { ...input, refType: input.refType || 'manual', refId: input.refId || this.store.id() });
+  }
+
+  createProject(user, input = {}) {
+    ensureCollections(this.store);
+    const project = {
+      id: this.store.id(),
+      ownerId: user.id,
+      name: String(input.name || 'Project').slice(0, 120),
+      description: String(input.description || '').slice(0, 2000),
+      status: 'active',
+      timeline: [],
+      createdAt: this.store.now()
+    };
+    this.store.data.projects.push(project);
+    this.store.data.projectMembers.push({
+      id: this.store.id(), projectId: project.id, userId: user.id, role: 'owner', joinedAt: this.store.now()
+    });
+    // Also keep Business OS org for deeper workspace if name is unique enough
+    try {
+      this.createOrg(user, { name: project.name, description: project.description });
+    } catch { /* ignore duplicate-ish */ }
+    this.store.save();
+    audit(this.store, user.id, 'project.created', 'project', project.id);
+    return project;
+  }
+
+  listProjects(user) {
+    ensureCollections(this.store);
+    const memberOf = new Set(
+      (this.store.data.projectMembers || []).filter(m => m.userId === user.id).map(m => m.projectId)
+    );
+    return this.store.data.projects.filter(p => p.ownerId === user.id || memberOf.has(p.id));
+  }
+
+  projectWorkspace(user, projectId) {
+    const project = this.listProjects(user).find(p => p.id === projectId);
+    if (!project) return { ok: false, error: 'PROJECT_NOT_FOUND' };
+    return {
+      ok: true,
+      project,
+      members: (this.store.data.projectMembers || []).filter(m => m.projectId === projectId),
+      tasks: (this.store.data.projectTasks || []).filter(t => t.projectId === projectId),
+      milestones: (this.store.data.projectMilestones || []).filter(m => m.projectId === projectId),
+      documents: (this.store.data.collaborativeDocuments || []).filter(d => d.projectId === projectId),
+      space: getSpace(projectId, this.store.data)
+    };
+  }
+
+  listUserSpaces(user) {
+    ensureCollections(this.store);
+    return {
+      spaces: listSpacesForUser(user.id, this.store.data),
+      capabilities: SPACE_CAPABILITIES,
+      engine: 'unified_space_adapter'
+    };
+  }
+
+  askAboutContext(user, { view, contentType, contentId, question } = {}) {
+    const q = String(question || 'поясни').slice(0, 2000);
+    const plan = buildCommandPlan(q, { locale: user.locale || 'uk' });
+    const context = {
+      view: view || 'ai',
+      contentType: contentType || 'unknown',
+      contentId: contentId || null,
+      note: 'Contextual Ask Sylora — uses current surface metadata; does not invent missing media.'
+    };
+    let excerpt = '';
+    if (contentType === 'post') {
+      excerpt = this.store.data.posts.find(p => p.id === contentId)?.text || '';
+    } else if (contentType === 'live') {
+      const live = this.store.data.liveRooms.find(r => r.id === contentId);
+      const chat = (this.store.data.liveMessages || []).filter(m => m.liveId === contentId).slice(-30).map(m => m.text).join('\n');
+      excerpt = `${live?.title || ''}\n${chat}`;
+    } else if (contentType === 'document') {
+      excerpt = this.store.data.orgDocuments.find(d => d.id === contentId)?.body
+        || this.store.data.collaborativeDocuments.find(d => d.id === contentId)?.body || '';
+    } else if (contentType === 'course' || contentType === 'lesson') {
+      excerpt = this.store.data.lessons.find(l => l.id === contentId)?.title
+        || this.store.data.courses.find(c => c.id === contentId)?.title || '';
+    }
+    const summary = this.executeTool(user, 'summarize_content', { text: `${q}\n\n${excerpt}` });
+    this.recordActivity(user, {
+      kind: 'ask_sylora_context',
+      summary: `Ask Sylora about ${contentType || view}`,
+      dataUsed: ['context_surface', excerpt ? 'content_excerpt' : 'metadata_only'],
+      reason: q.slice(0, 200),
+      context: view || 'ai'
+    });
+    return {
+      plan,
+      context,
+      answer: summary.result?.summary || 'Need more context on this surface.',
+      originalAvailable: true,
+      honesty: summary.result?.honesty
+    };
+  }
+
+  liveCopilotBundle(user, liveId) {
+    const room = this.store.data.liveRooms.find(r => r.id === liveId);
+    if (!room) return { ok: false, error: 'LIVE_NOT_FOUND' };
+    if (room.hostId !== user.id) return { ok: false, error: 'LIVE_HOST_REQUIRED' };
+    const chat = (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-80);
+    const questions = chat.filter(m => /\?|як|what|how|чому/i.test(m.text || '')).slice(-10);
+    return {
+      ok: true,
+      liveId,
+      highlights: questions.map(m => ({ id: m.id, text: m.text, userId: m.userId })),
+      suggestions: [
+        'Answer top chat question',
+        'Create a poll from recurring theme',
+        'Mark clip moment',
+        'Draft LIVE summary (private until you publish)'
+      ],
+      policy: {
+        speakAsStreamer: false,
+        note: 'Sylora assists the host — never speaks as the streamer without explicit control.'
+      },
+      translationReady: !!process.env.OPENAI_API_KEY || !!process.env.SYLORA_TRANSLATE_API_KEY
+    };
+  }
+
+  smartNotifications(user) {
+    const notes = (this.store.data.notifications || []).filter(n => n.userId === user.id && !n.read);
+    const critical = notes.filter(n => ['security', 'payment', 'invite', 'call'].includes(n.type));
+    const rest = notes.filter(n => !critical.includes(n));
+    const bundle = {
+      id: this.store.id(),
+      userId: user.id,
+      createdAt: this.store.now(),
+      total: notes.length,
+      critical: critical.slice(0, 10),
+      summary: rest.length
+        ? `За останній період у тебе ${notes.length} сповіщень. Ось ${Math.min(3, rest.length)} важливі з групи.`
+        : critical.length ? 'Є критичні сповіщення.' : 'Немає непрочитаних.',
+      top: rest.slice(0, 3)
+    };
+    this.store.data.smartNotificationBundles.unshift(bundle);
+    this.store.save();
+    return bundle;
+  }
+
+  continuityUpsert(user, input = {}) {
+    ensureCollections(this.store);
+    let row = this.store.data.continuitySessions.find(
+      s => s.userId === user.id && s.kind === (input.kind || 'draft') && s.key === (input.key || 'default')
+    );
+    if (!row) {
+      row = {
+        id: this.store.id(),
+        userId: user.id,
+        kind: input.kind || 'draft',
+        key: input.key || 'default',
+        payload: {},
+        device: input.device || 'unknown',
+        updatedAt: this.store.now(),
+        createdAt: this.store.now()
+      };
+      this.store.data.continuitySessions.push(row);
+    }
+    row.payload = { ...(row.payload || {}), ...(input.payload || {}) };
+    row.device = input.device || row.device;
+    row.updatedAt = this.store.now();
+    this.store.save();
+    return row;
+  }
+
+  continuityList(user) {
+    return (this.store.data.continuitySessions || []).filter(s => s.userId === user.id);
+  }
+
+  flagsFor(user) {
+    const overrides = Object.fromEntries(
+      (this.store.data.featureFlagOverrides || [])
+        .filter(f => f.userId === user.id)
+        .map(f => [f.name, f.enabled])
+    );
+    return resolveFlags(overrides);
+  }
+
+  platformStatus() {
+    return buildPlatformStatus({ env: process.env });
   }
 
   // —— Agents marketplace ——
@@ -618,8 +1214,11 @@ export class EcosystemService {
     return structuredSearch(query, collections);
   }
 
-  aiSearch(prompt) {
-    return planAiSearch(prompt);
+  aiSearch(prompt, user = null) {
+    const plan = planAiSearch(prompt);
+    if (!user) return plan;
+    const uni = this.universalSearch(user, prompt);
+    return { ...plan, results: uni.semantic, structured: uni.structured, semanticHonesty: uni.semanticHonesty };
   }
 
   metricsSnapshot() {
@@ -1144,18 +1743,36 @@ export class EcosystemService {
   }
 
   capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {
+    const providers = providerSnapshot();
+    const status = this.platformStatus();
     return {
       aiText: !!aiConfigured,
       aiRealtimeVoice: !!realtimeConfigured && !!aiConfigured,
       tts: !!aiConfigured,
       stt: !!aiConfigured,
-      translation: true,
+      translation: providers.translation?.status || 'degraded',
+      embeddings: providers.embedding?.status || 'blocked_provider',
       websocket: true,
       degraded: {
         ai: !aiConfigured,
-        voice: !realtimeConfigured || !aiConfigured
+        voice: !realtimeConfigured || !aiConfigured,
+        semanticSearch: providers.embedding?.status !== 'ready'
       },
-      oneSylora: true
+      oneSylora: true,
+      providers,
+      flags: resolveFlags(),
+      infrastructure: status.infrastructure,
+      modelRouting: {
+        simple: modelRouteFor('simple'),
+        complex: modelRouteFor('complex'),
+        realtime: modelRouteFor('realtime')
+      },
+      honesty: {
+        lumenWallet: status.infrastructure.lumenWallet,
+        live: status.infrastructure.live,
+        ai: status.infrastructure.ai
+      },
+      tools: BUILTIN_ACTIONS.filter(t => getTool(t)).length
     };
   }
 }

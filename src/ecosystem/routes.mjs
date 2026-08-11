@@ -54,6 +54,45 @@ export async function handleEcosystemRoutes(ctx) {
     try { return json(res, 200, ecosystem.setProactiveLevel(user, input.level)), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
+  if (req.method === 'POST' && p === '/api/ai/command') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const text = safeText(input.text || input.q || '', 2000);
+    if (!text) return json(res, 400, { error: 'TEXT_REQUIRED' }), true;
+    try {
+      return json(res, 200, ecosystem.universalCommand(user, text, {
+        locale: input.locale || user.locale,
+        executeReads: input.executeReads !== false
+      })), true;
+    } catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/ai/ask') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.askAboutContext(user, {
+      view: safeText(input.view || 'ai', 40),
+      contentType: safeText(input.contentType || 'unknown', 40),
+      contentId: input.contentId || null,
+      question: safeText(input.question || input.text || '', 2000)
+    })), true;
+  }
+  if (req.method === 'GET' && p === '/api/ai/memory/center') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.memoryCenter(user)), true;
+  }
+  if (req.method === 'PATCH' && p === '/api/ai/memory/enabled') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.setMemoryEnabled(user, input.enabled !== false)), true;
+  }
+  m = route('/api/ai/memory/:id', p);
+  if (req.method === 'PATCH' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const memory = ecosystem.updateMemory(user, m.id, input || {});
+    if (!memory) return json(res, 404, { error: 'MEMORY_NOT_FOUND' }), true;
+    return json(res, 200, { memory }), true;
+  }
 
   // —— Identity ——
   if (req.method === 'GET' && p === '/api/identity') {
@@ -388,8 +427,86 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/search/ai') {
     const user = await requireUser(req, res); if (!user) return true;
     const prompt = safeText(url.searchParams.get('q') || '', 500);
-    return json(res, 200, ecosystem.aiSearch(prompt)), true;
+    return json(res, 200, ecosystem.aiSearch(prompt, user)), true;
   }
+  if (req.method === 'GET' && p === '/api/search/universal') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const prompt = safeText(url.searchParams.get('q') || '', 500);
+    if (prompt.length < 2) return json(res, 200, { query: prompt, structured: [], semantic: [] }), true;
+    return json(res, 200, ecosystem.universalSearch(user, prompt)), true;
+  }
+
+  // —— Spaces / Events / Calendar / Projects ——
+  if (req.method === 'GET' && p === '/api/spaces') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.listUserSpaces(user)), true;
+  }
+  if (req.method === 'GET' && p === '/api/platform-events') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { events: ecosystem.listEvents(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/platform-events') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    return json(res, 201, { event: ecosystem.createEvent(user, input) }), true;
+  }
+  m = route('/api/platform-events/:id/register', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.registerForEvent(user, m.id);
+    return json(res, out.ok ? 200 : 404, out), true;
+  }
+  if (req.method === 'GET' && p === '/api/calendar') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { items: ecosystem.listCalendar(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/calendar') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    return json(res, 201, { item: ecosystem.createCalendarItem(user, input) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/projects') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { projects: ecosystem.listProjects(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/projects') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.name, 120)) return json(res, 400, { error: 'NAME_REQUIRED' }), true;
+    return json(res, 201, { project: ecosystem.createProject(user, input) }), true;
+  }
+  m = route('/api/projects/:id', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.projectWorkspace(user, m.id);
+    return json(res, out.ok ? 200 : 404, out), true;
+  }
+  m = route('/api/live/:id/copilot', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.liveCopilotBundle(user, m.id);
+    return json(res, out.ok ? 200 : (out.error === 'LIVE_HOST_REQUIRED' ? 403 : 404), out), true;
+  }
+  if (req.method === 'GET' && p === '/api/notifications/smart') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { bundle: ecosystem.smartNotifications(user) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/continuity') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { sessions: ecosystem.continuityList(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/continuity') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, { session: ecosystem.continuityUpsert(user, input || {}) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/feature-flags') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { flags: ecosystem.flagsFor(user) }), true;
+  }
+
   if (req.method === 'GET' && p === '/api/ecosystem/metrics') {
     const user = await requireUser(req, res); if (!user) return true;
     if (user.role !== 'admin') return json(res, 403, { error: 'ADMIN_ONLY' }), true;
@@ -397,9 +514,14 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/ecosystem/status') {
     return json(res, 200, {
-      core: 'personal_ai+identity+kg+actions+agents+developers+translation+business+trust',
+      core: 'personal_ai+identity+kg+actions+agents+developers+translation+business+trust+command+spaces+events',
       revenueShares: ecosystem.revenueShares(),
-      translationVoicePolicy: (await import('./translation.mjs')).VOICE_POLICY
+      translationVoicePolicy: (await import('./translation.mjs')).VOICE_POLICY,
+      platform: ecosystem.platformStatus(),
+      capabilities: ecosystem.capabilitiesSnapshot({
+        aiConfigured: !!process.env.OPENAI_API_KEY,
+        realtimeConfigured: !!process.env.OPENAI_API_KEY
+      })
     }), true;
   }
 

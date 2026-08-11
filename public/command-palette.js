@@ -1,4 +1,4 @@
-/** Universal Search + Command Palette — natural language + slash commands. */
+/** Universal Search + Command Palette — natural language + slash commands + Sylora actions. */
 const COMMANDS=[
   {cmd:'/live',view:'live',label:'Open LIVE'},
   {cmd:'/create',view:null,label:'Create Hub',action:'create'},
@@ -7,8 +7,14 @@ const COMMANDS=[
   {cmd:'/call',view:'messages',label:'Inbox / calls'},
   {cmd:'/learn',view:'learning',label:'Science & Learning'},
   {cmd:'/ai',view:'ai',label:'Talk with Sylora'},
+  {cmd:'/memory',view:'security',label:'Memory / Privacy Center'},
+  {cmd:'/calendar',view:'business',label:'Calendar'},
   {cmd:'/translate',view:'messages',label:'Inbox translation'},
 ];
+
+function looksLikeCommand(q){
+  return /^(знайд|створ|переклад|покаж|зроби|find|create|schedule|translate|show|make|szukaj|utwórz)/i.test(q.trim());
+}
 
 export function openCommandPalette({t,esc,api,onNavigate,onCreate,onAiSearch}={}){
   document.querySelector('#syloraCommandPalette')?.remove();
@@ -39,6 +45,41 @@ export function openCommandPalette({t,esc,api,onNavigate,onCreate,onAiSearch}={}
     };
   });
 
+  const renderCommandResult=async(q)=>{
+    results.innerHTML=`<p class="muted">${esc(t('loading'))}</p>`;
+    try{
+      const out=await api('/api/ai/command',{method:'POST',body:JSON.stringify({text:q})});
+      const plan=out.plan||{};
+      let html=`<div><small class="eyebrow">SYLORA COMMAND</small>
+        <p><b>${esc(plan.intent||'ask')}</b> · tool <code>${esc(plan.tool||'—')}</code> · ${Math.round((plan.confidence||0)*100)}%</p>`;
+      if(out.status==='pending_confirmation'&&out.action?.id){
+        html+=`<p class="muted">${esc(out.message||'Confirm to execute')}</p>
+          <button type="button" class="primary" data-confirm="${esc(out.action.id)}">Confirm · ${esc(out.action.type)}</button>
+          <button type="button" data-go="${esc(plan.view||'ai')}">Open context</button>`;
+      }else if(out.status==='executed'){
+        html+=`<p class="muted">Executed</p><pre style="white-space:pre-wrap;font-size:12px">${esc(JSON.stringify(out.result||{},null,2).slice(0,600))}</pre>
+          <button type="button" data-go="${esc(plan.view||'ai')}">Open</button>`;
+      }else{
+        html+=`<button type="button" data-ai="1">Ask Sylora</button>`;
+      }
+      html+=`</div>`;
+      results.innerHTML=html;
+      results.querySelector('[data-confirm]')?.addEventListener('click',async()=>{
+        const id=results.querySelector('[data-confirm]').dataset.confirm;
+        try{
+          const conf=await api(`/api/actions/${id}/confirm`,{method:'POST',body:'{}'});
+          results.innerHTML=`<p><b>Done</b></p><pre style="white-space:pre-wrap;font-size:12px">${esc(JSON.stringify(conf.result||conf.action?.result||{},null,2).slice(0,700))}</pre>
+            <button type="button" data-go="${esc(plan.view||'ai')}">Open</button>`;
+          results.querySelector('[data-go]')?.addEventListener('click',()=>{close();onNavigate?.(plan.view||'ai')});
+        }catch(err){results.innerHTML=`<p class="muted">${esc(err.message||t('syloraBusy'))}</p>`;}
+      });
+      results.querySelector('[data-go]')?.addEventListener('click',()=>{close();onNavigate?.(plan.view||'ai')});
+      results.querySelector('[data-ai]')?.addEventListener('click',()=>{close();onAiSearch?.(q)});
+    }catch{
+      results.innerHTML=`<p class="muted">${esc(t('syloraBusy'))}</p>`;
+    }
+  };
+
   let timer=null;
   input.oninput=()=>{
     clearTimeout(timer);
@@ -55,10 +96,12 @@ export function openCommandPalette({t,esc,api,onNavigate,onCreate,onAiSearch}={}
       return;
     }
     timer=setTimeout(async()=>{
+      if(looksLikeCommand(q))return renderCommandResult(q);
       results.innerHTML=`<p class="muted">${esc(t('loading'))}</p>`;
       try{
-        const [classic,ai]=await Promise.all([
+        const [classic,universal,ai]=await Promise.all([
           api(`/api/search?q=${encodeURIComponent(q)}`),
+          api(`/api/search/universal?q=${encodeURIComponent(q)}`).catch(()=>null),
           api(`/api/search/ai?q=${encodeURIComponent(q)}`).catch(()=>null)
         ]);
         const blocks=[];
@@ -71,10 +114,16 @@ export function openCommandPalette({t,esc,api,onNavigate,onCreate,onAiSearch}={}
         push('Communities',classic.communities,c=>c.name,'communities');
         push('Courses',classic.courses,c=>c.title,'learning');
         push('Business',classic.businesses,b=>b.name,'business');
-        if(ai?.plan)blocks.unshift(`<button type="button" data-ai="1"><b>Sylora</b> · ${esc(ai.plan.summary||ai.plan.intent||q)}</button>`);
+        push('LIVE',classic.lives,l=>l.title,'live');
+        if(universal?.semantic?.length){
+          blocks.push(`<div><small class="eyebrow">SEMANTIC ${universal.semanticHonesty?.state==='degraded'?'· lexical':''}</small>${universal.semantic.slice(0,6).map(r=>`<button type="button" data-go="explore">${esc(r.type)} · ${esc(r.label||'')}</button>`).join('')}</div>`);
+        }
+        blocks.unshift(`<button type="button" data-cmd-run="1"><b>Sylora Command</b> · ${esc(q)}</button>`);
+        if(ai?.summary||ai?.prompt)blocks.unshift(`<button type="button" data-ai="1"><b>Ask Sylora</b> · ${esc(ai.summary||ai.prompt||q)}</button>`);
         results.innerHTML=blocks.join('')||`<p class="muted">—</p>`;
         results.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{close();onNavigate?.(b.dataset.go)});
         results.querySelector('[data-ai]')?.addEventListener('click',()=>{close();onAiSearch?.(q)});
+        results.querySelector('[data-cmd-run]')?.addEventListener('click',()=>renderCommandResult(q));
       }catch{
         results.innerHTML=`<p class="muted">${esc(t('syloraBusy'))}</p>`;
       }
@@ -84,7 +133,8 @@ export function openCommandPalette({t,esc,api,onNavigate,onCreate,onAiSearch}={}
     if(e.key==='Enter'){
       const q=input.value.trim();
       const cmd=COMMANDS.find(c=>c.cmd===q.toLowerCase());
-      if(cmd){e.preventDefault();runCommand(cmd)}
+      if(cmd){e.preventDefault();runCommand(cmd);return}
+      if(q.length>=2&&looksLikeCommand(q)){e.preventDefault();renderCommandResult(q)}
     }
   };
   return overlay;

@@ -64,7 +64,7 @@ See CI command results in the agent run (expected: `npm test`, `npm run lint`, `
 - Vision / screen awareness / full agentic tool surface beyond propose_post/propose_memory
 - Complete UI string migration off hardcoded Ukrainian in every scene
 - Paid courses (honest `PAYMENT_PROVIDER_REQUIRED`)
-- Create Event (honest coming soon)
+- Create Event — wired via `/api/platform-events` + Action Engine (not full ticketing/CDN yet)
 - **VPS/Hetzner production deploy** (explicitly deferred; needs SSH secrets in Cursor Dashboard)
 
 ## Language matrix (honest)
