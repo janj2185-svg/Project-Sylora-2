@@ -1,56 +1,80 @@
-# Deploy SYLORA to Hetzner (final step)
+# Deploy SYLORA to Hetzner / getsylora.com
 
-**Status:** prepared offline. Live deploy waits for secure SSH access.  
-**Host (confirmed):** `77.42.42.246` (`getsylora.com`)  
-**Deployment path (operator):** `/opt/sylora`  
-**Do not invent** `PROD_SSH_USER`, `PROD_SSH_PRIVATE_KEY`, `PROD_SSH_PORT`, or `PROD_DEPLOY_PATH`.  
-**Do not** destructive `git reset --hard` / delete local production backup commits without analysis.
+**Status:** production is **online but STALE** (`?v=20260809-3`). Verified tip is on `cursor/sylora-live-ecosystem-34a2`.  
+**Host:** `77.42.42.246` (`getsylora.com`)  
+**Path:** `/opt/sylora`  
+**Agent SSH:** not available in Cloud Agent (no `PROD_SSH_*` secrets).
 
-## Prerequisites
+**Do not invent** `PROD_SSH_USER`, `PROD_SSH_PRIVATE_KEY`, `PROD_SSH_PORT`, or `PROD_DEPLOY_PATH` values in chat.  
+**Never:** destructive `git reset --hard`, volume wipe, or force-push without analysis.  
+**Never:** paste `PROD_SSH_PRIVATE_KEY` into chat.
 
-- Docker + Compose on the VPS
-- `.env.local` with production secrets (never commit)
-- TLS terminated at nginx (sample: `infra/nginx/sylora.conf.example`)
-- Optional: set `SYLORA_ENABLE_HSTS=1` only after HTTPS works
-- Optional companion: set `SYLORA_COMPANION_TOKEN` + `SYLORA_COMPANION_ORIGINS`
-
-## Deploy checklist (on VPS)
+## ONE command path (owner on VPS)
 
 ```bash
-cd /path/to/Project-Sylora-2   # PROD_DEPLOY_PATH when known
+ssh <YOUR_USER>@77.42.42.246
+cd /opt/sylora
+
+# 1) Backup metadata (safe)
+mkdir -p .deploy-backup-$(date -u +%Y%m%dT%H%M%SZ)
+git rev-parse HEAD > .deploy-backup-*/HEAD.txt 2>/dev/null || true
+
+# 2) Pull verified Project-Sylora-2 tip (not stale main)
 git fetch origin
-git checkout main
-git pull --ff-only origin main
-# ensure .env.local has DATABASE_URL, REDIS_URL, POSTGRES_PASSWORD, OPENAI_* as needed
+git checkout cursor/sylora-live-ecosystem-34a2
+git pull --ff-only origin cursor/sylora-live-ecosystem-34a2
+
+# 3) Deploy (keeps postgres/redis/data volumes)
 docker compose up -d --build
-curl -fsS http://127.0.0.1:8787/api/ready
+
+# 4) Local health
+curl -fsS http://127.0.0.1:8787/api/ready && echo
+
+# 5) From your laptop after deploy:
+# ./scripts/prod-smoke.sh https://getsylora.com
 ```
 
-Or: `./scripts/deploy-prod.sh /path/to/Project-Sylora-2`
+Or, after the new script is on the server:
 
-## After deploy
+```bash
+cd /opt/sylora
+SYLORA_DEPLOY_REF=cursor/sylora-live-ecosystem-34a2 ./scripts/deploy-prod.sh /opt/sylora deploy
+```
 
-1. Confirm HTML cache bust is not the old `?v=20260809-3` (expect `avatar3` or newer).
-2. Hard refresh on phone.
-3. Open Sylora AI — avatar must be one coherent white-suit portrait (no sliced arms/face).
-4. Mobile dock includes **Ще** (Settings) for Identity / Agents / Developer / Security.
+## Success criteria
 
-## Cursor secrets (when ready)
+- HTML cache bust contains `20260811` (not `20260809-3`)
+- `GET /live-studio.js` → 200
+- `GET /api/sylora-live/capabilities` → 200
+- `GET /api/wallet` authenticated → 200
+- `GET /api/auth/google` → 503 until keys (honest), not fake Connected
+- `./scripts/prod-smoke.sh https://getsylora.com` → PASS
 
-Add in Cursor Dashboard → Cloud Agents → Secrets (not in chat):
+## Prerequisites on VPS
+
+- Docker + Compose
+- `.env.local` with at least `POSTGRES_PASSWORD` (and existing DB volumes)
+- Optional keys later: `OPENAI_API_KEY`, Google/TikTok/… — leave empty; UI/API stay fail-closed
+- TLS at nginx (`infra/nginx/sylora.conf.example`)
+- Optional: `SYLORA_ENABLE_HSTS=1` only after HTTPS verified
+
+## Cursor secrets (optional, for agent remote deploy)
 
 | Variable | Notes |
 |---|---|
-| `PROD_SSH_HOST` | Confirmed: `77.42.42.246` |
-| `PROD_SSH_USER` | pending |
-| `PROD_SSH_PRIVATE_KEY` | pending (Runtime Secret) |
+| `PROD_SSH_HOST` | default `77.42.42.246` |
+| `PROD_SSH_USER` | required |
+| `PROD_SSH_PRIVATE_KEY` | Runtime Secret |
 | `PROD_SSH_PORT` | optional |
-| `PROD_DEPLOY_PATH` | optional |
+| `PROD_DEPLOY_PATH` | default `/opt/sylora` |
 
-## Local dry-run (no VPS)
+Then: `./scripts/deploy-prod.sh . remote`
 
-```bash
-docker compose up -d --build
-curl -fsS http://127.0.0.1:8787/api/ready
-npm test
-```
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/deploy-prod.sh` | backup / dry-run / deploy / remote / smoke |
+| `scripts/prod-smoke.sh` | public production smoke/E2E |
+
+See `docs/audit/PRODUCTION_DEPLOY_STATUS.md` for the live audit snapshot.
