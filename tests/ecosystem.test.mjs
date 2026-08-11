@@ -141,6 +141,35 @@ test('ecosystem APIs: identity, kg, agents, developer keys, translate, orgs', as
     const plan = await req(base, '/api/studio/ai/plan', { method: 'POST', token, body: { topic: 'Flutter in Poland' } });
     assert.equal(plan.status, 200);
     assert.ok(plan.data.plan.structure.length >= 3);
+    const confirmedPlan = await req(base, `/api/studio/ai/plan/${plan.data.action.id}/confirm`, { method: 'POST', token, body: {} });
+    assert.equal(confirmedPlan.status, 200);
+    assert.equal(confirmedPlan.data.ok, true);
+    assert.ok(confirmedPlan.data.scene?.name);
+
+    const negotiation = await req(base, '/api/agents/negotiations', {
+      method: 'POST',
+      token,
+      body: { toAgentId: agents.data.agents[0].id, topic: 'price', message: 'Need a quote' }
+    });
+    assert.equal(negotiation.status, 201);
+    assert.equal(negotiation.data.negotiation.reply.requiresUserConfirmation, true);
+    const confirmedNeg = await req(base, `/api/agents/negotiations/${negotiation.data.negotiation.id}/confirm`, { method: 'POST', token, body: {} });
+    assert.equal(confirmedNeg.status, 200);
+    assert.equal(confirmedNeg.data.executed, false);
+
+    const team = await req(base, `/api/orgs/${org.data.organization.id}/teams`, { method: 'POST', token, body: { name: 'Product' } });
+    assert.equal(team.status, 201);
+    const doc = await req(base, `/api/orgs/${org.data.organization.id}/documents`, { method: 'POST', token, body: { title: 'Playbook', body: 'Internal' } });
+    assert.equal(doc.status, 201);
+    const workspace = await req(base, `/api/orgs/${org.data.organization.id}/workspace`, { token });
+    assert.equal(workspace.status, 200);
+    assert.equal(workspace.data.teams.length, 1);
+    assert.equal(workspace.data.documents.length, 1);
+
+    const center = await req(base, '/api/ai/command-center?view=studio', { token });
+    assert.equal(center.status, 200);
+    assert.equal(center.data.pack.role, 'creator_assistant');
+    assert.match(center.data.pack.instruction, /Creator Assistant/i);
 
     const status = await req(base, '/api/ecosystem/status');
     assert.equal(status.status, 200);
@@ -149,4 +178,16 @@ test('ecosystem APIs: identity, kg, agents, developer keys, translate, orgs', as
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('AI-to-AI module never auto-executes financial actions', async () => {
+  const { createNegotiation, draftBusinessReply, confirmNegotiation } = await import('../src/ecosystem/ai-to-ai.mjs');
+  const negotiation = createNegotiation({
+    id: 'n1', userId: 'u1', fromAgentId: 'p1', toAgentId: 'b1', topic: 'booking', message: 'Book Friday'
+  });
+  const reply = draftBusinessReply(negotiation, { name: 'Biz' });
+  assert.equal(reply.binding, false);
+  const confirmed = confirmNegotiation(negotiation);
+  assert.equal(confirmed.ok, true);
+  assert.equal(confirmed.negotiation.status, 'confirmed');
 });

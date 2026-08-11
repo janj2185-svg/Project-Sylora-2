@@ -40,7 +40,8 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, {
       ...ecosystem.commandCenterContext(view),
       dashboard: ecosystem.dashboard(user),
-      agent: ecosystem.ensurePersonalAgent(user)
+      agent: ecosystem.ensurePersonalAgent(user),
+      pack: ecosystem.contextPack(user, view)
     }), true;
   }
 
@@ -184,6 +185,30 @@ export async function handleEcosystemRoutes(ctx) {
     if (!topic) return json(res, 400, { error: 'TOPIC_REQUIRED' }), true;
     return json(res, 200, ecosystem.creatorStudioPlan(user, topic)), true;
   }
+  m = route('/api/studio/ai/plan/:id/confirm', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.confirmCreatorStudioPlan(user, m.id);
+    return json(res, out.ok ? 200 : 404, out), true;
+  }
+
+  // —— AI-to-AI economy ——
+  if (req.method === 'GET' && p === '/api/agents/negotiations') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { negotiations: ecosystem.listNegotiations(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/agents/negotiations') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const out = ecosystem.startNegotiation(user, input);
+    return json(res, out.ok ? 201 : 400, out), true;
+  }
+  m = route('/api/agents/negotiations/:id/confirm', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.confirmNegotiation(user, m.id);
+    return json(res, out.ok ? 200 : 404, out), true;
+  }
 
   // —— Business OS / Enterprise control ——
   if (req.method === 'GET' && p === '/api/orgs') {
@@ -207,6 +232,35 @@ export async function handleEcosystemRoutes(ctx) {
     const input = await body(req);
     const out = ecosystem.updateControlPlane(user, m.id, input);
     return json(res, out.ok ? 200 : 403, out), true;
+  }
+  m = route('/api/orgs/:id/workspace', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const out = ecosystem.listOrgWorkspace(user, m.id);
+    return json(res, out.ok ? 200 : 403, out), true;
+  }
+  m = route('/api/orgs/:id/teams', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const out = ecosystem.createTeam(user, m.id, input.name);
+    return json(res, out.ok ? 201 : 403, out), true;
+  }
+  m = route('/api/orgs/:id/documents', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    const out = ecosystem.addOrgDocument(user, m.id, input);
+    return json(res, out.ok ? 201 : 403, out), true;
+  }
+  m = route('/api/orgs/:id/tasks', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    const out = ecosystem.addOrgTask(user, m.id, input);
+    return json(res, out.ok ? 201 : 403, out), true;
   }
 
   // —— Reputation / provenance / security / commerce / search ——

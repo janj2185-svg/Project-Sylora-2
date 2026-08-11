@@ -15,8 +15,40 @@ export function createMembership({ id, orgId, userId, role = 'member' }) {
   return { id, orgId, userId, role, joinedAt: new Date().toISOString() };
 }
 
-export function createTeam({ id, orgId, name }) {
-  return { id, orgId, name: String(name || '').slice(0, 80), createdAt: new Date().toISOString() };
+export function createTeam({ id, orgId, name, memberIds = [] }) {
+  return {
+    id,
+    orgId,
+    name: String(name || '').slice(0, 80),
+    memberIds: [...new Set(memberIds)].slice(0, 200),
+    createdAt: new Date().toISOString()
+  };
+}
+
+export function createOrgDocument({ id, orgId, authorId, title, body = '', privacy = 'business' }) {
+  return {
+    id,
+    orgId,
+    authorId,
+    title: String(title || '').slice(0, 160),
+    body: String(body || '').slice(0, 20000),
+    privacy,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+export function createOrgTask({ id, orgId, creatorId, title, assigneeId = null, status = 'open' }) {
+  return {
+    id,
+    orgId,
+    creatorId,
+    assigneeId,
+    title: String(title || '').slice(0, 160),
+    status: ['open', 'doing', 'done'].includes(status) ? status : 'open',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 }
 
 export function rbacAllows(role, action) {

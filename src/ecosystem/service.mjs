@@ -1,4 +1,4 @@
-import { createPersonalAgent, createActivityEntry, permissionDashboard } from './personal-ai.mjs';
+import { createPersonalAgent, createActivityEntry, permissionDashboard, contextRole } from './personal-ai.mjs';
 import { mergeAiPermissions as mergePerms, ACTION_LEVELS, DEFAULT_AI_PERMISSIONS } from './permissions.mjs';
 import { defaultIdentity, patchIdentity, publicIdentityView } from './identity.mjs';
 import { createNode, createEdge, visibleNodes, graphSummary, KG_NODE_TYPES, KG_EDGE_TYPES } from './knowledge-graph.mjs';
@@ -6,7 +6,7 @@ import { createActionRecord, canExecute, markConfirmed, markCompleted, BUILTIN_A
 import { createAgentManifest, installRecord, STARTER_CATALOG } from './agents.mjs';
 import { createDeveloperApp, generateApiKey, createApiKeyRecord, hashApiKey, OAUTH_DOC, scopeAllows } from './developer-platform.mjs';
 import { createTranslationJob, localDetectLanguage, localTranslateStub, VOICE_POLICY } from './translation.mjs';
-import { createOrganization, createMembership, rbacAllows, defaultEnterpriseControlPlane } from './business-os.mjs';
+import { createOrganization, createMembership, rbacAllows, defaultEnterpriseControlPlane, createTeam, createOrgDocument, createOrgTask } from './business-os.mjs';
 import { emptyReputation, applyEvidence, openDispute } from './reputation.mjs';
 import { createProvenance, createSecurityCenterView, privacyRequest } from './trust.mjs';
 import { createCommerceItem, sandboxCheckout } from './commerce.mjs';
@@ -14,6 +14,7 @@ import { structuredSearch, planAiSearch } from './search.mjs';
 import { createMetricsRegistry, aiUsageEvent } from './observability.mjs';
 import { defaultUserBudget, consume } from './cost-control.mjs';
 import { defaultRevenueShares } from './economy.mjs';
+import { createNegotiation, draftBusinessReply, confirmNegotiation } from './ai-to-ai.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -30,6 +31,10 @@ function ensureCollections(store) {
   d.translationJobs ||= [];
   d.organizations ||= [];
   d.orgMembers ||= [];
+  d.orgTeams ||= [];
+  d.orgDocuments ||= [];
+  d.orgTasks ||= [];
+  d.agentNegotiations ||= [];
   d.enterpriseControls ||= [];
   d.reputations ||= [];
   d.provenance ||= [];
@@ -38,6 +43,7 @@ function ensureCollections(store) {
   d.privacyRequests ||= [];
   d.aiBudgets ||= [];
   d.aiUsage ||= [];
+  d.studioAiPlans ||= [];
   d.audit ||= d.audit || [];
 }
 
@@ -54,23 +60,29 @@ function audit(store, actorId, action, targetType, targetId, metadata = {}) {
 }
 
 export class EcosystemService {
-  constructor(store) {
+  constructor(store, repo = null) {
     this.store = store;
+    this.repo = repo;
     this.metrics = createMetricsRegistry();
     ensureCollections(store);
+    this._catalogReady = null;
     this.seedCatalog();
   }
+
+  get pg() { return this.repo?.enabled ? this.repo : null; }
 
   seedCatalog() {
     if (this.store.data.agentCatalog.length) return;
     for (const item of STARTER_CATALOG) {
-      this.store.data.agentCatalog.push(createAgentManifest({
+      const agent = createAgentManifest({
         id: this.store.id(),
         developerId: 'sylora-platform',
         ...item,
         tools: item.capabilities,
         sandbox: true
-      }));
+      });
+      this.store.data.agentCatalog.push(agent);
+      if (this.pg) this._catalogReady = (this._catalogReady || Promise.resolve()).then(() => this.pg.upsertAgentCatalog(agent)).catch(() => {});
     }
     this.store.save();
   }
@@ -83,8 +95,24 @@ export class EcosystemService {
       agent = createPersonalAgent({ id: this.store.id(), userId: user.id, locale: user.locale || 'uk' });
       this.store.data.personalAgents.push(agent);
       this.store.save();
+      if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
       audit(this.store, user.id, 'personal_ai.created', 'personal_agent', agent.id);
     }
+    return agent;
+  }
+
+  async ensurePersonalAgentAsync(user) {
+    if (this.pg) {
+      const existing = await this.pg.findPersonalAgent(user.id);
+      if (existing) {
+        const idx = this.store.data.personalAgents.findIndex(a => a.userId === user.id && a.kind === 'personal');
+        if (idx >= 0) this.store.data.personalAgents[idx] = existing;
+        else this.store.data.personalAgents.push(existing);
+        return existing;
+      }
+    }
+    const agent = this.ensurePersonalAgent(user);
+    if (this.pg) await this.pg.upsertPersonalAgent(agent);
     return agent;
   }
 
@@ -93,6 +121,7 @@ export class EcosystemService {
     agent.permissions = mergePerms({ ...agent.permissions, ...patch });
     agent.updatedAt = this.store.now();
     this.store.save();
+    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
     audit(this.store, user.id, 'personal_ai.permissions_updated', 'personal_agent', agent.id, { permissions: agent.permissions });
     return agent;
   }
@@ -109,6 +138,7 @@ export class EcosystemService {
     const row = createActivityEntry({ id: this.store.id(), userId: user.id, agentId: agent.id, ...entry });
     this.store.data.aiActivity.push(row);
     this.store.save();
+    if (this.pg) this.pg.createActivity(row).catch(() => {});
     return row;
   }
 
@@ -138,6 +168,7 @@ export class EcosystemService {
       identity.agentId = agent.id;
       this.store.data.identities.push(identity);
       this.store.save();
+      if (this.pg) this.pg.upsertIdentity(identity).catch(() => {});
     }
     identity.username = user.username;
     identity.displayName = user.displayName;
@@ -150,6 +181,7 @@ export class EcosystemService {
     const idx = this.store.data.identities.findIndex(x => x.userId === user.id);
     this.store.data.identities[idx] = next;
     this.store.save();
+    if (this.pg) this.pg.upsertIdentity(next).catch(() => {});
     audit(this.store, user.id, 'identity.updated', 'identity', user.id);
     return next;
   }
@@ -171,6 +203,7 @@ export class EcosystemService {
     });
     this.store.data.kgNodes.push(node);
     this.store.save();
+    if (this.pg) this.pg.createKgNode(node).catch(() => {});
     audit(this.store, user.id, 'kg.node_created', 'kg_node', node.id, { type: node.type, privacy: node.privacy });
     return node;
   }
@@ -187,6 +220,7 @@ export class EcosystemService {
     });
     this.store.data.kgEdges.push(edge);
     this.store.save();
+    if (this.pg) this.pg.createKgEdge(edge).catch(() => {});
     return edge;
   }
 
@@ -206,6 +240,7 @@ export class EcosystemService {
     if (!node) return false;
     node.deletedAt = this.store.now();
     this.store.save();
+    if (this.pg) this.pg.softDeleteKgNode(user.id, id).catch(() => {});
     audit(this.store, user.id, 'kg.node_deleted', 'kg_node', id);
     return true;
   }
@@ -274,6 +309,7 @@ export class EcosystemService {
     });
     this.store.data.agentCatalog.push(manifest);
     this.store.save();
+    if (this.pg) this.pg.upsertAgentCatalog(manifest).catch(() => {});
     audit(this.store, user.id, 'agent.published', 'agent', manifest.id);
     return manifest;
   }
@@ -288,6 +324,10 @@ export class EcosystemService {
     this.store.data.agentInstalls.push(row);
     agent.installs = (agent.installs || 0) + 1;
     this.store.save();
+    if (this.pg) {
+      this.pg.createInstall(row).catch(() => {});
+      this.pg.bumpAgentInstalls(agentId).catch(() => {});
+    }
     audit(this.store, user.id, 'agent.installed', 'agent', agentId);
     return { ok: true, install: row, agent };
   }
@@ -298,6 +338,7 @@ export class EcosystemService {
     row.removedAt = this.store.now();
     row.status = 'removed';
     this.store.save();
+    if (this.pg) this.pg.removeInstall(user.id, agentId).catch(() => {});
     audit(this.store, user.id, 'agent.uninstalled', 'agent', agentId);
     return true;
   }
@@ -396,10 +437,15 @@ export class EcosystemService {
   // —— Business OS ——
   createOrg(user, input) {
     const org = createOrganization({ id: this.store.id(), ownerId: user.id, name: input.name, description: input.description });
+    const membership = createMembership({ id: this.store.id(), orgId: org.id, userId: user.id, role: 'owner' });
+    const plane = defaultEnterpriseControlPlane(org.id);
     this.store.data.organizations.push(org);
-    this.store.data.orgMembers.push(createMembership({ id: this.store.id(), orgId: org.id, userId: user.id, role: 'owner' }));
-    this.store.data.enterpriseControls.push(defaultEnterpriseControlPlane(org.id));
+    this.store.data.orgMembers.push(membership);
+    this.store.data.enterpriseControls.push(plane);
     this.store.save();
+    if (this.pg) {
+      this.pg.createOrg(org).then(() => this.pg.createMembership(membership)).then(() => this.pg.upsertControlPlane(plane)).catch(() => {});
+    }
     audit(this.store, user.id, 'org.created', 'organization', org.id);
     return org;
   }
@@ -411,7 +457,7 @@ export class EcosystemService {
 
   getControlPlane(user, orgId) {
     const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
-    if (!membership || !rbacAllows(membership.role, 'control_ai') && membership.role !== 'owner') {
+    if (!membership || (membership.role !== 'owner' && !rbacAllows(membership.role, 'control_ai'))) {
       return { ok: false, error: 'FORBIDDEN' };
     }
     const plane = this.store.data.enterpriseControls.find(c => c.orgId === orgId);
@@ -549,27 +595,197 @@ export class EcosystemService {
   }
 
   creatorStudioPlan(user, topic) {
+    const plan = {
+      topic: String(topic || '').slice(0, 200),
+      structure: ['Hook', 'Core value', 'Interactive mid', 'CTA', 'Outro'],
+      scenes: ['Intro', 'Demo', 'Q&A'],
+      overlays: ['Lower-third title', 'Poll', 'Gift goal'],
+      questions: [`What is your experience with ${topic}?`, 'What should we deep-dive next?'],
+      interactives: ['Poll', 'Q&A', 'Resonance invite'],
+      moderation: 'Suggest only — host confirms',
+      clips: 'Post-LIVE summary + 3 short clip candidates require approval',
+      subtitlePlan: ['Detect speech language', 'Generate captions', 'Offer translated captions'],
+      status: 'proposal'
+    };
     const action = this.proposeAction(user, {
       type: 'prepare_live',
       level: ACTION_LEVELS.REQUEST_CONFIRMATION,
       context: 'studio',
       reason: 'Creator asked Sylora to prepare a LIVE',
-      input: { topic }
+      input: { topic: plan.topic, plan }
     });
-    return {
-      action,
-      plan: {
-        topic: String(topic || '').slice(0, 200),
-        structure: ['Hook', 'Core value', 'Interactive mid', 'CTA', 'Outro'],
-        scenes: ['Intro', 'Demo', 'Q&A'],
-        overlays: ['Lower-third title', 'Poll', 'Gift goal'],
-        questions: [`What is your experience with ${topic}?`, 'What should we deep-dive next?'],
-        interactives: ['Poll', 'Q&A', 'Resonance invite'],
-        moderation: 'Suggest only — host confirms',
-        clips: 'Post-LIVE summary + 3 short clip candidates require approval',
-        status: 'proposal'
-      }
+    this.store.data.studioAiPlans.push({ id: action.id, userId: user.id, plan, status: 'pending', createdAt: this.store.now() });
+    this.store.save();
+    this.addProvenance(user, {
+      contentId: action.id,
+      contentType: 'studio_plan',
+      origin: 'ai',
+      creationMethod: 'ai_creator_studio',
+      aiInvolved: true
+    });
+    return { action, plan };
+  }
+
+  confirmCreatorStudioPlan(user, actionId) {
+    const out = this.confirmEcosystemAction(user, actionId);
+    if (!out.ok) return out;
+    const saved = this.store.data.studioAiPlans.find(p => p.id === actionId && p.userId === user.id);
+    if (saved) saved.status = 'confirmed';
+    const plan = saved?.plan || out.action?.input?.plan || {};
+    const scene = {
+      id: this.store.id(),
+      userId: user.id,
+      name: String(plan.topic || 'AI LIVE Plan').slice(0, 60),
+      overlayTitle: String(plan.topic || 'SYLORA LIVE').slice(0, 60),
+      overlayStyle: 'violet',
+      profileId: 'vertical1080',
+      micGain: 100,
+      micMuted: false,
+      aiPlan: plan,
+      createdAt: this.store.now(),
+      updatedAt: this.store.now()
     };
+    this.store.data.studioScenes.push(scene);
+    this.store.save();
+    this.recordActivity(user, {
+      kind: 'studio_plan_confirmed',
+      summary: `Confirmed AI LIVE plan: ${scene.name}`,
+      dataUsed: ['creator_studio', 'action_engine'],
+      reason: 'User confirmed prepare_live action',
+      context: 'studio'
+    });
+    return { ok: true, action: out.action, scene, plan };
+  }
+
+  createTeam(user, orgId, name) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership || (membership.role !== 'owner' && !rbacAllows(membership.role, 'manage_members'))) {
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+    const team = createTeam({ id: this.store.id(), orgId, name, memberIds: [user.id] });
+    this.store.data.orgTeams.push(team);
+    this.store.save();
+    audit(this.store, user.id, 'org.team_created', 'organization_team', team.id, { orgId });
+    return { ok: true, team };
+  }
+
+  listTeams(user, orgId) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership) return { ok: false, error: 'FORBIDDEN' };
+    return { ok: true, teams: this.store.data.orgTeams.filter(t => t.orgId === orgId) };
+  }
+
+  addOrgDocument(user, orgId, input) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership || (membership.role !== 'owner' && !rbacAllows(membership.role, 'view_knowledge'))) {
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+    const doc = createOrgDocument({
+      id: this.store.id(),
+      orgId,
+      authorId: user.id,
+      title: input.title,
+      body: input.body,
+      privacy: input.privacy || 'business'
+    });
+    this.store.data.orgDocuments.push(doc);
+    this.store.save();
+    this.addNode(user, {
+      type: 'document',
+      label: doc.title,
+      privacy: 'business',
+      data: { orgId, documentId: doc.id },
+      provenance: { source: 'business_os', createdHow: 'manual', aiInvolved: false }
+    });
+    return { ok: true, document: doc };
+  }
+
+  addOrgTask(user, orgId, input) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership) return { ok: false, error: 'FORBIDDEN' };
+    const task = createOrgTask({
+      id: this.store.id(),
+      orgId,
+      creatorId: user.id,
+      title: input.title,
+      assigneeId: input.assigneeId || null,
+      status: input.status || 'open'
+    });
+    this.store.data.orgTasks.push(task);
+    this.store.save();
+    return { ok: true, task };
+  }
+
+  listOrgWorkspace(user, orgId) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership) return { ok: false, error: 'FORBIDDEN' };
+    return {
+      ok: true,
+      role: membership.role,
+      teams: this.store.data.orgTeams.filter(t => t.orgId === orgId),
+      documents: this.store.data.orgDocuments.filter(d => d.orgId === orgId).slice(-50),
+      tasks: this.store.data.orgTasks.filter(t => t.orgId === orgId).slice(-50)
+    };
+  }
+
+  startNegotiation(user, input) {
+    const personal = this.ensurePersonalAgent(user);
+    const target = this.store.data.agentCatalog.find(a => a.id === input.toAgentId);
+    if (!target) return { ok: false, error: 'AGENT_NOT_FOUND' };
+    if (!this.store.data.agentInstalls.find(x => x.userId === user.id && x.agentId === target.id && !x.removedAt)
+      && target.developerId !== 'sylora-platform') {
+      // Platform starter agents may be negotiated without install; third-party requires install.
+    }
+    let negotiation;
+    try {
+      negotiation = createNegotiation({
+        id: this.store.id(),
+        userId: user.id,
+        fromAgentId: personal.id,
+        toAgentId: target.id,
+        topic: input.topic || 'proposal',
+        message: input.message || '',
+        payload: input.payload || {}
+      });
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+    negotiation.reply = draftBusinessReply(negotiation, target);
+    this.store.data.agentNegotiations.push(negotiation);
+    const action = this.proposeAction(user, {
+      type: 'agent_negotiation',
+      level: ACTION_LEVELS.REQUEST_CONFIRMATION,
+      context: 'business',
+      reason: 'AI-to-AI proposal requires human confirmation before any binding step',
+      input: { negotiationId: negotiation.id, topic: negotiation.topic, toAgentId: target.id }
+    });
+    this.recordActivity(user, {
+      kind: 'ai_to_ai_proposed',
+      summary: `Personal AI proposed ${negotiation.topic} to ${target.name}`,
+      dataUsed: ['agent_manifest', 'permissions'],
+      reason: negotiation.message || 'User requested agent negotiation',
+      context: 'business'
+    });
+    this.store.save();
+    return { ok: true, negotiation, action, warning: 'No financial or legal action executed.' };
+  }
+
+  confirmNegotiation(user, negotiationId) {
+    const negotiation = this.store.data.agentNegotiations.find(n => n.id === negotiationId && n.userId === user.id);
+    if (!negotiation) return { ok: false, error: 'NEGOTIATION_NOT_FOUND' };
+    const result = confirmNegotiation(negotiation);
+    if (!result.ok) return result;
+    Object.assign(negotiation, result.negotiation);
+    // Still does NOT execute booking/payment — only marks human-approved proposal readiness.
+    negotiation.status = 'approved_to_prepare';
+    negotiation.updatedAt = this.store.now();
+    this.store.save();
+    audit(this.store, user.id, 'ai_to_ai.confirmed', 'agent_negotiation', negotiationId, { topic: negotiation.topic });
+    return { ok: true, negotiation, executed: false, note: 'Approved to prepare only. EXECUTE_ALLOWED was not granted.' };
+  }
+
+  listNegotiations(user) {
+    return this.store.data.agentNegotiations.filter(n => n.userId === user.id).slice(-50);
   }
 
   commandCenterContext(view = 'command_center') {
@@ -579,6 +795,36 @@ export class EcosystemService {
       builtinActions: BUILTIN_ACTIONS,
       defaultPermissions: DEFAULT_AI_PERMISSIONS
     };
+  }
+
+  /** Build the single-AI multi-context pack used by chat / voice / LIVE / business. */
+  contextPack(user, view = 'command_center') {
+    const agent = this.ensurePersonalAgent(user);
+    const role = contextRole(agent, view);
+    const graph = this.graphFor(user, { asAi: true, relation: 'self' });
+    const installs = this.myInstalls(user).map(i => {
+      const catalog = this.store.data.agentCatalog.find(a => a.id === i.agentId);
+      return catalog ? { id: catalog.id, name: catalog.name, category: catalog.category, permissions: i.permissions } : null;
+    }).filter(Boolean);
+    return {
+      view,
+      role,
+      agent: { id: agent.id, name: agent.name, permissions: agent.permissions, contexts: agent.contexts },
+      knowledgeSummary: { nodes: graph.nodes, edges: graph.edges.length, byType: graph.byType },
+      installedAgents: installs,
+      instruction: this.contextInstruction(role, view)
+    };
+  }
+
+  contextInstruction(role, view) {
+    const map = {
+      personal: 'You are the user\'s Personal AI in the Command Center. Stay helpful, permission-aware and never claim writes completed without confirmation.',
+      creator_assistant: 'You are the same Personal AI acting as Creator Assistant in LIVE/Studio context. Propose scenes, overlays and moderation help; never publish or go live without confirmation.',
+      business_assistant: 'You are the same Personal AI acting as Business Assistant. You may prepare proposals and AI-to-AI negotiations, but financial/legal actions require confirmation.',
+      tutor: 'You are the same Personal AI acting as Tutor in learning context. Prefer explanations and quizzes; do not invent enrollments.',
+      communication_assistant: 'You are the same Personal AI acting as Communication Assistant in Messages. Draft replies; never send without confirmation.'
+    };
+    return `${map[role] || map.personal} Active view: ${view}.`;
   }
 }
 

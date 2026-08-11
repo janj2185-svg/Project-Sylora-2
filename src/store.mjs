@@ -8,7 +8,8 @@ const initial = () => ({
   aiMessages: [], aiMemories: [], aiActions: [],
   identities: [], personalAgents: [], aiActivity: [], kgNodes: [], kgEdges: [], ecosystemActions: [],
   agentCatalog: [], agentInstalls: [], developerApps: [], apiKeys: [], translationJobs: [],
-  organizations: [], orgMembers: [], enterpriseControls: [], reputations: [], provenance: [],
+  organizations: [], orgMembers: [], orgTeams: [], orgDocuments: [], orgTasks: [], agentNegotiations: [],
+  enterpriseControls: [], reputations: [], provenance: [], studioAiPlans: [],
   commerceItems: [], commerceOrders: [], privacyRequests: [], aiBudgets: [], aiUsage: [],
   communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [],
   businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], gifts: [
