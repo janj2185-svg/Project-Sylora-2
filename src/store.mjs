@@ -7,7 +7,15 @@ const initial = () => ({
   notifications: [], wallets: [], ledger: [], messages: [], conversations: [],
   aiMessages: [], aiMemories: [], aiActions: [],
   communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [],
-  businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], gifts: [
+  businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], personalAi: [], identities: [], knowledgeNodes: [], knowledgeEdges: [], knowledgeConsents: [],
+  agentCatalog: [], agentInstalls: [], agentReviews: [], developerProfiles: [],
+  devApps: [], devApiKeys: [], devWebhooks: [], devWebhookLogs: [], devUsage: [], oauthGrants: [],
+  organizations: [], orgMembers: [], orgProjects: [], orgAgents: [], orgPolicies: [], orgAudit: [], orgBudgets: [],
+  commerceProducts: [], commerceOrders: [], commerceSubscriptions: [], commerceMemberships: [], payoutRequests: [], refundRequests: [],
+  reputationScores: [], reputationEvents: [], reputationDisputes: [],
+  securitySessions: [], securityDevices: [], privacyRequests: [], syntheticLabels: [], moderationAppeals: [],
+  provenanceRecords: [], creatorStudioPlans: [], ecosystemActions: [],
+  gifts: [
     { id: 'spark', name: 'Crystal Star', price: 10, tier: 'basic', color: '#e8b95f' },
     { id: 'pulse', name: 'Crystal Heart', price: 25, tier: 'basic', color: '#a98ae8' },
     { id: 'lumen-bloom', name: 'Eternal Lotus', price: 75, tier: 'basic', color: '#72cfb8' },

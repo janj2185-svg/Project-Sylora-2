@@ -41,11 +41,17 @@ export class SpringValue {
   }
 }
 
+/**
+ * Cohesive Digital Human motion.
+ * Joint springs still converge for semantic gesture targets, but the live UI
+ * composites whole-body base + gesture atlas (no detached limb sprites).
+ */
 export class SyloraMotionRig {
   constructor(random = Math.random) {
     this.random = random;
     this.presence = 'ready';
     this.gesture = 'neutral';
+    this.mode = 'cohesive';
     this.voiceEnergy = 0;
     this.gazeX = 0;
     this.gazeY = 0;

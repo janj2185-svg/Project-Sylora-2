@@ -124,3 +124,37 @@ body[data-view="learning"] .progress{height:7px;background:#eee8e3;border-radius
 @media(prefers-reduced-motion:reduce){.sylora-avatar-gesture{transition:none}.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:1}}
 @keyframes sylora-gesture-layer{0%,100%{transform:translateY(var(--gesture-lift,0px)) rotate(0deg)}42%{transform:translateY(calc(var(--gesture-lift,0px) - 1px)) rotate(-.12deg)}74%{transform:translateY(var(--gesture-lift,0px)) rotate(.1deg)}}
 @media(prefers-reduced-motion:reduce){.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:0}.sylora-avatar-gesture.gesture-shown{opacity:1}}
+
+/* Digital Human V3 — cohesive assembled Sylora (whole-body base + gesture atlas).
+   Detached limb/hand sprites are retired from the live composition. */
+.sylora-ai-hero.has-living-avatar .sylora-avatar-motion,
+.sylora-ai-hero .sylora-avatar-motion{display:block}
+.sylora-ai-hero.has-living-avatar:after,
+.sylora-ai-hero.has-living-avatar:before{opacity:0!important}
+.sylora-avatar-motion{inset:10px 10px auto auto;width:min(41%,248px);height:auto;aspect-ratio:3/4;overflow:hidden;border-radius:22px;background:linear-gradient(160deg,#fffaf2,#f7f1ff);border:1px solid rgba(255,255,255,.82);box-shadow:0 18px 44px rgba(120,88,91,.10);z-index:1}
+.sylora-avatar-body{background-image:url('/assets/sylora-avatar-v2-base.png')!important;background-size:cover!important;background-position:center top!important;animation:none!important;transform:translateY(var(--body-y,0px)) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));transform-origin:50% 74%;will-change:transform;z-index:1}
+.sylora-avatar-gesture{background-image:url('/assets/sylora-gestures-v2.png')!important;background-size:400% 200%!important;background-position:var(--gesture-x,0%) var(--gesture-y,0%);opacity:0;z-index:2;transition:opacity .28s cubic-bezier(.22,.75,.24,1);transform:translateY(calc(var(--body-y,0px) + var(--gesture-lift,0px))) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));transform-origin:50% 74%}
+.sylora-avatar-gesture.gesture-shown{opacity:1}
+.sylora-rig-arm,.sylora-rig-upper,.sylora-rig-forearm,.sylora-rig-hand,.sylora-hand-pose{display:none!important}
+.sylora-avatar-head,.sylora-avatar-hair,.sylora-avatar-eyes,.sylora-avatar-blink{z-index:3}
+.sylora-avatar-head{background-image:url('/assets/sylora-visemes-v2.png')!important;background-size:400% 200%!important;background-position:var(--viseme-x,0%) var(--viseme-y,0%);clip-path:ellipse(28% 22% at 50% 21%);transform-origin:50% 24%}
+.sylora-avatar-hair{background-image:url('/assets/sylora-visemes-v2.png')!important;background-size:400% 200%!important;background-position:0 0;clip-path:polygon(30% 0,70% 0,76% 9%,72% 18%,66% 24%,58% 28%,43% 28%,34% 24%,27% 16%,26% 7%);transform:translate(var(--hair-x,0px),var(--hair-y,0px)) rotate(var(--hair-rot,0deg)) skewX(var(--hair-skew,0deg));transform-origin:50% 18%}
+.sylora-avatar-eyes,.sylora-avatar-blink{background-image:url('/assets/sylora-expressions-v2.png')!important;background-size:400% 200%!important;clip-path:polygon(18% 7%,82% 7%,82% 30%,18% 30%);transform-origin:50% 22%}
+.ai-command-center{margin:0 0 18px;padding:18px 18px 14px;border-radius:20px;border:1px solid rgba(255,255,255,.86);background:linear-gradient(145deg,rgba(255,252,247,.9),rgba(246,241,255,.78))}
+.ai-command-center h3{margin:6px 0 4px}
+.ai-command-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.ai-command-grid small{display:block;letter-spacing:.12em;font-size:9px;color:#8d7f86;margin-bottom:6px}
+.ai-command-grid ul{margin:0;padding-left:16px;color:#6f656b;font-size:12px}
+.ai-command-grid p{margin:0;font-size:12px;color:#6f656b;line-height:1.45}
+.ai-command-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.ai-permission-board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.ai-permission-board label{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#6f656b;padding:8px;border-radius:12px;background:rgba(255,255,255,.55)}
+.ai-permission-board .primary{grid-column:1/-1}
+@media(max-width:720px){
+  .sylora-avatar-motion{inset:auto 16px 108px auto;width:min(58vw,250px)}
+  .ai-command-grid,.ai-permission-board{grid-template-columns:1fr}
+  .sylora-ai-hero.has-living-avatar{min-height:520px;padding-bottom:280px}
+}
+@media(prefers-reduced-motion:reduce){
+  .sylora-avatar-body,.sylora-avatar-gesture,.sylora-avatar-hair{transition:none}
+}

@@ -35,3 +35,14 @@ test('semantic gestures choose anatomical whole-hand poses', () => {
   assert.equal(handPoseForGesture('emphasis'), 'emphasis');
   assert.equal(handPoseForGesture('unknown'), 'neutral');
 });
+
+test('cohesive digital human mode keeps semantic joints without requiring limb sprites', () => {
+  const rig = new SyloraMotionRig(() => 0.5);
+  assert.equal(rig.mode, 'cohesive');
+  rig.setGesture('welcome');
+  let pose;
+  for (let frame = 0; frame < 60; frame++) pose = rig.step(frame * 16.667 + 1);
+  assert.ok(pose.joints.leftShoulder < 0);
+  assert.ok(pose.joints.rightShoulder > 0);
+  assert.ok(pose.bodyScale >= 1);
+});

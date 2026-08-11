@@ -8,7 +8,10 @@
     "start": "node src/server.mjs",
     "companion": "node src/companion.mjs",
     "db:migrate": "node scripts/migrate.mjs",
-    "test": "DATABASE_URL= REDIS_URL= node --test --test-force-exit tests/*.test.mjs"
+    "test": "DATABASE_URL= REDIS_URL= node --test --test-force-exit tests/*.test.mjs",
+    "lint": "node --check src/server.mjs && node --check src/ecosystem/router.mjs && node --check public/sylora-motion.js && node --check public/app.js && node --check sdk/js/sylora-client.mjs",
+    "typecheck": "node --check src/ecosystem/index.mjs && node --check src/ecosystem/permissions.mjs && node --check src/ecosystem/knowledge-graph.mjs && node --check src/ecosystem/business.mjs",
+    "build": "node --check src/server.mjs && node --check public/app.js && node --check public/sylora-motion.js"
   },
   "engines": {
     "node": ">=22"

@@ -19,6 +19,8 @@ import { LivePeerRegistry } from './live-peer-registry.mjs';
 import { ConferenceFanout } from './conference-fanout.mjs';
 import { PostgresOutboxRepository } from './repositories/postgres-outbox.mjs';
 import { PostgresConferenceRepository } from './repositories/postgres-conference.mjs';
+import { handleEcosystemApi } from './ecosystem/router.mjs';
+import { createMetrics } from './ecosystem/observability.mjs';
 import { RealtimeOutbox } from './realtime-outbox.mjs';
 import { RealtimeFanout } from './realtime-fanout.mjs';
 
@@ -46,6 +48,7 @@ const openaiModel=String(process.env.OPENAI_MODEL||'gpt-5.6');
 const openaiRealtimeModel=String(process.env.OPENAI_REALTIME_MODEL||'gpt-realtime-2.1');
 const openaiRealtimeVoice=String(process.env.OPENAI_REALTIME_VOICE||'marin');
 const liveIceServers=parseIceServers(process.env.SYLORA_ICE_SERVERS_JSON);
+const ecosystemMetrics=createMetrics();
 const openai=process.env.OPENAI_API_KEY?new OpenAI({apiKey:process.env.OPENAI_API_KEY,...(process.env.OPENAI_BASE_URL?{baseURL:process.env.OPENAI_BASE_URL}:{})}):null;
 const aiBuckets=new Map();
 const postgres=new PostgresService(process.env.DATABASE_URL);
@@ -236,6 +239,24 @@ function serveHls(req,res,mediaId,fileName){if(!/^(index\.m3u8|seg-\d{5}\.ts)$/.
 
 async function api(req, res, url) {
   const p = url.pathname;
+  if (p.startsWith('/api/ecosystem/') || p === '/api/v1/openapi.json') {
+    const handled = await handleEcosystemApi({
+      req, res, url, path: p, method: req.method, json, store, body, metrics: ecosystemMetrics,
+      requireUser,
+      listMemories: async (userId) => aiListMemories(userId, 50),
+      listPendingActions: async (userId) => aiListPendingActions(userId, 20),
+      clearLongMemories: async (userId) => {
+        if (aiRepo.enabled) {
+          const mems = await aiListMemories(userId, 500);
+          for (const m of mems) await aiDeleteMemory(userId, m.id);
+        } else {
+          store.data.aiMemories = (store.data.aiMemories || []).filter(m => m.userId !== userId);
+          store.save();
+        }
+      }
+    });
+    if (handled !== false) return;
+  }
   if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',dependencies})}
   if(req.method==='GET'&&p==='/api/ready'){const dependencies=await dependencyHealth();return json(res,dependencies.ready?200:503,{ready:dependencies.ready,dependencies})}
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
