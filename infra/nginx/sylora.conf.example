@@ -1,0 +1,47 @@
+# Example nginx reverse proxy for SYLORA on a VPS (e.g. Hetzner).
+# Copy to /etc/nginx/sites-available/getsylora.com and adjust paths/certs.
+# App listens on 127.0.0.1:8787 (see compose.yaml).
+
+upstream sylora_app {
+  server 127.0.0.1:8787;
+  keepalive 32;
+}
+
+server {
+  listen 80;
+  listen [::]:80;
+  server_name getsylora.com www.getsylora.com;
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl http2;
+  listen [::]:443 ssl http2;
+  server_name getsylora.com www.getsylora.com;
+
+  # ssl_certificate     /etc/letsencrypt/live/getsylora.com/fullchain.pem;
+  # ssl_certificate_key /etc/letsencrypt/live/getsylora.com/privkey.pem;
+
+  client_max_body_size 110m;
+
+  # Long-lived SSE / realtime voice SDP proxy
+  location / {
+    proxy_pass http://sylora_app;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+
+  location /api/ready {
+    proxy_pass http://sylora_app;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    access_log off;
+  }
+}

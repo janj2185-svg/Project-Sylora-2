@@ -144,8 +144,9 @@ async function openConversation(id){const {messages}=await api(`/api/conversatio
 
 function renderMore(){app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Спокійні налаштування профілю, приватності, Sylora AI та всієї екосистеми.</p></div><section class="settings-scene"><div class="settings-copy"><span class="eyebrow">НАЛАШТУВАННЯ</span><h2>Усе під твоїм контролем.</h2><p>SYLORA не ховає важливі рішення: профіль, пам’ять AI та комунікації відкриваються окремо.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><div class="module-grid settings-grid"><div class="card module" data-go="profile"><span class="icon">○</span><h3>Акаунт і профіль</h3><p>Ім’я, мова, профіль, гаманець і статистика.</p></div><div class="card module" data-go="identity"><span class="icon">◈</span><h3>SYLORA Identity</h3><p>Цифрова ідентичність, навички, портфоліо та рівні приватності.</p></div><div class="card module" data-go="ai"><span class="icon">✦</span><h3>Sylora AI</h3><p>Один Personal AI, пам’ять, дозволи та прозора історія дій.</p></div><div class="card module" data-go="agents"><span class="icon">⬡</span><h3>Agent Marketplace</h3><p>Встановлюй і керуй AI-агентами з явними дозволами.</p></div><div class="card module" data-go="developer"><span class="icon">⌁</span><h3>Developer Platform</h3><p>Додатки, API-ключі, scopes і пісочниця інтеграцій.</p></div><div class="card module" data-go="security"><span class="icon">⛨</span><h3>Центр безпеки</h3><p>Приватність, експорт даних, репутація та provenance.</p></div><div class="card module" data-go="messages"><span class="icon">◌</span><h3>Комунікації</h3><p>Приватні повідомлення та твій простір спілкування.</p></div><div class="card module" data-go="videos"><span class="icon">▻</span><h3>Медіа</h3><p>Відео, довгі формати та медіа-пайплайн.</p></div><div class="card module" data-go="communities"><span class="icon">◎</span><h3>Спільноти</h3><p>Твої кола, канали й простори.</p></div><div class="card module" data-go="learning"><span class="icon">⌬</span><h3>Science</h3><p>Навчання, дослідження та закриті конференції.</p></div><div class="card module" data-go="business"><span class="icon">◈</span><h3>Business</h3><p>Організації, команди та Enterprise AI Control Plane.</p></div>${state.me?.role==='admin'?'<div class="card module" data-go="admin"><span class="icon">⚙</span><h3>Moderation</h3><p>Reports та audit log.</p></div>':''}</div>`;document.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>nav(x.dataset.go))}
 async function renderIdentity(){
-  const {identity}=await api('/api/identity');
+  const [{identity},kg]=await Promise.all([api('/api/identity'),api('/api/kg').catch(()=>({nodes:[],edges:[]}))]);
   const p=identity.privacy||{};
+  const nodes=Array.isArray(kg.nodes)?kg.nodes:[];
   app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA IDENTITY</span><h1>${esc(identity.displayName||state.me.displayName)}</h1><p>Не сторінка соцмережі — цифрова ідентичність із контрольованою приватністю.</p></div>
   <form id="identityForm" class="card fields"><span class="eyebrow">ПРОФЕСІЙНЕ</span>
   <input name="title" placeholder="Посада" value="${esc(identity.professional?.title||'')}">
@@ -155,7 +156,12 @@ async function renderIdentity(){
   <input name="headline" placeholder="Creator headline" value="${esc(identity.creatorPersona?.headline||'')}">
   <span class="eyebrow">ПРИВАТНІСТЬ ПОЛІВ</span>
   ${['profile','professional','portfolio','skills','interests','reputation','agent','assets'].map(k=>`<label>${k}<select name="privacy_${k}">${['public','followers','connections','business','private','ai_only'].map(v=>`<option value="${v}" ${p[k]===v?'selected':''}>${v}</option>`).join('')}</select></label>`).join('')}
-  <button class="primary">Зберегти Identity</button></form>`;
+  <button class="primary">Зберегти Identity</button></form>
+  <section class="card"><span class="eyebrow">KNOWLEDGE GRAPH</span><h3>Що Sylora може знати з твого дозволу</h3>
+  <form id="kgForm" class="fields"><input name="label" maxlength="120" placeholder="Напр. Улюблена мова" required><input name="value" maxlength="1000" placeholder="Значення" required>
+  <select name="privacy"><option value="private">private</option><option value="ai_only">ai_only</option><option value="connections">connections</option><option value="public">public</option></select>
+  <button class="ghost">Додати вузол</button></form>
+  <div class="stack">${nodes.slice(-20).reverse().map(n=>`<div class="item row"><div><b>${esc(n.label||n.type||'node')}</b><p class="muted">${esc(n.data?.value||n.data?.summary||n.type||'')} · ${esc(n.privacy||'private')}</p></div><button class="ghost kg-del" data-id="${esc(n.id)}">Видалити</button></div>`).join('')||'<p class="muted">Граф поки порожній.</p>'}</div></section>`;
   document.querySelector('#identityForm').onsubmit=async e=>{
     e.preventDefault();
     const fd=new FormData(e.currentTarget);
@@ -168,6 +174,13 @@ async function renderIdentity(){
     })});
     toast('Identity оновлено');renderIdentity();
   };
+  document.querySelector('#kgForm')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(e.currentTarget);
+    await api('/api/kg/nodes',{method:'POST',body:JSON.stringify({label:fd.get('label'),privacy:fd.get('privacy'),type:'knowledge',data:{value:String(fd.get('value')||'')}})});
+    toast('Вузол додано');renderIdentity();
+  });
+  document.querySelectorAll('.kg-del').forEach(b=>b.onclick=async()=>{await api(`/api/kg/nodes/${b.dataset.id}`,{method:'DELETE'});toast('Вузол видалено');renderIdentity()});
 }
 async function renderAgents(){
   const [{agents},{installs}]=await Promise.all([api('/api/agents'),api('/api/agents/installed')]);

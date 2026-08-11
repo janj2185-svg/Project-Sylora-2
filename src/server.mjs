@@ -73,12 +73,35 @@ function json(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(value);
 }
+function companionConnectSrc() {
+  const defaults = ['http://127.0.0.1:43179', 'http://localhost:43179', 'ws://127.0.0.1:4455', 'ws://localhost:4455', 'wss://localhost:4455'];
+  const extra = String(process.env.SYLORA_COMPANION_ORIGINS || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+  return [...new Set([...defaults, ...extra])].join(' ');
+}
 function securityHeaders(res) {
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('x-frame-options', 'DENY');
   res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   res.setHeader('permissions-policy', 'camera=(self), microphone=(self), geolocation=()');
-  res.setHeader('content-security-policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' http://127.0.0.1:43179 http://localhost:43179 ws://127.0.0.1:4455 ws://localhost:4455 wss://localhost:4455; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    `connect-src 'self' ${companionConnectSrc()}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'"
+  ];
+  if (process.env.NODE_ENV === 'production') csp.push('upgrade-insecure-requests');
+  res.setHeader('content-security-policy', csp.join('; '));
+  if (process.env.NODE_ENV === 'production' && process.env.SYLORA_ENABLE_HSTS === '1') {
+    res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  }
 }
 async function allowRequest(req) {
   const ip = req.socket.remoteAddress || 'unknown';

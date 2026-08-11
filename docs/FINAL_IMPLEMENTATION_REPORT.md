@@ -56,8 +56,19 @@
 - AI Creator Studio confirm path that materializes a Studio scene
 - Provenance on AI studio plans
 
+## Continuation (no-VPS) — 2026-08-11
+
+- Mobile dock: **Ще** (Settings) so Identity / Agents / Developer / Security / KG are reachable on phone
+- Knowledge Graph UI on Identity page (list/create/delete)
+- Gift engines import Three.js via relative vendor paths (not bare `'three'`)
+- Avatar tablet band + assembled CSS retained
+- Security: env-gated HSTS, `upgrade-insecure-requests` in production CSP, companion origins from env
+- Deploy prep: `infra/nginx/sylora.conf.example`, `docs/DEPLOY-HETZNER.md`, `scripts/deploy-prod.sh` dry-run
+- Tests: **82/82** pass
+
 ## Still not claimed DONE
 
+- **Production deploy to Hetzner `77.42.42.246`** — blocked only on secure SSH (`PROD_SSH_USER` / `PROD_SSH_PRIVATE_KEY`); does not block development
 - Production payments / payouts
 - Full OAuth/OIDC provider with JWKS
 - Speech/voice translation + voice preserve

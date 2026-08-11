@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from '../vendor/three/three.module.js';
 import {DEPTH_PLANES} from './stream-compositor.js';
 
 const VERT=`
