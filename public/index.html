@@ -11,5 +11,7 @@
   </main>
   <nav class="mobile-dock" aria-label="SYLORA mobile navigation"><button data-view="feed" class="nav active"><span>⌂</span><span data-i18n="home">Головна</span></button><button data-view="live" class="nav"><span>◉</span><span data-i18n="live">LIVE</span></button><button data-view="ai" class="nav"><span>✦</span><span data-i18n="ai">Sylora</span></button><button data-view="messages" class="nav"><span>◌</span><span data-i18n="chat">Чат</span></button><button data-view="profile" class="nav"><span>♙</span><span data-i18n="profile">Профіль</span></button></nav>
   <div id="gift-stage"></div><div id="toast"></div>
+  <button id="syloraCommandFab" class="sylora-command-fab" type="button" aria-label="Sylora Command Center" hidden><span>✦</span></button>
+  <aside id="syloraCommandPanel" class="sylora-command-panel" hidden aria-label="Sylora Command Center"><header><span>✦ Sylora</span><button id="syloraCommandClose" type="button" aria-label="Закрити">×</button></header><p class="muted">Один Personal AI · одна пам’ять · будь-який контекст.</p><form id="syloraCommandForm"><textarea name="text" maxlength="6000" placeholder="Запитай Sylora…" required></textarea><button class="primary" type="submit">↑</button></form><div class="sylora-command-actions"><button type="button" data-command-view="ai">Повний AI простір</button><button type="button" id="syloraCommandVoice">Жива розмова</button></div></aside>
   <script src="/bootstrap-diagnostics.js?v=20260809-3"></script><script type="module" src="/app.js?v=20260809-3"></script>
 </body></html>

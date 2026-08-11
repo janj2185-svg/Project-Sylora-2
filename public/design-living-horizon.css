@@ -124,3 +124,38 @@ body[data-view="learning"] .progress{height:7px;background:#eee8e3;border-radius
 @media(prefers-reduced-motion:reduce){.sylora-avatar-gesture{transition:none}.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:1}}
 @keyframes sylora-gesture-layer{0%,100%{transform:translateY(var(--gesture-lift,0px)) rotate(0deg)}42%{transform:translateY(calc(var(--gesture-lift,0px) - 1px)) rotate(-.12deg)}74%{transform:translateY(var(--gesture-lift,0px)) rotate(.1deg)}}
 @media(prefers-reduced-motion:reduce){.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:0}.sylora-avatar-gesture.gesture-shown{opacity:1}}
+
+/* Sylora Digital Human V2 — assembled rig always on AI page; sprite gestures disabled to avoid double arms. */
+.sylora-ai-hero.avatar-rig:before,.sylora-ai-hero.avatar-rig:after{display:none!important;opacity:0!important;animation:none!important}
+.sylora-ai-hero.avatar-rig .sylora-avatar-motion{display:block!important}
+.sylora-ai-hero.avatar-rig .sylora-avatar-gesture{display:none!important;opacity:0!important}
+.sylora-avatar-body{z-index:0}
+.sylora-avatar-gesture{z-index:1}
+.sylora-rig-arm{z-index:2}
+.sylora-avatar-head,.sylora-avatar-hair{z-index:3}
+.sylora-avatar-eyes,.sylora-avatar-blink{z-index:4}
+.sylora-rig-arm{top:41%;width:11.2%;height:30.8%}
+.sylora-rig-arm-left{left:15.4%}
+.sylora-rig-arm-right{right:15.4%}
+.sylora-avatar-head{background-position:var(--viseme-x,0%) var(--viseme-y,0%);transform:translate(calc(var(--gaze-x,0px) + var(--saccade-x,0px)),calc(var(--gaze-y,0px) + var(--saccade-y,0px)));transition:background-position .065s steps(1),transform .14s ease-out;will-change:transform,background-position}
+.sylora-avatar-eyes,.sylora-avatar-blink{transform:translate(calc(var(--gaze-x,0px) + var(--saccade-x,0px)),calc(var(--gaze-y,0px) + var(--saccade-y,0px)));transition:transform .14s ease-out;will-change:transform}
+.sylora-ai-hero.avatar-rig:not(.realtime-live){min-height:330px}
+@media(max-width:720px){.sylora-ai-hero.avatar-rig:not(.realtime-live){min-height:430px;padding-bottom:235px}.sylora-ai-hero.avatar-rig:not(.realtime-live) .sylora-avatar-motion{inset:auto 18px 108px auto;width:min(58vw,250px);height:auto;aspect-ratio:3/4}}
+
+/* Sylora Command Center — global AI entry from any view */
+.sylora-command-fab{position:fixed;right:22px;bottom:88px;z-index:60;width:52px;height:52px;border:1px solid rgba(255,255,255,.9);border-radius:18px;background:linear-gradient(145deg,rgba(255,248,236,.95),rgba(244,237,255,.9));box-shadow:0 14px 40px rgba(108,82,98,.14);color:#7a5f35;font-size:22px;cursor:pointer}
+.sylora-command-fab span{display:grid;place-items:center}
+.sylora-command-panel{position:fixed;right:22px;bottom:150px;z-index:61;width:min(360px,calc(100vw - 32px));padding:14px;border-radius:20px;border:1px solid rgba(255,255,255,.9);background:linear-gradient(145deg,rgba(255,254,251,.96),rgba(246,242,255,.9));box-shadow:0 22px 60px rgba(90,68,82,.16);backdrop-filter:blur(18px)}
+.sylora-command-panel header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-weight:700}
+.sylora-command-panel header button{border:0;background:transparent;font-size:20px;cursor:pointer;color:#8a7d83}
+.sylora-command-panel form{display:flex;gap:8px;margin-top:10px}
+.sylora-command-panel textarea{flex:1;min-height:54px;border:1px solid rgba(138,103,89,.1);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.82);resize:vertical;font:inherit}
+.sylora-command-panel .primary{width:44px;height:44px;padding:0;border-radius:14px}
+.sylora-command-actions{display:flex;gap:8px;margin-top:10px}
+.sylora-command-actions button{flex:1;border:1px solid rgba(138,103,89,.1);border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.7);font-size:10px;cursor:pointer}
+.ai-permissions-grid{display:grid;gap:8px;margin-top:10px}
+.ai-permission-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.62);border:1px solid rgba(138,103,89,.07)}
+.ai-permission-row small{color:#8a7d83;font-size:9px}
+.ai-activity-log{display:grid;gap:6px;margin-top:8px;max-height:220px;overflow:auto}
+.ai-activity-item{padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.65);border:1px solid rgba(138,103,89,.06);font-size:10px}
+@media(max-width:720px){.sylora-command-fab{right:14px;bottom:78px}.sylora-command-panel{right:14px;bottom:136px}}

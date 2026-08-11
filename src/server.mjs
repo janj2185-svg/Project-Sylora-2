@@ -21,6 +21,11 @@ import { PostgresOutboxRepository } from './repositories/postgres-outbox.mjs';
 import { PostgresConferenceRepository } from './repositories/postgres-conference.mjs';
 import { RealtimeOutbox } from './realtime-outbox.mjs';
 import { RealtimeFanout } from './realtime-fanout.mjs';
+import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
+import { PersonalAiService } from './ecosystem/personal-ai.mjs';
+import { defaultIdentityProfile, mergeIdentityProfile } from './ecosystem/identity.mjs';
+import { buildNode } from './ecosystem/knowledge-graph.mjs';
+import { AI_PERMISSION_KEYS } from './ecosystem/permissions.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -61,6 +66,8 @@ const aiRepo=new PostgresAiRepository(postgres.pool);
 const liveRepo=new PostgresLiveRepository(postgres.pool);
 const outboxRepo=new PostgresOutboxRepository(postgres.pool);
 const conferenceRepo=new PostgresConferenceRepository(postgres.pool);
+const ecosystemRepo=new PostgresEcosystemRepository(postgres.pool);
+const personalAi=new PersonalAiService({store,aiRepo,ecosystemRepo});
 const realtimeOutbox=new RealtimeOutbox({repository:outboxRepo,dispatch:dispatchOutboxEvent});
 
 function json(res, status, body) {
@@ -168,6 +175,26 @@ function emitUser(userId,type,event){const targets=userStreams.get(userId);if(!t
 async function notifyUser(userId,type,actorId,payload={}){const notification=store.notify(userId,type,actorId,payload);if(notification&&authSocial.enabled)await authSocial.createNotification(notification);if(notification)emitUser(userId,'notification',{...notification,actor:store.publicUser(store.data.users.find(u=>u.id===actorId))});return notification}
 function safeText(value, max = 2000) { return String(value ?? '').trim().slice(0, max); }
 async function createTextPost(user,text){let post={id:store.id(),userId:user.id,text:safeText(text,4000),kind:'text',createdAt:store.now()};if(authSocial.enabled)post=await authSocial.createPost(post);cachePost(post);return post}
+async function identityForUser(user){
+  const base=defaultIdentityProfile(user);
+  if(ecosystemRepo.enabled){
+    const stored=await ecosystemRepo.getIdentityProfile(user.id);
+    if(stored)return {...base,...stored,displayName:user.displayName,username:user.username,bio:user.bio,locale:user.locale};
+  }
+  const stored=store.data.identityProfiles?.find(x=>x.userId===user.id);
+  if(stored)return {...base,...stored,displayName:user.displayName,username:user.username,bio:user.bio,locale:user.locale};
+  return base;
+}
+async function saveIdentity(user,patch){
+  const merged=mergeIdentityProfile(await identityForUser(user),patch);
+  const record={...merged,userId:user.id,updatedAt:store.now()};
+  if(ecosystemRepo.enabled)return ecosystemRepo.upsertIdentityProfile(user.id,record);
+  const idx=store.data.identityProfiles?.findIndex(x=>x.userId===user.id)??-1;
+  if(!store.data.identityProfiles)store.data.identityProfiles=[];
+  if(idx>=0)store.data.identityProfiles[idx]=record;else store.data.identityProfiles.push(record);
+  store.save();
+  return record;
+}
 async function aiContext(user){
   const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},memories=(await aiListMemories(user.id,30)).map(({label,value})=>({label,value}));
   return {profile:{id:user.id,username:user.username,displayName:user.displayName,bio:user.bio,locale:user.locale},stats:{...social,creatorEarnings:wallet?.earnings||0},communities:store.data.communityMembers.filter(x=>x.userId===user.id).map(m=>store.data.communities.find(c=>c.id===m.communityId)).filter(Boolean).slice(0,20).map(c=>({id:c.id,name:c.name})),courses:store.data.enrollments.filter(x=>x.userId===user.id).map(e=>{const c=store.data.courses.find(x=>x.id===e.courseId);return c?{id:c.id,title:c.title,progress:e.progress}:null}).filter(Boolean).slice(0,20),memories};
@@ -405,7 +432,16 @@ async function api(req, res, url) {
   if(req.method==='POST'&&p==='/api/videos'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const media=store.data.media.find(x=>x.id===input.mediaId&&x.userId===user.id);if(!media)return json(res,400,{error:'OWNED_MEDIA_REQUIRED'});const format=input.format==='clip'?'clip':'video';const video={id:store.id(),userId:user.id,mediaId:media.id,title:safeText(input.title,120)||'Untitled',description:safeText(input.description,2000),format,visibility:'public',createdAt:store.now()};store.data.videos.push(video);store.save();const job=startHlsJob(media,user);return json(res,201,{video:{...video,media:{...media,url:`/media/${media.id}`},author:store.publicUser(user),stream:publicJob(job)}});}
   if(req.method==='GET'&&p==='/api/stats'){const user=await requireUser(req,res);if(!user)return;const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),creatorEarnings:wallet?.earnings||0};return json(res,200,{...social,...giftStats});}
   if(req.method==='GET'&&p==='/api/progress'){const user=await requireUser(req,res);if(!user)return;const progress=authSocial.enabled?await walletRepo.progress(user.id):{donorXp:store.data.donorProgress.find(x=>x.userId===user.id)?.giftXp||0};return json(res,200,{...progress,orbitLevel:levelFromXp(progress.donorXp)})}
-  if(req.method==='GET'&&p==='/api/ai/history'){const user=await requireUser(req,res);if(!user)return;const [messages,memories,pendingActions]=await Promise.all([aiListMessages(user.id,50),aiListMemories(user.id,50),aiListPendingActions(user.id,20)]);return json(res,200,{messages,memories,pendingActions,model:openaiModel,configured:!!openai})}
+  if(req.method==='GET'&&p==='/api/ai/history'){const user=await requireUser(req,res);if(!user)return;const [messages,memories,pendingActions,aiSettings]=await Promise.all([aiListMessages(user.id,50),aiListMemories(user.id,50),aiListPendingActions(user.id,20),personalAi.getSettings(user.id)]);return json(res,200,{messages,memories,pendingActions,aiSettings,model:openaiModel,configured:!!openai})}
+  if(req.method==='GET'&&p==='/api/identity'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{identity:await identityForUser(user)})}
+  if(req.method==='PATCH'&&p==='/api/identity'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);return json(res,200,{identity:await saveIdentity(user,input)})}
+  if(req.method==='GET'&&p==='/api/ai/permissions'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{settings:await personalAi.getSettings(user.id),keys:AI_PERMISSION_KEYS})}
+  if(req.method==='PATCH'&&p==='/api/ai/permissions'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const settings=await personalAi.updatePermissions(user.id,input.permissions||input);await personalAi.logAction(user.id,{actionType:'ai.permissions.update',level:'request_confirmation',permission:'profile_read',input:{permissions:settings.permissions},confirmed:true,result:{updated:true}});return json(res,200,{settings})}
+  if(req.method==='GET'&&p==='/api/ai/activity'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{entries:await personalAi.listActivity(user.id,50)})}
+  if(req.method==='POST'&&p==='/api/ai/memory/export'){const user=await requireUser(req,res);if(!user)return;const guard=await personalAi.guardAction(user.id,'memory.export','memory_read',{confirmed:true});if(!guard.allowed)return json(res,403,{error:'AI_PERMISSION_DENIED'});return json(res,200,await personalAi.exportMemory(user.id))}
+  if(req.method==='POST'&&p==='/api/ai/memory/delete-all'){const user=await requireUser(req,res);if(!user)return;const guard=await personalAi.guardAction(user.id,'memory.delete_all','memory_write',{confirmed:true});if(!guard.allowed)return json(res,403,{error:'AI_PERMISSION_DENIED'});return json(res,200,await personalAi.deleteAllMemory(user.id))}
+  if(req.method==='GET'&&p==='/api/knowledge/nodes'){const user=await requireUser(req,res);if(!user)return;if(ecosystemRepo.enabled)return json(res,200,{nodes:await ecosystemRepo.listKnowledgeNodes(user.id,80)});return json(res,200,{nodes:(store.data.knowledgeNodes||[]).filter(x=>x.ownerId===user.id).slice(-80)})}
+  if(req.method==='POST'&&p==='/api/knowledge/nodes'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);try{const node=buildNode({id:store.id(),type:safeText(input.type,40),ownerId:user.id,label:safeText(input.label,240),visibility:safeText(input.visibility,20)||'private',metadata:input.metadata||{}});if(ecosystemRepo.enabled){const saved=await ecosystemRepo.createKnowledgeNode(node);return json(res,201,{node:saved})}if(!store.data.knowledgeNodes)store.data.knowledgeNodes=[];store.data.knowledgeNodes.push(node);store.save();return json(res,201,{node})}catch{return json(res,400,{error:'INVALID_KNOWLEDGE_NODE'})}}
   if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),label=safeText(input.label,80),value=safeText(input.value,1000);if(!label||!value)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,createdAt:store.now(),source:'user'});return json(res,201,{memory})}
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
@@ -417,6 +453,7 @@ async function api(req, res, url) {
       const response=await runSyloraAi(user,text);
       const answer=safeText(response.output_text,12000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});
       const now=store.now();await aiCreateMessages([{id:store.id(),userId:user.id,role:'user',text,source:'chat',sourceEventId:null,createdAt:now},{id:store.id(),userId:user.id,role:'assistant',text:answer,source:'chat',sourceEventId:null,createdAt:store.now()}]);
+      await personalAi.logAction(user.id,{actionType:'ai.chat.respond',level:'read',permission:'profile_read',input:{chars:text.length},confirmed:true,result:{chars:answer.length}});
       return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10)});
     }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'});}
   }
