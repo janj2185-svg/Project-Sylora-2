@@ -255,7 +255,6 @@ function mountSyloraAvatarLayers(){
     hero._syloraMotionRig=rig;
     rig.setPresence(hero.dataset.presence||'ready');
     hero._syloraMotionDetach=rig.attach(hero);
-    startSyloraBodyLife(hero);
     hero.addEventListener('pointermove',e=>{
       if(e.pointerType==='touch')return;
       const r=motion.getBoundingClientRect();
