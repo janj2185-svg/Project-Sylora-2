@@ -1,0 +1,168 @@
+/* SYLORA Digital Human V7 — assembled kinematic chain calibration.
+   Loads last. Fixes shoulder/elbow/wrist attachment, layering and idle coherence. */
+
+.sylora-avatar-motion{
+  inset:10px 10px auto auto;
+  width:min(42%,248px);
+  height:auto;
+  aspect-ratio:3/4;
+  background:#fffaf2;
+  border:1px solid rgba(255,255,255,.82);
+  box-shadow:0 18px 44px rgba(120,88,91,.10);
+  overflow:hidden;
+  isolation:isolate;
+}
+
+/* Assembled idle base under the kinematic layers — prevents a hollow armless torso flash */
+.sylora-avatar-body{
+  background-image:url('/assets/sylora-avatar-v2-base.png');
+  background-size:cover!important;
+  background-position:center top!important;
+  z-index:1;
+  transform:translateY(var(--body-y,0px)) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
+  transform-origin:50% 74%;
+}
+
+/* When the spring arm chain is active, swap to the armless torso so limbs are not doubled */
+.sylora-ai-hero.rig-live .sylora-avatar-body{
+  background-image:url('/assets/sylora-rig-torso-v1.png');
+}
+
+.sylora-avatar-gesture{
+  z-index:2;
+  opacity:0;
+  pointer-events:none;
+}
+.sylora-avatar-gesture.gesture-shown{opacity:.92}
+
+/* Shoulder sockets calibrated to torso silhouette (~15% / ~85% at ~36% height) */
+.sylora-rig-arm{
+  position:absolute;
+  top:34.8%;
+  width:12.4%;
+  height:34%;
+  z-index:3;
+  pointer-events:none;
+  will-change:transform;
+}
+.sylora-rig-arm-left{
+  left:12.8%;
+  transform-origin:50% 6%;
+  transform:translate3d(0,var(--body-y,0px),0) rotate(calc(var(--body-rot,0deg) + var(--rig-leftShoulder,0deg))) scale(var(--body-scale,1));
+}
+.sylora-rig-arm-right{
+  right:12.8%;
+  transform-origin:50% 6%;
+  transform:translate3d(0,var(--body-y,0px),0) rotate(calc(var(--body-rot,0deg) + var(--rig-rightShoulder,0deg))) scale(var(--body-scale,1));
+}
+
+.sylora-rig-upper{
+  position:absolute;
+  inset:0;
+  display:block;
+  background-repeat:no-repeat;
+  background-position:center top;
+  background-size:contain;
+  filter:drop-shadow(0 1px 1px rgba(80,50,40,.08));
+}
+.sylora-rig-arm-left .sylora-rig-upper{background-image:url('/assets/sylora-rig-upper-left-v2.png')}
+.sylora-rig-arm-right .sylora-rig-upper{background-image:url('/assets/sylora-rig-upper-right-v2.png')}
+
+/* Elbow overlap keeps the chain visually continuous */
+.sylora-rig-forearm{
+  position:absolute;
+  left:-8%;
+  top:78%;
+  width:116%;
+  height:58%;
+  display:block;
+  background-repeat:no-repeat;
+  background-position:center top;
+  background-size:contain;
+  transform-origin:50% 8%;
+  will-change:transform;
+  filter:drop-shadow(0 1px 1px rgba(80,50,40,.06));
+}
+.sylora-rig-arm-left .sylora-rig-forearm{
+  background-image:url('/assets/sylora-rig-forearm-sleeve-left-v3.png');
+  transform:rotate(var(--rig-leftElbow,8deg));
+}
+.sylora-rig-arm-right .sylora-rig-forearm{
+  background-image:url('/assets/sylora-rig-forearm-sleeve-right-v3.png');
+  transform:rotate(var(--rig-rightElbow,-8deg));
+}
+
+.sylora-rig-hand{
+  position:absolute;
+  left:8%;
+  top:86%;
+  width:84%;
+  height:96%;
+  display:block;
+  transform-origin:50% 8%;
+  will-change:transform;
+  z-index:4;
+}
+.sylora-rig-arm-left .sylora-rig-hand{transform:rotate(var(--rig-leftWrist,0deg))}
+.sylora-rig-arm-right .sylora-rig-hand{transform:rotate(var(--rig-rightWrist,0deg))}
+
+.sylora-hand-pose{
+  position:absolute;
+  inset:0;
+  display:block;
+  background-repeat:no-repeat;
+  background-position:center top;
+  background-size:contain;
+  opacity:0;
+  transition:opacity .2s ease;
+}
+.sylora-hand-pose-neutral{opacity:1}
+.sylora-rig-arm-left .sylora-hand-pose-neutral{background-image:url('/assets/sylora-hand-left-neutral-v4.png')}
+.sylora-rig-arm-right .sylora-hand-pose-neutral{background-image:url('/assets/sylora-hand-right-neutral-v4.png')}
+.sylora-rig-arm-left .sylora-hand-pose-open{background-image:url('/assets/sylora-hand-left-open-v4.png')}
+.sylora-rig-arm-right .sylora-hand-pose-open{background-image:url('/assets/sylora-hand-right-open-v4.png')}
+.sylora-rig-arm-left .sylora-hand-pose-curl{background-image:url('/assets/sylora-hand-left-curl-v4.png')}
+.sylora-rig-arm-right .sylora-hand-pose-curl{background-image:url('/assets/sylora-hand-right-curl-v4.png')}
+.sylora-rig-arm-left .sylora-hand-pose-emphasis{background-image:url('/assets/sylora-hand-left-emphasis-v4.png')}
+.sylora-rig-arm-right .sylora-hand-pose-emphasis{background-image:url('/assets/sylora-hand-right-emphasis-v4.png')}
+
+.sylora-ai-hero[data-hand-pose="open"] .sylora-hand-pose-neutral,
+.sylora-ai-hero[data-hand-pose="curl"] .sylora-hand-pose-neutral,
+.sylora-ai-hero[data-hand-pose="emphasis"] .sylora-hand-pose-neutral{opacity:0}
+.sylora-ai-hero[data-hand-pose="open"] .sylora-hand-pose-open,
+.sylora-ai-hero[data-hand-pose="curl"] .sylora-hand-pose-curl,
+.sylora-ai-hero[data-hand-pose="emphasis"] .sylora-hand-pose-emphasis{opacity:1}
+
+/* Face stack above body, below emphatic hand gestures when needed */
+.sylora-avatar-head,
+.sylora-avatar-hair,
+.sylora-avatar-eyes,
+.sylora-avatar-blink{z-index:5}
+
+/* Soften extreme inherited joint defaults so rest pose stays assembled */
+.sylora-ai-hero{
+  --rig-leftShoulder:0deg;
+  --rig-leftElbow:8deg;
+  --rig-leftWrist:0deg;
+  --rig-rightShoulder:0deg;
+  --rig-rightElbow:-8deg;
+  --rig-rightWrist:0deg;
+  --gesture-lift:0px;
+}
+
+@media(max-width:720px){
+  .sylora-avatar-motion{
+    inset:auto 18px 108px auto;
+    width:min(58vw,260px);
+  }
+  .sylora-rig-arm{top:35.2%;height:33.5%}
+}
+@media(max-width:430px){
+  .sylora-avatar-motion{right:12px;width:min(64vw,246px);bottom:110px}
+}
+@media(prefers-reduced-motion:reduce){
+  .sylora-rig-arm,
+  .sylora-rig-forearm,
+  .sylora-rig-hand,
+  .sylora-avatar-body{transition:none}
+}

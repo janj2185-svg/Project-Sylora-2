@@ -15,7 +15,7 @@ function messageFromRow(row) {
 
 function memoryFromRow(row) {
   if (!row) return null;
-  return { id: row.id, userId: row.user_id, label: row.label, value: row.value, source: row.source, createdAt: iso(row.created_at) };
+  return { id: row.id, userId: row.user_id, label: row.label, value: row.value, source: row.source, kind: row.kind || 'long', tags: row.tags || [], contextSources: row.context_sources || [], confidence: Number(row.confidence ?? 1), createdAt: iso(row.created_at) };
 }
 
 function actionFromRow(row) {
@@ -96,8 +96,14 @@ export class PostgresAiRepository {
   }
 
   async createMemory(memory) {
-    const result = await this.pool.query('INSERT INTO ai_memories(id,user_id,label,value,source,created_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [memory.id,memory.userId,memory.label,memory.value,memory.source,memory.createdAt]);
-    return memoryFromRow(result.rows[0]);
+    try {
+      const result = await this.pool.query('INSERT INTO ai_memories(id,user_id,label,value,source,kind,tags,context_sources,confidence,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *', [memory.id,memory.userId,memory.label,memory.value,memory.source,memory.kind||'long',memory.tags||[],memory.contextSources||[],memory.confidence??1,memory.createdAt]);
+      return memoryFromRow(result.rows[0]);
+    } catch (error) {
+      if (error?.code !== '42703' && !/column .* does not exist/i.test(error?.message||'')) throw error;
+      const result = await this.pool.query('INSERT INTO ai_memories(id,user_id,label,value,source,created_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [memory.id,memory.userId,memory.label,memory.value,memory.source,memory.createdAt]);
+      return memoryFromRow(result.rows[0]);
+    }
   }
 
   async deleteMemory(userId, id) {

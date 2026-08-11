@@ -19,10 +19,10 @@ test('Sylora motion rig drives semantic joints and voice-reactive posture', () =
   rig.setVoiceEnergy(0.75);
   let pose;
   for (let frame = 0; frame < 90; frame++) pose = rig.step(frame * 16.667 + 1);
-  assert.ok(pose.joints.rightElbow < -35);
-  assert.ok(pose.joints.rightShoulder > 8);
-  assert.ok(pose.joints.rightWrist > 3);
-  assert.ok(pose.joints.leftWrist < -2);
+  assert.ok(pose.joints.rightElbow < -20);
+  assert.ok(pose.joints.rightShoulder > 6);
+  assert.ok(pose.joints.rightWrist > 2);
+  assert.ok(pose.joints.leftWrist < -1);
   assert.ok(pose.gestureLift < -1.5);
   assert.ok(pose.hairX < 0);
   assert.ok(pose.bodyScale >= 1);

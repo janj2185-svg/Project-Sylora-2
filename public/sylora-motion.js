@@ -1,12 +1,14 @@
+/* Joint targets stay within anatomically connected ranges so the
+   shoulder → elbow → wrist sprite chain remains visually assembled. */
 const POSES = {
-  neutral:  { leftShoulder: 0,  leftElbow: 10, leftWrist: 0,  rightShoulder: 0,  rightElbow: -10, rightWrist: 0 },
-  explain:  { leftShoulder: -5, leftElbow: 24, leftWrist: -5, rightShoulder: 9,  rightElbow: -34, rightWrist: 8 },
-  empathy:  { leftShoulder: 7,  leftElbow: 38, leftWrist: -8, rightShoulder: -8, rightElbow: -42, rightWrist: 7 },
-  welcome:  { leftShoulder: -13,leftElbow: 28, leftWrist: -10,rightShoulder: 13, rightElbow: -28, rightWrist: 10 },
-  emphasis: { leftShoulder: -3, leftElbow: 18, leftWrist: -3, rightShoulder: 12, rightElbow: -48, rightWrist: 4 },
-  wave:     { leftShoulder: 0,  leftElbow: 12, leftWrist: 0,  rightShoulder: 17, rightElbow: -58, rightWrist: 13 },
-  thinking: { leftShoulder: -2, leftElbow: 15, leftWrist: -2, rightShoulder: 6,  rightElbow: -36, rightWrist: -4 },
-  positive: { leftShoulder: -10,leftElbow: 31, leftWrist: -8, rightShoulder: 10, rightElbow: -31, rightWrist: 8 }
+  neutral:  { leftShoulder: 0,  leftElbow: 8,  leftWrist: 0,  rightShoulder: 0,  rightElbow: -8,  rightWrist: 0 },
+  explain:  { leftShoulder: -4, leftElbow: 18, leftWrist: -4, rightShoulder: 7,  rightElbow: -22, rightWrist: 5 },
+  empathy:  { leftShoulder: 5,  leftElbow: 24, leftWrist: -5, rightShoulder: -5, rightElbow: -26, rightWrist: 5 },
+  welcome:  { leftShoulder: -8, leftElbow: 20, leftWrist: -6, rightShoulder: 8,  rightElbow: -20, rightWrist: 6 },
+  emphasis: { leftShoulder: -2, leftElbow: 14, leftWrist: -2, rightShoulder: 9,  rightElbow: -28, rightWrist: 4 },
+  wave:     { leftShoulder: 0,  leftElbow: 10, leftWrist: 0,  rightShoulder: 12, rightElbow: -34, rightWrist: 8 },
+  thinking: { leftShoulder: -2, leftElbow: 12, leftWrist: -2, rightShoulder: 5,  rightElbow: -20, rightWrist: -2 },
+  positive: { leftShoulder: -6, leftElbow: 20, leftWrist: -5, rightShoulder: 6,  rightElbow: -20, rightWrist: 5 }
 };
 
 const HAND_POSES = {

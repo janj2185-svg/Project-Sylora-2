@@ -6,6 +6,11 @@ const initial = () => ({
   users: [], sessions: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
   notifications: [], wallets: [], ledger: [], messages: [], conversations: [],
   aiMessages: [], aiMemories: [], aiActions: [],
+  identityProfiles: [], aiPermissions: [], kgNodes: [], kgEdges: [], kgAudit: [],
+  agentCatalog: [], agentInstalls: [], agentRatings: [], developerApps: [], apiKeys: [], webhooks: [], webhookDeliveries: [],
+  ecosystemAudit: [], organizations: [], orgMembers: [], orgTeams: [], enterprisePolicies: [],
+  reputationScores: [], reputationDisputes: [], contentLabels: [], provenanceRecords: [], securitySessions: [], translationJobs: [],
+  commerceProducts: [], entitlements: [], creatorPackages: [], a2aNegotiations: [], revenueShareEntries: [],
   communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [],
   businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], gifts: [
     { id: 'spark', name: 'Crystal Star', price: 10, tier: 'basic', color: '#e8b95f' },
