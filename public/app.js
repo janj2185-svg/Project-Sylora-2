@@ -226,6 +226,17 @@ function toggleSyloraRealtimeMute(){const track=syloraRealtimeStream?.getAudioTr
 function scheduleSyloraLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;const blink=hero.querySelector('.sylora-avatar-blink');const doBlink=()=>{if(!hero.isConnected||!blink)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),105);if(Math.random()<.14)setTimeout(()=>{if(!hero.isConnected)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),95)},210)};const nextBlink=()=>setTimeout(()=>{if(!hero.isConnected)return;doBlink();nextBlink()},2500+Math.random()*4100);const nextSaccade=()=>setTimeout(()=>{if(!hero.isConnected)return;hero.style.setProperty('--saccade-x',`${((Math.random()-.5)*.9).toFixed(2)}px`);hero.style.setProperty('--saccade-y',`${((Math.random()-.5)*.5).toFixed(2)}px`);setTimeout(()=>{if(hero.isConnected){hero.style.setProperty('--saccade-x','0px');hero.style.setProperty('--saccade-y','0px')}},110+Math.random()*90);nextSaccade()},1500+Math.random()*2600);nextBlink();nextSaccade()}
 function startSyloraHairPhysics(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let x=0,y=0,vx=0,vy=0,rot=0,vrot=0,last=performance.now();const tick=now=>{if(!hero.isConnected)return;const dt=Math.min(2,(now-last)/16.667||1);last=now;const idle=Math.sin(now/3100)*.14,tx=(hero._syloraHairTargetX||0)+idle,ty=(hero._syloraHairTargetY||0)+(hero._syloraHairVoice||0),tr=-tx*.16,spring=.085*dt,damping=Math.pow(.82,dt);vx=(vx+(tx-x)*spring)*damping;vy=(vy+(ty-y)*spring)*damping;vrot=(vrot+(tr-rot)*spring*.8)*damping;x+=vx*dt;y+=vy*dt;rot+=vrot*dt;hero.style.setProperty('--hair-x',`${x.toFixed(3)}px`);hero.style.setProperty('--hair-y',`${y.toFixed(3)}px`);hero.style.setProperty('--hair-rot',`${rot.toFixed(3)}deg`);hero.style.setProperty('--hair-skew',`${(rot*.42).toFixed(3)}deg`);hero._syloraHairRaf=requestAnimationFrame(tick)};hero._syloraHairRaf=requestAnimationFrame(tick)}
 function startSyloraBodyLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let cycleStart=performance.now(),duration=6200,amplitude=.0036,lean=0;const nextCycle=now=>{const mode=hero.dataset.presence||'ready',range=mode==='speaking'?[4100,5600]:mode==='listening'?[4500,6200]:mode==='thinking'?[5400,7600]:[5600,7900];duration=range[0]+Math.random()*(range[1]-range[0]);amplitude=(mode==='speaking'?.0026:mode==='listening'?.0032:mode==='thinking'?.0038:.0034)*(0.86+Math.random()*.28);lean=(Math.random()-.5)*.12;cycleStart=now};nextCycle(cycleStart);const tick=now=>{if(!hero.isConnected)return;let phase=(now-cycleStart)/duration;if(phase>=1){nextCycle(now);phase=0}const breath=(1-Math.cos(phase*Math.PI*2))/2,eased=breath*breath*(3-2*breath),scale=1+eased*amplitude,y=-eased*.9,rot=lean*Math.sin(phase*Math.PI);hero.style.setProperty('--body-scale',scale.toFixed(5));hero.style.setProperty('--body-y',`${y.toFixed(3)}px`);hero.style.setProperty('--body-rot',`${rot.toFixed(3)}deg`);hero._syloraBodyRaf=requestAnimationFrame(tick)};hero._syloraBodyRaf=requestAnimationFrame(tick)}
+const SYLORA_GESTURE_SRC={
+  neutral:'/assets/gestures/sylora-gesture-neutral.png',
+  explain:'/assets/gestures/sylora-gesture-explain.png',
+  empathy:'/assets/gestures/sylora-gesture-empathy.png',
+  welcome:'/assets/gestures/sylora-gesture-welcome.png',
+  emphasis:'/assets/gestures/sylora-gesture-emphasis.png',
+  wave:'/assets/gestures/sylora-gesture-wave.png',
+  thinking:'/assets/gestures/sylora-gesture-thinking.png',
+  positive:'/assets/gestures/sylora-gesture-positive.png'
+};
+function syloraGestureSrc(name='neutral'){return SYLORA_GESTURE_SRC[name]||SYLORA_GESTURE_SRC.neutral}
 function mountSyloraAvatarLayers(){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero||hero.querySelector('.sylora-avatar-motion'))return;
@@ -233,19 +244,22 @@ function mountSyloraAvatarLayers(){
   const motion=document.createElement('div');
   motion.className='sylora-avatar-motion';
   motion.setAttribute('aria-hidden','true');
-  const body=document.createElement('i');
+  // Single coherent portrait images — never sprite grids / arm tubes / clipped face layers.
+  const body=document.createElement('img');
   body.className='sylora-avatar-body';
+  body.src='/assets/sylora-avatar-v2-base.png';
+  body.alt='';
+  body.decoding='async';
+  body.draggable=false;
   motion.append(body);
-  // Assembled Digital Human: one white-suit base + gesture sheet crossfade only.
-  // No pink sleeve tubes, no clipped face/hair overlays (they create a collage look).
   for(let i=0;i<2;i++){
-    const gesture=document.createElement('i');
+    const gesture=document.createElement('img');
     gesture.className='sylora-avatar-gesture';
-    if(i===0){
-      gesture.classList.add('gesture-shown','gesture-base');
-      gesture.style.setProperty('--gesture-x','0%');
-      gesture.style.setProperty('--gesture-y','0%');
-    }
+    gesture.src=syloraGestureSrc('neutral');
+    gesture.alt='';
+    gesture.decoding='async';
+    gesture.draggable=false;
+    if(i===0)gesture.classList.add('gesture-shown','gesture-base');
     motion.append(gesture);
   }
   hero.append(motion);
@@ -255,20 +269,6 @@ function mountSyloraAvatarLayers(){
     hero._syloraMotionRig=rig;
     rig.setPresence(hero.dataset.presence||'ready');
     hero._syloraMotionDetach=rig.attach(hero);
-    hero.addEventListener('pointermove',e=>{
-      if(e.pointerType==='touch')return;
-      const r=motion.getBoundingClientRect();
-      const x=Math.max(-1,Math.min(1,(e.clientX-(r.left+r.width/2))/(r.width/2)));
-      const y=Math.max(-1,Math.min(1,(e.clientY-(r.top+r.height/2))/(r.height/2)));
-      hero.style.setProperty('--gaze-x',`${(x*1.35).toFixed(2)}px`);
-      hero.style.setProperty('--gaze-y',`${(y*.8).toFixed(2)}px`);
-      rig.setGaze(x,y);
-    });
-    hero.addEventListener('pointerleave',()=>{
-      hero.style.setProperty('--gaze-x','0px');
-      hero.style.setProperty('--gaze-y','0px');
-      rig.setGaze(0,0);
-    });
   }
   setSyloraGesture(hero.dataset.gesture||'neutral');
 }
@@ -276,21 +276,19 @@ function detectSyloraEmotion(text=''){const s=String(text).toLowerCase();if(/[!]
 function setSyloraGesture(name='neutral',duration=0){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
-  const frames={neutral:0,explain:1,empathy:2,welcome:3,emphasis:4,wave:5,thinking:6,positive:7};
-  const frame=frames[name]??0;
+  const gestureName=SYLORA_GESTURE_SRC[name]?name:'neutral';
   const layers=[...hero.querySelectorAll('.sylora-avatar-gesture')];
   clearTimeout(hero._syloraGestureTimer);
-  hero.dataset.gesture=name;
-  hero.dataset.handPose=handPoseForGesture(name);
-  hero._syloraMotionRig?.setGesture(name);
-  hero.classList.toggle('gesture-active',frame!==0);
+  hero.dataset.gesture=gestureName;
+  hero.dataset.handPose=handPoseForGesture(gestureName);
+  hero._syloraMotionRig?.setGesture(gestureName);
+  hero.classList.toggle('gesture-active',gestureName!=='neutral');
   if(!layers.length)return;
   let next=layers.length===1?0:(hero._syloraGestureLayer===0?1:0);
   if(hero._syloraGestureLayer==null||hero._syloraGestureLayer<0)next=0;
   const incoming=layers[next];
   const outgoing=layers[hero._syloraGestureLayer];
-  incoming.style.setProperty('--gesture-x',`${(frame%4)*33.333}%`);
-  incoming.style.setProperty('--gesture-y',frame>3?'100%':'0%');
+  incoming.src=syloraGestureSrc(gestureName);
   incoming.classList.add('gesture-shown');
   if(outgoing&&outgoing!==incoming)outgoing.classList.remove('gesture-shown');
   hero._syloraGestureLayer=next;

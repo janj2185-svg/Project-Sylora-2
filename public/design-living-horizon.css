@@ -131,29 +131,17 @@ body[data-view="learning"] .progress{height:7px;background:#eee8e3;border-radius
 .sylora-ai-hero .sylora-avatar-motion{display:block;overflow:visible;z-index:1;background:transparent;border:0;box-shadow:none}
 .sylora-ai-hero.sylora-assembled:after,
 .sylora-ai-hero.sylora-assembled:before{opacity:0!important}
-.sylora-ai-hero.sylora-assembled .sylora-avatar-body{
-  background-image:url('/assets/sylora-avatar-v2-base.png');
-  background-size:cover!important;
-  background-position:center top!important;
-  z-index:1;
-  opacity:1;
-  transform:translateY(var(--body-y,0px)) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
-  transform-origin:50% 74%;
-}
+.sylora-ai-hero.sylora-assembled .sylora-avatar-body,
 .sylora-ai-hero.sylora-assembled .sylora-avatar-gesture{
-  background-image:url('/assets/sylora-gestures-v2.png');
-  background-size:400% 200%;
-  opacity:0;
-  z-index:2;
-  transform:translateY(calc(var(--body-y,0px) + var(--gesture-lift,0px))) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
-  transform-origin:50% 74%;
+  background:none!important;
+  background-image:none!important;
 }
-.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture.gesture-shown{opacity:1}
 .sylora-ai-hero.sylora-assembled .sylora-rig-arm,
 .sylora-ai-hero.sylora-assembled .sylora-avatar-head,
 .sylora-ai-hero.sylora-assembled .sylora-avatar-hair,
 .sylora-ai-hero.sylora-assembled .sylora-avatar-eyes,
-.sylora-ai-hero.sylora-assembled .sylora-avatar-blink{display:none!important}
+.sylora-ai-hero.sylora-assembled .sylora-avatar-blink,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-motion>i{display:none!important}
 @media(max-width:720px){
   .sylora-ai-hero.sylora-assembled{min-height:520px;padding-bottom:300px}
   .sylora-ai-hero.sylora-assembled .sylora-avatar-motion{inset:auto 14px 96px auto;width:min(58vw,250px)}

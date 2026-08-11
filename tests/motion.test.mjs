@@ -36,27 +36,29 @@ test('semantic gestures choose anatomical whole-hand poses', () => {
   assert.equal(handPoseForGesture('unknown'), 'neutral');
 });
 
-test('assembled Digital Human assets and gesture sheet are present', async () => {
+test('assembled Digital Human uses whole-character images, not collage layers', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
   const root = path.resolve('public/assets');
-  for (const file of ['sylora-avatar-v2-base.png', 'sylora-gestures-v2.png', 'sylora-visemes-v2.png', 'sylora-expressions-v2.png']) {
-    assert.ok(fs.existsSync(path.join(root, file)), file);
+  assert.ok(fs.existsSync(path.join(root, 'sylora-avatar-v2-base.png')));
+  for (const name of ['neutral', 'explain', 'empathy', 'welcome', 'emphasis', 'wave', 'thinking', 'positive']) {
+    assert.ok(fs.existsSync(path.join(root, 'gestures', `sylora-gesture-${name}.png`)), name);
   }
-  const css = fs.readFileSync('public/design-living-horizon.css', 'utf8');
-  assert.match(css, /Digital Human V3 — Assembled Sylora/);
-  assert.match(css, /\.sylora-ai-hero\.sylora-assembled \.sylora-rig-arm/);
   const finalCss = fs.readFileSync('public/design-avatar-assembled.css', 'utf8');
   assert.match(finalCss, /position:absolute!important/);
-  assert.match(finalCss, /sylora-avatar-head/);
+  assert.match(finalCss, /object-fit:cover!important/);
+  assert.match(finalCss, /\.sylora-rig-arm/);
   assert.match(finalCss, /display:none!important/);
+  assert.doesNotMatch(finalCss, /background-size:400% 200%/);
   const html = fs.readFileSync('public/index.html', 'utf8');
   assert.match(html, /design-avatar-assembled\.css/);
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /sylora-assembled/);
-  assert.match(app, /sylora-avatar-gesture/);
+  assert.match(app, /createElement\('img'\)/);
+  assert.match(app, /\/assets\/gestures\/sylora-gesture-/);
   const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
   assert.doesNotMatch(mount, /sylora-rig-arm/);
   assert.doesNotMatch(mount, /sylora-avatar-head/);
   assert.doesNotMatch(mount, /['"]eyes['"]/);
+  assert.doesNotMatch(mount, /createElement\('i'\)/);
 });
