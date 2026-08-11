@@ -11,6 +11,7 @@ import { detectLanguageHint } from './language-detect.mjs';
 import { clearLoginFailures, isLoginLocked, recordLoginFailure } from './login-lockout.mjs';
 import { assertIntegerAmount, integerQuantity } from './wallet-integers.mjs';
 import { routeLanguage } from './ecosystem/providers.mjs';
+import { streamSyloraResponse, chunkText } from './ai-stream.mjs';
 import { PostgresService } from './infra/postgres.mjs';
 import { RedisService } from './infra/redis.mjs';
 import { PostgresAuthSocialRepository } from './repositories/postgres-auth-social.mjs';
@@ -296,14 +297,32 @@ function probeVideo(file) {
     const info=JSON.parse(raw), stream=info.streams?.[0]||{}; return { width:Number(stream.width)||null,height:Number(stream.height)||null,duration:Number(stream.duration||info.format?.duration)||null };
   } catch { return { width:null,height:null,duration:null }; }
 }
-async function receiveVideo(req, user) {
+function imageMagicOk(file, mime) {
+  const fd = fs.openSync(file, 'r'); const buf = Buffer.alloc(12); const read = fs.readSync(fd, buf, 0, 12, 0); fs.closeSync(fd);
+  if (mime === 'image/jpeg') return read >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  if (mime === 'image/png') return read >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+  if (mime === 'image/webp') return read >= 12 && buf.subarray(0,4).toString('ascii') === 'RIFF' && buf.subarray(8,12).toString('ascii') === 'WEBP';
+  return false;
+}
+async function receiveVideo(req, user) { return receiveMedia(req, user, { allowImage: false }); }
+async function receiveMedia(req, user, { allowImage = true } = {}) {
   const mime=String(req.headers['content-type']||'').split(';')[0].trim();
-  const ext=mime==='video/mp4'?'.mp4':mime==='video/webm'?'.webm':''; if(!ext) throw new Error('UNSUPPORTED_MEDIA_TYPE');
-  const max=100*1024*1024, declared=Number(req.headers['content-length']||0); if(declared>max) throw new Error('MEDIA_TOO_LARGE');
+  const videoExt=mime==='video/mp4'?'.mp4':mime==='video/webm'?'.webm':'';
+  const imageExt=mime==='image/jpeg'?'.jpg':mime==='image/png'?'.png':mime==='image/webp'?'.webp':'';
+  const ext=videoExt||(allowImage?imageExt:''); if(!ext) throw new Error('UNSUPPORTED_MEDIA_TYPE');
+  const isImage=!!imageExt && !videoExt;
+  const max=isImage?8*1024*1024:100*1024*1024, declared=Number(req.headers['content-length']||0); if(declared>max) throw new Error('MEDIA_TOO_LARGE');
   const id=store.id(), file=path.join(mediaDir,`${id}${ext}`), hash=createHash('sha256'); let size=0;
   const out=fs.createWriteStream(file,{flags:'wx'});
-  try { for await(const chunk of req){size+=chunk.length;if(size>max)throw new Error('MEDIA_TOO_LARGE');hash.update(chunk);if(!out.write(chunk))await new Promise(resolve=>out.once('drain',resolve));} await new Promise((resolve,reject)=>out.end(err=>err?reject(err):resolve())); if(!videoMagicOk(file,mime))throw new Error('INVALID_VIDEO_FILE'); const probe=probeVideo(file); const media={id,userId:user.id,mime,size,sha256:hash.digest('hex'),fileName:path.basename(file),...probe,createdAt:store.now()};store.data.media.push(media);store.save();return media; }
-  catch(e){out.destroy();try{fs.unlinkSync(file)}catch{}throw e;}
+  try {
+    for await(const chunk of req){size+=chunk.length;if(size>max)throw new Error('MEDIA_TOO_LARGE');hash.update(chunk);if(!out.write(chunk))await new Promise(resolve=>out.once('drain',resolve));}
+    await new Promise((resolve,reject)=>out.end(err=>err?reject(err):resolve()));
+    if(isImage){if(!imageMagicOk(file,mime))throw new Error('INVALID_IMAGE_FILE')}
+    else if(!videoMagicOk(file,mime))throw new Error('INVALID_VIDEO_FILE');
+    const probe=isImage?{width:null,height:null,duration:null}:probeVideo(file);
+    const media={id,userId:user.id,mime,size,sha256:hash.digest('hex'),fileName:path.basename(file),kind:isImage?'image':'video',...probe,createdAt:store.now()};
+    store.data.media.push(media);store.save();return media;
+  } catch(e){out.destroy();try{fs.unlinkSync(file)}catch{}throw e;}
 }
 function serveMedia(req,res,id){const media=store.data.media.find(x=>x.id===id);if(!media)return json(res,404,{error:'MEDIA_NOT_FOUND'});const file=path.join(mediaDir,media.fileName);if(!fs.existsSync(file))return json(res,404,{error:'MEDIA_BYTES_MISSING'});const size=fs.statSync(file).size, range=req.headers.range;res.setHeader('accept-ranges','bytes');res.setHeader('content-type',media.mime);res.setHeader('cache-control','public, max-age=3600');if(range){const match=/bytes=(\d*)-(\d*)/.exec(range);if(!match)return json(res,416,{error:'INVALID_RANGE'});const start=match[1]?Number(match[1]):0,end=match[2]?Math.min(Number(match[2]),size-1):size-1;if(start>end||start>=size){res.setHeader('content-range',`bytes */${size}`);return json(res,416,{error:'RANGE_NOT_SATISFIABLE'});}res.writeHead(206,{'content-range':`bytes ${start}-${end}/${size}`,'content-length':end-start+1});return fs.createReadStream(file,{start,end}).pipe(res);}res.writeHead(200,{'content-length':size});fs.createReadStream(file).pipe(res);}
 function publicJob(job){return{...job,playlistUrl:job.status==='ready'?`/hls/${job.mediaId}/index.m3u8`:null}}
@@ -333,7 +352,7 @@ async function api(req, res, url) {
     if(!saved.saved)return json(res,200,{saved:false,duplicate:true});
     return json(res,201,{saved:true,message:{id:saved.message.id,role:saved.message.role,text:saved.message.text,createdAt:saved.message.createdAt}})
   }
-  if(req.method==='POST'&&p==='/api/media/upload'){const user=await requireUser(req,res);if(!user)return;try{const media=await receiveVideo(req,user);return json(res,201,{media:{...media,url:`/media/${media.id}`}})}catch(e){const map={UNSUPPORTED_MEDIA_TYPE:415,MEDIA_TOO_LARGE:413,INVALID_VIDEO_FILE:400};return json(res,map[e.message]||400,{error:e.message})}}
+  if(req.method==='POST'&&p==='/api/media/upload'){const user=await requireUser(req,res);if(!user)return;try{const media=await receiveMedia(req,user,{allowImage:true});return json(res,201,{media:{...media,url:`/media/${media.id}`}})}catch(e){const map={UNSUPPORTED_MEDIA_TYPE:415,MEDIA_TOO_LARGE:413,INVALID_VIDEO_FILE:400,INVALID_IMAGE_FILE:400};return json(res,map[e.message]||400,{error:e.message})}}
   let mediaRoute=route('/api/media/:id/transcode',p);if(req.method==='POST'&&mediaRoute){const user=await requireUser(req,res);if(!user)return;const media=store.data.media.find(x=>x.id===mediaRoute.id&&x.userId===user.id);if(!media)return json(res,404,{error:'MEDIA_NOT_FOUND'});const job=startHlsJob(media,user);return json(res,202,{job:publicJob(job)})}
   mediaRoute=route('/api/media/jobs/:id',p);if(req.method==='GET'&&mediaRoute){const user=await requireUser(req,res);if(!user)return;const job=store.data.mediaJobs.find(x=>x.id===mediaRoute.id&&x.userId===user.id);if(!job)return json(res,404,{error:'JOB_NOT_FOUND'});return json(res,200,{job:publicJob(job)})}
 
@@ -456,12 +475,75 @@ async function api(req, res, url) {
     }
     const code = safeText(url.searchParams.get('code'), 500);
     if (!code) return json(res, 400, { error: 'OAUTH_CODE_REQUIRED' });
-    // Token exchange + account link requires live Google credentials — boundary only.
-    return json(res, 501, {
-      error: 'GOOGLE_TOKEN_EXCHANGE_PENDING_LIVE_CREDENTIALS',
-      status: 'blocked_external_config',
-      note: 'Callback received code shape OK. Complete token exchange against Google when credentials are provisioned.'
-    });
+    try {
+      const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_CLIENT_ID,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+          grant_type: 'authorization_code'
+        })
+      });
+      const tokenJson = await tokenRes.json().catch(() => ({}));
+      if (!tokenRes.ok || !tokenJson.access_token) {
+        return json(res, 502, { error: 'GOOGLE_TOKEN_EXCHANGE_FAILED', detail: tokenJson.error || 'token_error' });
+      }
+      const profileRes = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { authorization: `Bearer ${tokenJson.access_token}` }
+      });
+      const profile = await profileRes.json().catch(() => ({}));
+      if (!profileRes.ok || !profile.email) {
+        return json(res, 502, { error: 'GOOGLE_PROFILE_FAILED' });
+      }
+      const email = String(profile.email).toLowerCase();
+      let user = authSocial.enabled
+        ? await authSocial.findUserByIdentity(email)
+        : store.data.users.find(u => u.email === email);
+      if (!user) {
+        const base = safeText(String(profile.email).split('@')[0].replace(/[^a-zA-Z0-9_]/g, ''), 24) || 'google';
+        let username = base.slice(0, 20);
+        const taken = async (name) => authSocial.enabled
+          ? !!(await authSocial.findUserByIdentity(name))
+          : store.data.users.some(u => u.username.toLowerCase() === name.toLowerCase());
+        let n = 0;
+        while (await taken(username)) { n += 1; username = `${base.slice(0, 16)}${n}`; }
+        user = {
+          id: store.id(),
+          email,
+          username,
+          passwordHash: hashPassword(makeToken()),
+          displayName: safeText(profile.name || username, 80) || username,
+          bio: '',
+          locale: 'uk',
+          avatar: safeText(profile.picture || '', 500),
+          role: 'user',
+          createdAt: store.now(),
+          authProvider: 'google'
+        };
+        const t0 = makeToken();
+        const session0 = { tokenHash: tokenHash(t0), userId: user.id, createdAt: store.now(), expiresAt: new Date(Date.now() + ttlMs).toISOString() };
+        if (authSocial.enabled) await authSocial.register(user, session0);
+        else { store.data.users.push(user); store.data.sessions.push(session0); store.save(); }
+        cacheUser(user);
+        // Prefer redirect with the session we just created
+        res.writeHead(302, { location: `/?google_token=${encodeURIComponent(t0)}`, 'cache-control': 'no-store' });
+        return res.end();
+      }
+      if (user.disabled) return json(res, 403, { error: 'ACCOUNT_DISABLED' });
+      cacheUser(user);
+      const t = makeToken();
+      const session = { tokenHash: tokenHash(t), userId: user.id, createdAt: store.now(), expiresAt: new Date(Date.now() + ttlMs).toISOString() };
+      if (authSocial.enabled) await authSocial.createSession(session);
+      else { store.data.sessions.push(session); store.save(); }
+      res.writeHead(302, { location: `/?google_token=${encodeURIComponent(t)}`, 'cache-control': 'no-store' });
+      return res.end();
+    } catch (error) {
+      console.error('Google OAuth callback failed', error?.message || error);
+      return json(res, 502, { error: 'GOOGLE_OAUTH_FAILED' });
+    }
   }
   if (req.method === 'POST' && p === '/api/auth/login') {
     const input = await body(req); const identity = safeText(input.identity, 254).toLowerCase();
@@ -707,11 +789,14 @@ async function api(req, res, url) {
     const transferId = safeText(input.transferId || input.ledgerId, 80);
     if (!transferId) return json(res, 400, { error: 'TRANSFER_ID_REQUIRED' });
     if (authSocial.enabled) {
-      return json(res, 501, {
-        error: 'REFUND_ARCHITECTURE_READY',
-        status: 'partial',
-        note: 'Reverse-ledger refund API boundary — implement Postgres reverse legs under correlation id; no fake refund success.'
-      });
+      try {
+        const out = await walletRepo.refundGiftTransfer({ transferId, refundId: store.id(), createdAt: store.now() });
+        return json(res, 200, { ok: true, refund: out.refund, balance: out.wallet.balance });
+      } catch (error) {
+        const code = error.code || error.message;
+        const map = { TRANSFER_NOT_FOUND: 404, ALREADY_REFUNDED: 409, INSUFFICIENT_CREATOR_EARNINGS: 409, WALLET_NOT_FOUND: 400 };
+        return json(res, map[code] || 400, { error: code });
+      }
     }
     const entry = store.data.ledger.find(e => e.id === transferId && e.type === 'gift');
     if (!entry) return json(res, 404, { error: 'TRANSFER_NOT_FOUND' });
@@ -762,6 +847,14 @@ async function api(req, res, url) {
   if(req.method==='GET'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{scenes:store.data.studioScenes.filter(x=>x.userId===user.id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))})}
   if(req.method==='POST'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet',profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720',rawGain=Number(input.micGain),micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100))),micMuted=input.micMuted===true;if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});const scene={id:store.id(),userId:user.id,name,overlayTitle:overlayTitle||'SYLORA LIVE',overlayStyle,profileId,micGain,micMuted,createdAt:store.now(),updatedAt:store.now()};store.data.studioScenes.push(scene);store.save();return json(res,201,{scene})}
   let studioRoute=route('/api/studio/scenes/:id',p);if(req.method==='PATCH'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const scene=store.data.studioScenes.find(x=>x.id===studioRoute.id&&x.userId===user.id);if(!scene)return json(res,404,{error:'SCENE_NOT_FOUND'});const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),rawGain=Number(input.micGain);if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});scene.name=name;scene.overlayTitle=overlayTitle||'SYLORA LIVE';scene.overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet';scene.profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720';scene.micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100)));scene.micMuted=input.micMuted===true;scene.updatedAt=store.now();store.save();return json(res,200,{scene})}if(req.method==='DELETE'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const index=store.data.studioScenes.findIndex(x=>x.id===studioRoute.id&&x.userId===user.id);if(index<0)return json(res,404,{error:'SCENE_NOT_FOUND'});store.data.studioScenes.splice(index,1);store.save();return json(res,200,{deleted:true})}
+  if(req.method==='GET'&&p==='/api/studio/companion-boundary'){
+    return json(res,200,{
+      status:'working_local',
+      companion: { urlDefault:'http://127.0.0.1:43179', tokenEnv:'SYLORA_COMPANION_TOKEN', originsEnv:'SYLORA_COMPANION_ORIGINS' },
+      obs: { websocket:'local-only', password:'browser-local-never-sent-to-api' },
+      honesty: { note:'Companion + OBS WebSocket are production-ready on the creator machine. Cloud OBS credentials are intentionally not collected by SYLORA API.' }
+    });
+  }
   if(req.method==='POST'&&p==='/api/studio/browser-source'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),live=await findLiveRoom(input.liveId);if(!live||live.hostId!==user.id)return json(res,404,{error:'HOST_LIVE_NOT_FOUND'});const now=Date.now();for(const [key,value] of browserSourceTokens)if(value.expiresAt<=now)browserSourceTokens.delete(key);const raw=makeToken(),expiresAt=now+2*60*60*1000;browserSourceTokens.set(tokenHash(raw),{userId:user.id,liveId:live.id,expiresAt});return json(res,201,{path:`/obs-overlay.html?token=${encodeURIComponent(raw)}`,expiresAt:new Date(expiresAt).toISOString()})}
   if(req.method==='GET'&&p==='/api/studio/browser-source/events'){const raw=safeText(url.searchParams.get('token'),512),entry=browserSourceTokens.get(tokenHash(raw)),live=entry?await findLiveRoom(entry.liveId):null;if(!raw||!entry||entry.expiresAt<=Date.now()||!live||live.hostId!==entry.userId){if(entry&&entry.expiresAt<=Date.now())browserSourceTokens.delete(tokenHash(raw));return json(res,401,{error:'BROWSER_SOURCE_EXPIRED'})}res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store',connection:'keep-alive'});res.write(`retry: 2500\nevent: presence\ndata: ${JSON.stringify({status:'connected',liveId:live.id})}\n\n`);if(!liveOverlayStreams.has(live.id))liveOverlayStreams.set(live.id,new Set());const targets=liveOverlayStreams.get(live.id);targets.add(res);req.on('close',()=>{targets.delete(res);if(!targets.size)liveOverlayStreams.delete(live.id)});return}
   if (req.method === 'POST' && p === '/api/conversations') {
@@ -794,6 +887,22 @@ async function api(req, res, url) {
     for(const msg of all){if(msg.userId!==user.id)markDelivered(msg,user.id)}
     if(!authSocial.enabled)store.save();
     const page=paginateMessages(all,c.id,{before,limit});
+    page.messages = page.messages.map(msg => {
+      if (msg.attachment?.url) return msg;
+      const mid = msg.mediaId || msg.attachment?.mediaId;
+      if (!mid) return msg;
+      const media = store.data.media.find(x => x.id === mid);
+      if (!media) return msg;
+      return {
+        ...msg,
+        attachment: {
+          mediaId: media.id,
+          url: `/media/${media.id}`,
+          mime: media.mime,
+          kind: media.kind || (String(media.mime).startsWith('image/') ? 'image' : 'video')
+        }
+      };
+    });
     return json(res,200,page);
   }
   if(req.method==='POST'&&m){
@@ -802,13 +911,19 @@ async function api(req, res, url) {
     const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));
     const blocked=c?(await Promise.all(c.memberIds.filter(id=>id!==user.id).map(id=>isBlockedBetween(user.id,id)))).some(Boolean):false;
     if(!c||blocked)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});
-    const input=await body(req),text=safeText(input.text,2000),clientId=safeText(input.clientId,80)||null;
-    if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
+    const input=await body(req),text=safeText(input.text,2000),clientId=safeText(input.clientId,80)||null,mediaId=safeText(input.mediaId,80)||null;
+    if(!text&&!mediaId)return json(res,400,{error:'TEXT_REQUIRED'});
+    let attachment=null;
+    if(mediaId){
+      const media=store.data.media.find(x=>x.id===mediaId&&x.userId===user.id);
+      if(!media)return json(res,400,{error:'OWNED_MEDIA_REQUIRED'});
+      attachment={mediaId:media.id,url:`/media/${media.id}`,mime:media.mime,kind:media.kind||(String(media.mime).startsWith('image/')?'image':'video')};
+    }
     if(clientId){
       const existing=(authSocial.enabled?await authSocial.listMessages(c.id):store.data.messages).find(x=>x.conversationId===c.id&&x.clientId===clientId&&x.userId===user.id);
       if(existing)return json(res,200,{message:existing,deduped:true});
     }
-    const msg=createMessageRecord({id:store.id(),conversationId:c.id,userId:user.id,text,createdAt:store.now(),clientId});
+    const msg=createMessageRecord({id:store.id(),conversationId:c.id,userId:user.id,text:text||(attachment?'📎':'') ,createdAt:store.now(),clientId,mediaId,attachment});
     if(authSocial.enabled)await authSocial.createMessage(msg);else store.data.messages.push(msg);
     for(const id of c.memberIds){
       if(id!==user.id){await notifyUser(id,'message',user.id,{conversationId:c.id,messageId:msg.id});emitUser(id,'message',{message:msg,actor:store.publicUser(user)})}
@@ -959,19 +1074,29 @@ async function api(req, res, url) {
     const abort={aborted:false};req.on('close',()=>{abort.aborted=true});
     res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});
     const write=(event,data)=>{if(!res.writableEnded)res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)};
-    // Honest transport: progressive delivery of completed provider response (not OpenAI token SSE until adapter wires responses.stream).
-    write('status',{state:'thinking',model:openaiModel,streaming:false,progressive:true,language:lang,note:'Provider call is non-stream; UI receives progressive chunks after completion. Real token streaming is BLOCKED_EXTERNAL until responses.stream adapter is enabled with live key verification.'});
+    write('status',{state:'thinking',model:openaiModel,language:lang});
     try{
-      const response=await runSyloraAi(user,text,view,{signal:abort});
-      if(abort.aborted){write('error',{error:'AI_CANCELLED'});return res.end()}
-      const answer=safeText(response.output_text,12000);
-      if(!answer){write('error',{error:'AI_EMPTY_RESPONSE'});return res.end()}
-      const usage=response.usage||null;
-      const chunkSize=48;
-      for(let i=0;i<answer.length;i+=chunkSize){
+      const wantsTools=/\b(remember|запам|опублік|publish|post)\b/i.test(text);
+      let answer='', responseId=null, usage=null, transport='progressive_after_complete';
+      if(wantsTools){
+        const response=await runSyloraAi(user,text,view,{signal:abort});
         if(abort.aborted){write('error',{error:'AI_CANCELLED'});return res.end()}
-        write('delta',{text:answer.slice(i,i+chunkSize)});
+        answer=safeText(response.output_text,12000); responseId=response.id; usage=response.usage||null;
+        write('status',{state:'speaking',streaming:false,transport});
+        for(const chunk of chunkText(answer,48)){ if(abort.aborted){write('error',{error:'AI_CANCELLED'});return res.end()} write('delta',{text:chunk,transport}); }
+      } else {
+        const history=(await aiListMessages(user.id,12)).map(x=>({role:x.role,content:x.text}));
+        const pack=ecosystem.contextPack(user, view);
+        const personality=ecosystem.personalityFor(view, user);
+        const langLine=`Reply in language code "${lang.replyLanguage}" (preferred ${lang.preferred}, detected ${lang.detected||'none'}).`;
+        const request={model:openaiModel,store:false,reasoning:{effort:'low'},max_output_tokens:2400,instructions:`${personality} ${pack.instruction} ${langLine} Never expose secrets. UI context: ${view}.`,input:[...history,{role:'user',content:text}]};
+        for await (const ev of streamSyloraResponse(openai, request, { signal: abort })) {
+          if(ev.kind==='status') write('status',{state:'speaking',...ev,language:lang,model:openaiModel});
+          else if(ev.kind==='delta') write('delta',{text:ev.text,transport:ev.transport,streaming:!!ev.streaming});
+          else if(ev.kind==='done'){ answer=safeText(ev.message,12000); responseId=ev.responseId; usage=ev.usage; transport=ev.transport||transport; }
+        }
       }
+      if(!answer){write('error',{error:'AI_EMPTY_RESPONSE'});return res.end()}
       const now=store.now();
       await aiCreateMessages([
         {id:store.id(),userId:user.id,role:'user',text,source:'chat',sourceEventId:null,createdAt:now},
@@ -981,7 +1106,7 @@ async function api(req, res, url) {
       ecosystem.ensurePersonalAgent(user);
       ecosystem.recordActivity(user,{kind:'chat_stream',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
       ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat_stream',tokensIn:usage?.input_tokens||usage?.prompt_tokens||0,tokensOut:usage?.output_tokens||usage?.completion_tokens||0});
-      write('done',{message:answer,model:openaiModel,responseId:response.id,language:lang,usage:usage?{input:usage.input_tokens||usage.prompt_tokens||0,output:usage.output_tokens||usage.completion_tokens||0}:null,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role},transport:'progressive_after_complete'});
+      write('done',{message:answer,model:openaiModel,responseId,language:lang,usage:usage?{input:usage.input_tokens||usage.prompt_tokens||0,output:usage.output_tokens||usage.completion_tokens||0}:null,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role},transport});
       return res.end();
     }catch(error){
       if(error?.code==='AI_CANCELLED'||error?.message==='AI_CANCELLED'){write('error',{error:'AI_CANCELLED'});return res.end()}

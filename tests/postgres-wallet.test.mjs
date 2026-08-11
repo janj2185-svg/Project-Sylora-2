@@ -51,5 +51,29 @@ test('PostgreSQL wallet gift transfer is atomic, balanced and idempotent', async
   assert.equal(outbox.rowCount,1);
   assert.equal(outbox.rows[0].event_type,'gift.sent');
   assert.equal(outbox.rows[0].payload.id,first.transfer.id);
+
+  await pool.query('ALTER TABLE gift_transfers ADD COLUMN IF NOT EXISTS refunded_at timestamptz');
+  const beforeSender = (await repo.getWallet(senderId)).balance;
+  const beforeEarn = (await repo.getWallet(recipientId)).earnings;
+  const refund = await repo.refundGiftTransfer({
+    transferId: first.transfer.id,
+    refundId: randomUUID(),
+    createdAt: new Date().toISOString()
+  });
+  assert.equal(refund.ok, true);
+  assert.equal(refund.refund.gross, 25);
+  assert.equal((await repo.getWallet(senderId)).balance, beforeSender + 25);
+  assert.equal((await repo.getWallet(recipientId)).earnings, beforeEarn - 17);
+  let again = null;
+  try {
+    again = await repo.refundGiftTransfer({
+      transferId: first.transfer.id,
+      refundId: randomUUID(),
+      createdAt: new Date().toISOString()
+    });
+  } catch (error) {
+    assert.equal(error.code, 'ALREADY_REFUNDED');
+  }
+  assert.equal(again, null);
   await pool.end();
 });

@@ -1395,9 +1395,27 @@ export class EcosystemService {
   checkout(user, itemId) {
     const item = this.store.data.commerceItems.find(i => i.id === itemId);
     if (!item) return { ok: false, error: 'ITEM_NOT_FOUND' };
-    const result = sandboxCheckout({ id: this.store.id(), buyerId: user.id, item });
+    let buyerWallet = this.store.data.wallets.find(w => w.userId === user.id);
+    let creatorWallet = this.store.data.wallets.find(w => w.userId === item.creatorId);
+    if (!buyerWallet) {
+      buyerWallet = { userId: user.id, balance: 0, earnings: 0, currency: 'LUMEN' };
+      this.store.data.wallets.push(buyerWallet);
+    }
+    if (!creatorWallet) {
+      creatorWallet = { userId: item.creatorId, balance: 0, earnings: 0, currency: 'LUMEN' };
+      this.store.data.wallets.push(creatorWallet);
+    }
+    const result = sandboxCheckout({
+      id: this.store.id(),
+      buyerId: user.id,
+      item,
+      buyerWallet,
+      creatorWallet,
+      now: this.store.now()
+    });
     if (result.ok) {
       this.store.data.commerceOrders.push(result.order);
+      for (const entry of result.ledgerEntries || []) this.store.data.ledger.unshift(entry);
       this.store.save();
     }
     return result;
@@ -3413,6 +3431,10 @@ export class EcosystemService {
     } else {
       inv.status = status;
       inv.updatedAt = this.store.now();
+      if (status === 'paid' || status === 'partially_paid') {
+        inv.settlement = 'manual_bookkeeping';
+        inv.settlementNote = 'Manual bookkeeping status — not a payment-provider capture.';
+      }
     }
     this.store.save();
     return inv;

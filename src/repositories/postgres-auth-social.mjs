@@ -5,7 +5,29 @@ function userFromRow(row) {
 }
 function postFromRow(row) { return row ? { id: row.id, userId: row.user_id, text: row.body || '', kind: row.kind || 'text', createdAt: iso(row.created_at) } : null; }
 function commentFromRow(row) { return row ? { id:row.id,postId:row.post_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at),editedAt:row.edited_at?iso(row.edited_at):null } : null; }
-function messageFromRow(row) { return row ? { id:row.id,conversationId:row.conversation_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at),editedAt:row.edited_at?iso(row.edited_at):null } : null; }
+function messageFromRow(row) {
+  if (!row) return null;
+  let attachment = row.attachment || null;
+  if (typeof attachment === 'string') {
+    try { attachment = JSON.parse(attachment); } catch { attachment = null; }
+  }
+  if (!attachment && row.media_id) attachment = { mediaId: row.media_id };
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    userId: row.user_id,
+    text: row.body || '',
+    createdAt: iso(row.created_at),
+    editedAt: row.edited_at ? iso(row.edited_at) : null,
+    clientId: row.client_id || null,
+    mediaId: row.media_id || null,
+    status: row.status || 'sent',
+    deliveredAt: null,
+    readBy: {},
+    failedReason: null,
+    attachment
+  };
+}
 function notificationFromRow(row) { return row ? { id:row.id,userId:row.user_id,actorId:row.actor_id,type:row.type,payload:row.payload||{},read:!!row.read_at,createdAt:iso(row.created_at) } : null; }
 
 export class PostgresAuthSocialRepository {
@@ -121,7 +143,28 @@ export class PostgresAuthSocialRepository {
   async conversationForUser(id,userId){const result=await this.pool.query('SELECT c.id,c.created_at FROM conversations c JOIN conversation_members mine ON mine.conversation_id=c.id AND mine.user_id=$2 WHERE c.id=$1',[id,userId]);if(!result.rowCount)return null;const members=await this.pool.query('SELECT user_id FROM conversation_members WHERE conversation_id=$1 ORDER BY joined_at',[id]);return {id,memberIds:members.rows.map(r=>r.user_id),createdAt:iso(result.rows[0].created_at)}}
   async listConversations(userId){const rows=await this.pool.query('SELECT c.id,c.created_at FROM conversations c JOIN conversation_members mine ON mine.conversation_id=c.id WHERE mine.user_id=$1 ORDER BY c.created_at DESC',[userId]);return Promise.all(rows.rows.map(async row=>{const members=await this.pool.query('SELECT u.* FROM conversation_members cm JOIN users u ON u.id=cm.user_id WHERE cm.conversation_id=$1',[row.id]);const last=await this.pool.query('SELECT * FROM messages WHERE conversation_id=$1 ORDER BY created_at DESC LIMIT 1',[row.id]);return {id:row.id,memberIds:members.rows.map(r=>r.id),members:members.rows.map(userFromRow),lastMessage:messageFromRow(last.rows[0]),createdAt:iso(row.created_at)}}))}
   async listMessages(conversationId){const result=await this.pool.query('SELECT * FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC LIMIT 200',[conversationId]);return result.rows.map(messageFromRow)}
-  async createMessage(message){const result=await this.pool.query('INSERT INTO messages(id,conversation_id,user_id,body,created_at,edited_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[message.id,message.conversationId,message.userId,message.text,message.createdAt,message.editedAt]);return messageFromRow(result.rows[0])}
+  async createMessage(message){
+    const attachmentJson = message.attachment ? JSON.stringify(message.attachment) : null;
+    try {
+      const result = await this.pool.query(
+        'INSERT INTO messages(id,conversation_id,user_id,body,created_at,edited_at,client_id,media_id,status,attachment) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) RETURNING *',
+        [message.id, message.conversationId, message.userId, message.text, message.createdAt, message.editedAt || null, message.clientId || null, message.mediaId || null, message.status || 'sent', attachmentJson]
+      );
+      return messageFromRow(result.rows[0]);
+    } catch {
+      try {
+        const result = await this.pool.query(
+          'INSERT INTO messages(id,conversation_id,user_id,body,created_at,edited_at,client_id,media_id,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+          [message.id, message.conversationId, message.userId, message.text, message.createdAt, message.editedAt || null, message.clientId || null, message.mediaId || null, message.status || 'sent']
+        );
+        return { ...messageFromRow(result.rows[0]), attachment: message.attachment || null, clientId: message.clientId || null, mediaId: message.mediaId || null };
+      } catch {
+        // Pre-013 schema fallback
+        const result = await this.pool.query('INSERT INTO messages(id,conversation_id,user_id,body,created_at,edited_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [message.id, message.conversationId, message.userId, message.text, message.createdAt, message.editedAt]);
+        return { ...messageFromRow(result.rows[0]), clientId: message.clientId || null, mediaId: message.mediaId || null, attachment: message.attachment || null };
+      }
+    }
+  }
   async createNotification(notification){await this.pool.query('INSERT INTO notifications(id,user_id,actor_id,type,payload,created_at) VALUES($1,$2,$3,$4,$5,$6)',[notification.id,notification.userId,notification.actorId,notification.type,notification.payload,notification.createdAt])}
   async listNotifications(userId){const result=await this.pool.query('SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50',[userId]);return result.rows.map(notificationFromRow)}
   async socialStats(userId){const [posts,followers,following]=await Promise.all([this.pool.query('SELECT count(*)::int AS n FROM posts WHERE user_id=$1',[userId]),this.pool.query('SELECT count(*)::int AS n FROM follows WHERE following_id=$1',[userId]),this.pool.query('SELECT count(*)::int AS n FROM follows WHERE follower_id=$1',[userId])]);return {posts:Number(posts.rows[0]?.n||0),followers:Number(followers.rows[0]?.n||0),following:Number(following.rows[0]?.n||0)}}

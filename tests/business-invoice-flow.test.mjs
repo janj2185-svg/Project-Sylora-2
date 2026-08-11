@@ -134,6 +134,8 @@ test('API: Client → Quote → Accept → Invoice → Issue → PDF → payment
     });
     assert.equal(paid.status, 200);
     assert.equal(paid.data.invoice.status, 'paid');
+    assert.equal(paid.data.invoice.settlement, 'manual_bookkeeping');
+    assert.match(String(paid.data.invoice.settlementNote || ''), /Manual bookkeeping/);
   } finally {
     server.close();
     fs.rmSync(dir, { recursive: true, force: true });

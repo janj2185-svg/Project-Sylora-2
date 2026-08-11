@@ -6,7 +6,8 @@
 export const MESSAGE_STATUSES = Object.freeze(['sending', 'sent', 'delivered', 'read', 'failed']);
 
 export function createMessageRecord({
-  id, conversationId, userId, text, createdAt = new Date().toISOString(), clientId = null
+  id, conversationId, userId, text, createdAt = new Date().toISOString(), clientId = null,
+  mediaId = null, attachment = null
 } = {}) {
   return {
     id,
@@ -16,6 +17,8 @@ export function createMessageRecord({
     createdAt,
     editedAt: null,
     clientId: clientId || null,
+    mediaId: mediaId || null,
+    attachment: attachment || null,
     status: 'sent',
     deliveredAt: null,
     readBy: {},

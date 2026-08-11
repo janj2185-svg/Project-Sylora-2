@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 function iso(value){return value instanceof Date?value.toISOString():String(value||'')}
 function gift(row){return row?{id:row.id,name:row.name,tier:row.tier,price:Number(row.price),enabled:row.enabled,color:row.color}:null}
 function wallet(row){return row?{userId:row.user_id,balance:Number(row.balance),earnings:Number(row.earnings),currency:row.currency}:null}
@@ -63,5 +64,58 @@ export class PostgresWalletRepository {
   async listLedger(userId){const result=await this.pool.query("SELECT le.*,CASE WHEN le.reason='gift' THEN gt.quantity ELSE 1 END AS quantity,gt.creator_amount,gt.platform_amount,gt.live_id FROM ledger_entries le LEFT JOIN gift_transfers gt ON gt.id=le.correlation_id WHERE le.wallet_user_id=$1 ORDER BY le.created_at DESC LIMIT 100",[userId]);return result.rows.map(r=>({id:r.id,type:r.reason.startsWith('gift')?'gift':r.reason,direction:r.direction,bucket:r.bucket,amount:Number(r.amount),grossAmount:r.reason==='gift'?Number(r.amount):undefined,creatorAmount:r.creator_amount==null?undefined:Number(r.creator_amount),platformAmount:r.platform_amount==null?undefined:Number(r.platform_amount),quantity:Number(r.quantity||1),currency:r.currency,giftId:r.gift_id,fromUserId:r.direction==='debit'?userId:r.counterparty_user_id,toUserId:r.direction==='credit'?userId:r.counterparty_user_id,liveId:r.live_id||null,correlationId:r.correlation_id,createdAt:iso(r.created_at)}))}
   async giftStats(userId){const result=await this.pool.query('SELECT COALESCE(sum(gross_amount),0)::bigint AS gross,COALESCE(sum(creator_amount),0)::bigint AS earnings FROM gift_transfers WHERE recipient_id=$1',[userId]);return {giftsReceived:Number(result.rows[0].gross),creatorEarnings:Number(result.rows[0].earnings)}}
   async progress(userId){const d=await this.pool.query('SELECT gift_xp FROM donor_progress WHERE user_id=$1',[userId]);return{donorXp:Number(d.rows[0]?.gift_xp||0)}}
+
+  /** Reverse a gift transfer under correlation id — admin refund. Atomic. */
+  async refundGiftTransfer({ transferId, refundId, createdAt }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await client.query('SELECT * FROM gift_transfers WHERE id=$1 FOR UPDATE', [transferId]);
+      if (!existing.rowCount) {
+        const error = new Error('TRANSFER_NOT_FOUND'); error.code = 'TRANSFER_NOT_FOUND'; throw error;
+      }
+      const t = existing.rows[0];
+      if (t.refunded_at) {
+        const error = new Error('ALREADY_REFUNDED'); error.code = 'ALREADY_REFUNDED'; throw error;
+      }
+      const priorRefund = await client.query("SELECT 1 FROM ledger_entries WHERE correlation_id=$1 AND reason='gift_refund' LIMIT 1", [transferId]);
+      if (priorRefund.rowCount) {
+        const error = new Error('ALREADY_REFUNDED'); error.code = 'ALREADY_REFUNDED'; throw error;
+      }
+      const locked = await client.query('SELECT * FROM wallets WHERE user_id IN ($1,$2) ORDER BY user_id FOR UPDATE', [t.sender_id, t.recipient_id]);
+      const sender = locked.rows.find(r => r.user_id === t.sender_id);
+      const recipient = locked.rows.find(r => r.user_id === t.recipient_id);
+      if (!sender || !recipient) {
+        const error = new Error('WALLET_NOT_FOUND'); error.code = 'WALLET_NOT_FOUND'; throw error;
+      }
+      const gross = Number(t.gross_amount), creator = Number(t.creator_amount), platform = Number(t.platform_amount);
+      if (Number(recipient.earnings) < creator) {
+        const error = new Error('INSUFFICIENT_CREATOR_EARNINGS'); error.code = 'INSUFFICIENT_CREATOR_EARNINGS'; throw error;
+      }
+      await client.query('UPDATE wallets SET balance=$2 WHERE user_id=$1', [t.sender_id, Number(sender.balance) + gross]);
+      await client.query('UPDATE wallets SET earnings=$2 WHERE user_id=$1', [t.recipient_id, Number(recipient.earnings) - creator]);
+      await client.query("INSERT INTO ledger_entries(id,wallet_user_id,direction,amount,currency,reason,correlation_id,counterparty_user_id,gift_id,created_at,bucket) VALUES($8,$1,'credit',$3,'LUMEN','gift_refund',$5,$2,$4,$6,'spendable'),($9,$2,'debit',$7,'LUMEN','gift_refund',$5,$1,$4,$6,'earnings')", [t.sender_id, t.recipient_id, gross, t.gift_id, transferId, createdAt, creator, randomUUID(), randomUUID()]);
+      if (platform > 0) {
+        // correlation_id must be unique on platform_ledger_entries — use refundId, not original transferId
+        await client.query("INSERT INTO platform_ledger_entries(id,direction,amount,currency,reason,correlation_id,created_at) VALUES($4,'debit',$1,'LUMEN','gift_refund_platform',$2,$3)", [platform, refundId, createdAt, randomUUID()]);
+      }
+      try {
+        await client.query('UPDATE gift_transfers SET refunded_at=$2 WHERE id=$1', [transferId, createdAt]);
+      } catch {
+        // Column may not exist until migration 013 — still keep ledger reverse
+      }
+      const current = await client.query('SELECT * FROM wallets WHERE user_id=$1', [t.sender_id]);
+      await client.query('COMMIT');
+      return {
+        ok: true,
+        refund: { id: refundId, transferId, gross, creator, platform, createdAt },
+        wallet: wallet(current.rows[0])
+      };
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
-import { randomUUID } from 'node:crypto';

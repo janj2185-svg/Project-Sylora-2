@@ -429,7 +429,12 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/commerce/products') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { products: ecosystem.listProducts(), mine: ecosystem.listProducts(user.id), paymentMode: 'sandbox' }), true;
+    return json(res, 200, {
+      products: ecosystem.listProducts(),
+      mine: ecosystem.listProducts(user.id),
+      paymentMode: 'test_lumen',
+      honesty: { state: 'test_lumen', note: 'Checkout moves TEST LUMEN between wallets — not card/PSP.' }
+    }), true;
   }
   if (req.method === 'POST' && p === '/api/commerce/products') {
     const user = await requireUser(req, res); if (!user) return true;
