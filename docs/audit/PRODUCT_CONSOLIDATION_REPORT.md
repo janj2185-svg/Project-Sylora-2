@@ -77,3 +77,7 @@ See CI command results in the agent run (expected: `npm test`, `npm run lint`, `
 | Voices | Catalog personalities map to realtime voice routing; provider voices required |
 | Memory | User-visible list + add/delete + export/clear + secret rejection + proactive level |
 | Still needs API keys | `OPENAI_API_KEY`, optional TURN, payment provider, production SSH deploy secrets |
+
+## Platform intelligence (39–49)
+
+Added without separate bots: Creator LIVE insights + content packs; Business meeting brief/summary/tasks (confirm-gated); Learning quizzes + adaptive difficulty; Privacy & AI Control Center + Activity Log; degraded capabilities banner; Home hub API; AI eval suite. Analytics are store-backed only (`honestEmpty` when no signal).
