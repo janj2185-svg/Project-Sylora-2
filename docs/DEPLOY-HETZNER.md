@@ -22,10 +22,16 @@ git pull --ff-only origin cursor/sylora-live-ecosystem-34a2
 
 Then from laptop: `./scripts/prod-smoke.sh https://getsylora.com`
 
-<details><summary>Expanded manual steps</summary>
+Equivalent: `SYLORA_DEPLOY_REF=cursor/sylora-live-ecosystem-34a2 ./scripts/deploy-prod.sh /opt/sylora deploy`
 
+## Success criteria
 
-</details>
+- HTML cache bust contains `20260811` (not `20260809-3`)
+- `GET /live-studio.js` → 200
+- `GET /api/sylora-live/capabilities` → 200
+- `GET /api/wallet` authenticated → 200
+- `GET /api/auth/google` → 503 until keys (honest), not fake Connected
+- `./scripts/prod-smoke.sh https://getsylora.com` → PASS
 
 ## Prerequisites on VPS
 
