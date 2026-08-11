@@ -39,6 +39,37 @@ import { resolveFlags } from './feature-flags.mjs';
 import { providerSnapshot } from './providers.mjs';
 import { listSpacesForUser, getSpace, SPACE_CAPABILITIES } from './spaces.mjs';
 import { getTool } from './sylora-tools.mjs';
+import {
+  selectContextSlices,
+  routeOperatingIntent,
+  orchestrateTask,
+  buildDailyBrief,
+  buildIntelligentInbox,
+  createActivityEvent,
+  createContentUnderstanding,
+  extractTopics,
+  createDecisionRecord,
+  createSharedMemoryRecord,
+  createUniversalTask,
+  createGoal,
+  goalProgress,
+  structuredMeetingResult,
+  creatorPipelinePlan,
+  localizedContentTracks,
+  ownershipGraphNode,
+  revenueSplitDraft,
+  scienceClaim,
+  learningKnowledgeNode,
+  personalDashboardPayload,
+  guestPublicView,
+  onboardingState,
+  emptyPlatformSeed,
+  connectedServiceRecord,
+  canvasWorkspace,
+  PLATFORM_SKILLS,
+  KNOWLEDGE_SCOPES,
+  SPECIALIST_AGENTS
+} from './sylora-os.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -83,6 +114,22 @@ function ensureCollections(store) {
   d.continuitySessions ||= [];
   d.smartNotificationBundles ||= [];
   d.toolAudit ||= [];
+  d.activityGraph ||= [];
+  d.contentUnderstanding ||= [];
+  d.contentHistory ||= [];
+  d.sharedMemories ||= [];
+  d.decisionRecords ||= [];
+  d.universalTasks ||= [];
+  d.goals ||= [];
+  d.meetingResults ||= [];
+  d.canvasWorkspaces ||= [];
+  d.connectedServices ||= [];
+  d.skillInstalls ||= [];
+  d.ownershipGraph ||= [];
+  d.revenueSplits ||= [];
+  d.learningGraphs ||= [];
+  d.businessWorkflows ||= [];
+  d.dailyBriefPrefs ||= [];
   d.audit ||= d.audit || [];
 }
 
@@ -456,6 +503,20 @@ export class EcosystemService {
         });
         return { ok: true, result: { invitedUserId: target.id, username } };
       }
+      case 'daily_brief':
+        return { ok: true, result: this.dailyBrief(user) };
+      case 'list_open_work':
+        return { ok: true, result: { tasks: this.listTasks(user).filter(t => t.status !== 'done'), continuity: this.continuityList(user) } };
+      case 'prepare_meeting':
+        return { ok: true, result: this.prepareMeetingBriefOs(user, input) };
+      case 'content_history_search':
+        return { ok: true, result: this.searchContentHistory(user, input.q || input.raw || '') };
+      case 'recall_decision':
+        return { ok: true, result: { decisions: this.findDecisions(user, input.q || input.raw || '') } };
+      case 'list_goals':
+        return { ok: true, result: { goals: this.listGoals(user) } };
+      case 'intelligent_inbox':
+        return { ok: true, result: this.intelligentInbox(user) };
       default:
         return { ok: true, result: { accepted: true, type, note: 'No dedicated executor — marked complete' } };
     }
@@ -506,29 +567,53 @@ export class EcosystemService {
   }
 
   // —— Universal Command ——
-  universalCommand(user, text, { locale, executeReads = true } = {}) {
+  universalCommand(user, text, { locale, executeReads = true, view } = {}) {
+    const orchestration = orchestrateTask({ text });
+    const osRoute = orchestration.routing;
     const plan = buildCommandPlan(text, { locale: locale || user.locale || 'uk' });
+    // Prefer operating-layer routing when confidence is higher
+    if (osRoute.confidence >= (plan.confidence || 0) && osRoute.tool) {
+      plan.intent = osRoute.intent;
+      plan.tool = osRoute.tool;
+      plan.view = view || osRoute.view || plan.view;
+      plan.confidence = osRoute.confidence;
+      plan.requiresConfirmation = !!osRoute.requiresConfirmation || plan.requiresConfirmation;
+      plan.specialist = osRoute.specialist;
+      plan.skill = osRoute.skill;
+    }
+    plan.orchestration = orchestration;
+    plan.contextEngine = this.buildContextEngine(user, { view: plan.view || 'command_center', query: text });
+
     const tool = getTool(plan.tool);
+    const osTools = new Set([
+      'daily_brief', 'list_open_work', 'prepare_meeting', 'content_history_search',
+      'recall_decision', 'list_goals', 'intelligent_inbox'
+    ]);
     this.recordActivity(user, {
       kind: 'universal_command',
       summary: `Command: ${plan.intent}`,
-      dataUsed: ['intent_detection', 'tool_catalog'],
+      dataUsed: ['intent_detection', 'tool_catalog', 'context_engine', 'orchestration'],
       reason: String(text || '').slice(0, 200),
       context: plan.view || 'command_center'
     });
+    this.recordActivityGraph(user, {
+      type: 'custom',
+      summary: `Sylora OS: ${plan.intent}`,
+      data: { tool: plan.tool, specialist: plan.specialist || null }
+    });
 
-    if (!tool) {
-      return { plan, status: 'needs_clarification', message: 'Sylora needs a clearer request.' };
+    if (!tool && !osTools.has(plan.tool)) {
+      return { plan, status: 'needs_clarification', message: 'Sylora needs a clearer request.', orchestration };
     }
 
-    if (!plan.requiresConfirmation && executeReads) {
-      const executed = this.executeTool(user, plan.tool, plan.slots || {});
-      return { plan, status: executed.ok ? 'executed' : 'failed', ...executed };
+    if ((!plan.requiresConfirmation || osTools.has(plan.tool)) && executeReads) {
+      const executed = this.executeTool(user, plan.tool, { ...(plan.slots || {}), raw: text, q: text });
+      return { plan, status: executed.ok ? 'executed' : 'failed', orchestration, ...executed };
     }
 
     const action = this.proposeAction(user, {
       type: plan.tool,
-      level: tool.level,
+      level: tool?.level,
       input: plan.slots || {},
       context: plan.view || 'command_center',
       reason: `Universal Command: ${plan.intent}`
@@ -537,6 +622,7 @@ export class EcosystemService {
       plan,
       status: 'pending_confirmation',
       action,
+      orchestration,
       message: 'Confirm this action for Sylora to execute it with platform tools.'
     };
   }
@@ -1496,7 +1582,7 @@ export class EcosystemService {
   }
 
   /** Build the single-AI multi-context pack used by chat / voice / LIVE / business. */
-  contextPack(user, view = 'command_center') {
+  contextPack(user, view = 'command_center', { query = '', spaceId = null } = {}) {
     const agent = this.ensurePersonalAgent(user);
     const role = contextRole(agent, view);
     const graph = this.graphFor(user, { asAi: true, relation: 'self' });
@@ -1504,14 +1590,61 @@ export class EcosystemService {
       const catalog = this.store.data.agentCatalog.find(a => a.id === i.agentId);
       return catalog ? { id: catalog.id, name: catalog.name, category: catalog.category, permissions: i.permissions } : null;
     }).filter(Boolean);
+    const selected = this.buildContextEngine(user, { view, query, spaceId });
     return {
       view,
       role,
       agent: { id: agent.id, name: agent.name, permissions: agent.permissions, contexts: agent.contexts },
-      knowledgeSummary: { nodes: graph.nodes, edges: graph.edges.length, byType: graph.byType },
+      knowledgeSummary: {
+        nodes: Math.min(graph.nodes, 12),
+        edges: graph.edges.length,
+        byType: graph.byType,
+        note: 'Full graph is not copied into prompts — Context Engine selects slices.'
+      },
       installedAgents: installs,
+      contextEngine: selected,
       instruction: this.contextInstruction(role, view)
     };
+  }
+
+  buildContextEngine(user, { view = 'command_center', query = '', spaceId = null } = {}) {
+    ensureCollections(this.store);
+    const agent = this.ensurePersonalAgent(user);
+    if (agent.privacyControls?.memory === false && !query) {
+      // still allow non-memory slices
+    }
+    const memories = agent.privacyControls?.memory === false
+      ? []
+      : (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const docs = [
+      ...(this.store.data.orgDocuments || []).filter(d => this.listOrgs(user).some(o => o.id === d.orgId)),
+      ...(this.store.data.collaborativeDocuments || []).filter(d => d.ownerId === user.id || (d.memberIds || []).includes(user.id))
+    ].map(d => ({ ...d, knowledgeScope: d.knowledgeScope || (d.orgId ? 'company' : 'my') }));
+    return selectContextSlices({
+      view,
+      query,
+      spaceId,
+      user: { id: user.id, displayName: user.displayName, locale: user.locale },
+      memories,
+      calendar: this.listCalendar(user),
+      projects: this.listProjects(user),
+      orgs: this.listOrgs(user),
+      lives: (this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, 20),
+      notifications: (this.store.data.notifications || []).filter(n => n.userId === user.id).slice(0, 40),
+      conversations: (this.store.data.conversations || [])
+        .filter(c => (c.memberIds || []).includes(user.id))
+        .slice(0, 20)
+        .map(c => ({
+          ...c,
+          lastMessage: [...(this.store.data.messages || [])].reverse().find(m => m.conversationId === c.id) || null
+        })),
+      documents: docs,
+      continuity: this.continuityList(user),
+      tasks: this.listTasks(user),
+      goals: this.listGoals(user),
+      decisions: this.listDecisions(user, { spaceId }),
+      contentIndex: this.listContentHistory(user)
+    });
   }
 
   contextInstruction(role, view) {
@@ -1739,7 +1872,702 @@ export class EcosystemService {
   }
 
   buildHomeHub(user, collections = {}) {
-    return homeHubPayload({ me: user, ...collections });
+    const hub = homeHubPayload({ me: user, ...collections });
+    const continuity = this.continuityList(user);
+    const briefPref = this.dailyBriefPrefs(user);
+    return {
+      ...hub,
+      continue: [
+        ...continuity.slice(0, 4).map(s => ({
+          kind: 'continuity',
+          label: `${s.kind}:${s.key}`,
+          view: s.payload?.view || 'ai',
+          id: s.id
+        })),
+        ...(hub.continue || [])
+      ].slice(0, 8),
+      dailyBriefEnabled: briefPref.enabled,
+      emptyPlatform: emptyPlatformSeed({
+        communities: collections.communities || [],
+        courses: collections.courses || [],
+        lives: collections.rooms || [],
+        people: (collections.posts || []).map(p => p.author).filter(Boolean)
+      })
+    };
+  }
+
+  // —— Intelligence Layer / OS (125–164) ——
+  dailyBriefPrefs(user) {
+    ensureCollections(this.store);
+    let pref = this.store.data.dailyBriefPrefs.find(p => p.userId === user.id);
+    if (!pref) {
+      pref = { userId: user.id, enabled: true, updatedAt: this.store.now() };
+      this.store.data.dailyBriefPrefs.push(pref);
+      this.store.save();
+    }
+    return pref;
+  }
+
+  setDailyBriefEnabled(user, enabled) {
+    const pref = this.dailyBriefPrefs(user);
+    pref.enabled = !!enabled;
+    pref.updatedAt = this.store.now();
+    this.store.save();
+    audit(this.store, user.id, 'daily_brief.toggled', 'user', user.id, { enabled: !!enabled });
+    return pref;
+  }
+
+  dailyBrief(user) {
+    ensureCollections(this.store);
+    const pref = this.dailyBriefPrefs(user);
+    const notifications = (this.store.data.notifications || []).filter(n => n.userId === user.id);
+    const invites = notifications.filter(n => /invite|conference/i.test(String(n.type || '')));
+    const enrollments = (this.store.data.enrollments || []).filter(e => e.userId === user.id && e.progress < 1);
+    const courses = this.store.data.courses || [];
+    const learning = enrollments.map(e => {
+      const c = courses.find(x => x.id === e.courseId);
+      return c ? { id: c.id, title: c.title, progress: e.progress } : null;
+    }).filter(Boolean);
+    const brief = buildDailyBrief({
+      enabled: pref.enabled,
+      notifications,
+      invites,
+      lives: this.store.data.liveRooms || [],
+      calendar: this.listCalendar(user),
+      projects: this.listProjects(user),
+      tasks: this.listTasks(user),
+      learning,
+      creator: {
+        recentClips: (this.store.data.videos || []).filter(v => v.userId === user.id).slice(0, 4)
+      },
+      business: { orgs: this.listOrgs(user) }
+    });
+    this.recordActivity(user, {
+      kind: 'daily_brief',
+      summary: brief.summary,
+      dataUsed: ['notifications', 'calendar', 'tasks', 'projects'],
+      reason: 'Daily Intelligence Brief',
+      context: 'home'
+    });
+    return brief;
+  }
+
+  intelligentInbox(user) {
+    ensureCollections(this.store);
+    const conversations = (this.store.data.conversations || [])
+      .filter(c => (c.memberIds || []).includes(user.id))
+      .map(c => ({
+        ...c,
+        members: (c.memberIds || []).map(id => this.store.publicUser(this.store.data.users.find(u => u.id === id))),
+        lastMessage: [...(this.store.data.messages || [])].reverse().find(m => m.conversationId === c.id) || null
+      }));
+    const notifications = (this.store.data.notifications || []).filter(n => n.userId === user.id && !n.read);
+    return buildIntelligentInbox({ conversations, notifications });
+  }
+
+  recordActivityGraph(user, { type, entityType = null, entityId = null, summary = '', data = {}, spaceId = null } = {}) {
+    ensureCollections(this.store);
+    const row = createActivityEvent({
+      id: this.store.id(),
+      userId: user.id,
+      type: type || 'custom',
+      entityType,
+      entityId,
+      summary,
+      data,
+      spaceId
+    });
+    this.store.data.activityGraph.unshift(row);
+    this.store.data.activityGraph = this.store.data.activityGraph.slice(0, 2000);
+    this.store.save();
+    return row;
+  }
+
+  activityTimeline(user, { limit = 50 } = {}) {
+    ensureCollections(this.store);
+    return this.store.data.activityGraph.filter(a => a.userId === user.id).slice(0, limit);
+  }
+
+  indexContent(user, input = {}) {
+    ensureCollections(this.store);
+    const visibility = input.visibility === 'public' ? 'public' : input.visibility === 'space' ? 'space' : 'private';
+    const topics = input.topics?.length ? input.topics : extractTopics(input.transcript || input.text || input.title || '');
+    const row = createContentUnderstanding({
+      id: this.store.id(),
+      contentId: input.contentId || this.store.id(),
+      contentType: input.contentType || 'post',
+      ownerId: user.id,
+      visibility,
+      transcript: input.transcript || input.text || '',
+      captions: input.captions || [],
+      language: input.language || user.locale || 'uk',
+      topics,
+      entities: input.entities || [],
+      chapters: input.chapters || []
+    });
+    this.store.data.contentUnderstanding.unshift(row);
+    if (input.trackHistory !== false) {
+      this.store.data.contentHistory.unshift({
+        id: this.store.id(),
+        userId: user.id,
+        contentId: row.contentId,
+        contentType: row.contentType,
+        title: input.title || topics[0] || row.contentType,
+        topics,
+        language: row.language,
+        watchedAt: this.store.now(),
+        enabled: true
+      });
+    }
+    const own = ownershipGraphNode({
+      id: this.store.id(),
+      contentId: row.contentId,
+      originalCreatorId: user.id,
+      relation: input.relation || 'original',
+      parentContentId: input.parentContentId || null,
+      aiModified: !!input.aiModified
+    });
+    this.store.data.ownershipGraph.unshift(own);
+    this.store.save();
+    this.recordActivityGraph(user, {
+      type: 'document_created',
+      entityType: row.contentType,
+      entityId: row.contentId,
+      summary: `Indexed ${row.contentType} for understanding`
+    });
+    return { understanding: row, ownership: own };
+  }
+
+  listContentHistory(user) {
+    ensureCollections(this.store);
+    const prefOff = this.store.data.contentHistory.some(h => h.userId === user.id && h.enabled === false && h.contentId === '*');
+    if (prefOff) return [];
+    return this.store.data.contentHistory.filter(h => h.userId === user.id && h.enabled !== false).slice(0, 100);
+  }
+
+  setContentHistoryEnabled(user, enabled) {
+    ensureCollections(this.store);
+    this.store.data.contentHistory = this.store.data.contentHistory.filter(h => !(h.userId === user.id && h.contentId === '*'));
+    if (!enabled) {
+      this.store.data.contentHistory.unshift({
+        id: this.store.id(), userId: user.id, contentId: '*', contentType: 'pref', title: 'history_off',
+        topics: [], enabled: false, watchedAt: this.store.now()
+      });
+    }
+    this.store.save();
+    return { enabled: !!enabled };
+  }
+
+  searchContentHistory(user, query = '') {
+    const q = String(query || '').toLowerCase();
+    const tokens = q.split(/\s+/).filter(t => t.length > 2);
+    const history = this.listContentHistory(user);
+    const indexed = this.store.data.contentUnderstanding.filter(c => c.ownerId === user.id || c.visibility === 'public');
+    const hits = [];
+    for (const h of history) {
+      const hay = `${h.title || ''} ${(h.topics || []).join(' ')}`.toLowerCase();
+      if (!q || tokens.some(t => hay.includes(t)) || hay.includes(q)) hits.push({ source: 'history', ...h });
+    }
+    for (const c of indexed) {
+      const hay = `${c.transcript || ''} ${(c.topics || []).join(' ')}`.toLowerCase();
+      if (tokens.some(t => hay.includes(t))) {
+        hits.push({
+          source: 'understanding',
+          contentId: c.contentId,
+          contentType: c.contentType,
+          title: (c.topics || [])[0] || c.contentType,
+          topics: c.topics,
+          visibility: c.visibility
+        });
+      }
+    }
+    return {
+      query,
+      results: hits.slice(0, 40),
+      honesty: { embeddings: process.env.SYLORA_EMBEDDING_PROVIDER ? 'ready' : 'lexical_permission_aware' }
+    };
+  }
+
+  createTask(user, input = {}) {
+    ensureCollections(this.store);
+    const task = createUniversalTask({
+      id: this.store.id(),
+      title: input.title,
+      description: input.description,
+      ownerId: input.ownerId || user.id,
+      deadline: input.deadline || null,
+      status: input.status,
+      priority: input.priority,
+      source: input.source || 'sylora',
+      relatedType: input.relatedType || null,
+      relatedId: input.relatedId || null,
+      spaceId: input.spaceId || null
+    });
+    this.store.data.universalTasks.unshift(task);
+    this.store.save();
+    this.recordActivityGraph(user, {
+      type: 'task_created', entityType: 'task', entityId: task.id, summary: task.title, spaceId: task.spaceId
+    });
+    return task;
+  }
+
+  listTasks(user) {
+    ensureCollections(this.store);
+    return this.store.data.universalTasks.filter(t => t.ownerId === user.id || t.createdBy === user.id);
+  }
+
+  updateTask(user, id, patch = {}) {
+    const task = this.store.data.universalTasks.find(t => t.id === id && t.ownerId === user.id);
+    if (!task) return null;
+    if (patch.title != null) task.title = String(patch.title).slice(0, 160);
+    if (patch.status) task.status = patch.status;
+    if (patch.priority) task.priority = patch.priority;
+    if (patch.deadline !== undefined) task.deadline = patch.deadline;
+    task.updatedAt = this.store.now();
+    this.store.save();
+    return task;
+  }
+
+  createUserGoal(user, input = {}) {
+    ensureCollections(this.store);
+    const goal = createGoal({
+      id: this.store.id(),
+      userId: user.id,
+      title: input.title,
+      description: input.description,
+      milestones: input.milestones || []
+    });
+    // Optionally break into tasks when user asked
+    if (input.decompose) {
+      for (const m of goal.milestones) {
+        const task = this.createTask(user, {
+          title: m.title,
+          source: 'goal',
+          relatedType: 'goal',
+          relatedId: goal.id,
+          priority: 'normal'
+        });
+        goal.taskIds.push(task.id);
+      }
+    }
+    goal.progress = goalProgress(goal, this.listTasks(user));
+    this.store.data.goals.unshift(goal);
+    this.store.save();
+    this.recordActivityGraph(user, { type: 'goal_updated', entityType: 'goal', entityId: goal.id, summary: goal.title });
+    return goal;
+  }
+
+  listGoals(user) {
+    ensureCollections(this.store);
+    return this.store.data.goals.filter(g => g.userId === user.id).map(g => ({
+      ...g,
+      progress: goalProgress(g, this.listTasks(user))
+    }));
+  }
+
+  recordDecision(user, input = {}) {
+    ensureCollections(this.store);
+    const row = createDecisionRecord({
+      id: this.store.id(),
+      spaceId: input.spaceId || input.orgId || null,
+      orgId: input.orgId || null,
+      projectId: input.projectId || null,
+      decision: input.decision,
+      owner: input.owner || user.displayName || user.username,
+      reason: input.reason,
+      relatedTaskIds: input.relatedTaskIds || [],
+      source: input.source || { type: 'user', id: user.id }
+    });
+    this.store.data.decisionRecords.unshift(row);
+    this.store.save();
+    this.recordActivityGraph(user, {
+      type: 'decision_recorded',
+      entityType: 'decision',
+      entityId: row.id,
+      summary: row.decision,
+      spaceId: row.spaceId
+    });
+    return row;
+  }
+
+  listDecisions(user, { spaceId = null } = {}) {
+    ensureCollections(this.store);
+    const orgIds = new Set(this.listOrgs(user).map(o => o.id));
+    return this.store.data.decisionRecords.filter(d => {
+      if (spaceId && d.spaceId !== spaceId) return false;
+      if (d.orgId && !orgIds.has(d.orgId) && d.source?.id !== user.id) return false;
+      return d.source?.id === user.id || (d.orgId && orgIds.has(d.orgId)) || !d.orgId;
+    });
+  }
+
+  findDecisions(user, query = '') {
+    const q = String(query || '').toLowerCase();
+    return this.listDecisions(user).filter(d => {
+      if (!q) return true;
+      return `${d.decision} ${d.reason}`.toLowerCase().includes(q)
+        || q.split(/\s+/).some(t => t.length > 2 && `${d.decision} ${d.reason}`.toLowerCase().includes(t));
+    }).slice(0, 20);
+  }
+
+  addSharedMemory(user, input = {}) {
+    ensureCollections(this.store);
+    const scope = input.scope || 'project';
+    const row = createSharedMemoryRecord({
+      id: this.store.id(),
+      scope,
+      spaceId: input.spaceId || input.projectId || input.orgId || null,
+      orgId: input.orgId || null,
+      communityId: input.communityId || null,
+      projectId: input.projectId || null,
+      label: input.label,
+      value: input.value,
+      createdBy: user.id,
+      roles: input.roles || ['member']
+    });
+    this.store.data.sharedMemories.unshift(row);
+    this.store.save();
+    audit(this.store, user.id, 'shared_memory.created', 'shared_memory', row.id, { scope });
+    return row;
+  }
+
+  listSharedMemory(user, { spaceId = null, scope = null } = {}) {
+    ensureCollections(this.store);
+    const orgIds = new Set(this.listOrgs(user).map(o => o.id));
+    return this.store.data.sharedMemories.filter(m => {
+      if (m.deletedAt) return false;
+      if (scope && m.scope !== scope) return false;
+      if (spaceId && m.spaceId !== spaceId) return false;
+      if (m.scope === 'my' && m.createdBy !== user.id) return false;
+      if (m.orgId && !orgIds.has(m.orgId)) return false;
+      return true;
+    });
+  }
+
+  knowledgeSpaces(user) {
+    return {
+      scopes: KNOWLEDGE_SCOPES,
+      mine: this.listSharedMemory(user, { scope: 'my' }).length,
+      project: this.listSharedMemory(user, { scope: 'project' }).length,
+      company: this.listSharedMemory(user, { scope: 'company' }).length,
+      community: this.listSharedMemory(user, { scope: 'community' }).length,
+      note: 'Private company knowledge is never mixed into personal/public memory.'
+    };
+  }
+
+  prepareMeetingBriefOs(user, input = {}) {
+    const cal = this.listCalendar(user).filter(c => /meeting|event/i.test(c.kind || ''));
+    const next = cal[0];
+    const decisions = this.listDecisions(user).slice(0, 5);
+    const tasks = this.listTasks(user).filter(t => t.status !== 'done').slice(0, 8);
+    return {
+      meeting: next || { title: input.title || 'Next meeting', startsAt: input.startsAt || null },
+      agenda: input.agenda || ['Goals', 'Decisions', 'Next steps'],
+      priorDecisions: decisions,
+      openTasks: tasks,
+      context: this.buildContextEngine(user, { view: 'business', query: input.raw || 'meeting' }),
+      note: 'Preparation only — no calendar changes without permission.'
+    };
+  }
+
+  saveMeetingResult(user, input = {}) {
+    ensureCollections(this.store);
+    const result = structuredMeetingResult({
+      id: this.store.id(),
+      spaceId: input.spaceId || input.orgId || null,
+      title: input.title,
+      transcript: input.transcript,
+      speakers: input.speakers || [],
+      notes: input.notes,
+      locale: user.locale || 'uk'
+    });
+    this.store.data.meetingResults.unshift(result);
+    for (const d of result.decisions) {
+      this.recordDecision(user, {
+        decision: d.text,
+        reason: 'Extracted from meeting',
+        spaceId: result.spaceId,
+        orgId: input.orgId || null,
+        source: { type: 'meeting', id: result.id }
+      });
+    }
+    for (const a of result.actionItems) {
+      this.createTask(user, {
+        title: a.text.slice(0, 160),
+        source: 'meeting',
+        relatedType: 'meeting',
+        relatedId: result.id,
+        spaceId: result.spaceId
+      });
+    }
+    this.store.save();
+    this.recordActivityGraph(user, {
+      type: 'meeting_completed',
+      entityType: 'meeting',
+      entityId: result.id,
+      summary: result.title,
+      spaceId: result.spaceId
+    });
+    return result;
+  }
+
+  listSkills() {
+    return PLATFORM_SKILLS;
+  }
+
+  orchestrate(user, text) {
+    const orch = orchestrateTask({ text });
+    orch.contextEngine = this.buildContextEngine(user, { view: orch.routing.view || 'ai', query: text });
+    orch.specialists = SPECIALIST_AGENTS;
+    return orch;
+  }
+
+  personalDashboard(user) {
+    const brief = this.dailyBrief(user);
+    const inbox = this.intelligentInbox(user);
+    const role = user.role === 'admin' ? 'admin' : (this.listOrgs(user).length ? 'professional' : 'member');
+    return personalDashboardPayload({
+      role,
+      brief,
+      tasks: this.listTasks(user),
+      goals: this.listGoals(user),
+      inbox,
+      continuity: this.continuityList(user),
+      lives: (this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, 6),
+      projects: this.listProjects(user),
+      suggestions: [
+        { text: brief.summary, view: 'home' },
+        { text: inbox.summary, view: 'messages' }
+      ]
+    });
+  }
+
+  createCanvas(user, input = {}) {
+    ensureCollections(this.store);
+    const row = canvasWorkspace({
+      id: this.store.id(),
+      userId: user.id,
+      title: input.title,
+      kind: input.kind,
+      artifact: input.artifact || { body: input.body || '' },
+      spaceId: input.spaceId || null,
+      shared: !!input.shared
+    });
+    this.store.data.canvasWorkspaces.unshift(row);
+    this.store.save();
+    return row;
+  }
+
+  listCanvas(user) {
+    ensureCollections(this.store);
+    return this.store.data.canvasWorkspaces.filter(w => w.userId === user.id || (w.shared && w.spaceId));
+  }
+
+  spaceAsk(user, spaceId, question) {
+    const space = getSpace(spaceId, this.store.data);
+    if (!space) return { ok: false, error: 'SPACE_NOT_FOUND' };
+    // Shared context only — never other users' personal memories
+    const shared = this.listSharedMemory(user, { spaceId });
+    const decisions = this.listDecisions(user, { spaceId });
+    const ctx = selectContextSlices({
+      view: 'business',
+      query: question,
+      user: { id: user.id, displayName: user.displayName },
+      memories: [], // personal memory excluded in collaborative AI
+      documents: shared.map(m => ({ id: m.id, title: m.label, body: m.value, knowledgeScope: m.scope })),
+      decisions,
+      tasks: this.listTasks(user).filter(t => t.spaceId === spaceId)
+    });
+    const summary = this.executeTool(user, 'summarize_content', {
+      text: `${question}\n\n${shared.map(m => `${m.label}: ${m.value}`).join('\n')}\n${decisions.map(d => d.decision).join('\n')}`
+    });
+    return {
+      ok: true,
+      space: { id: space.id, title: space.title, kind: space.kind },
+      answer: summary.result?.summary,
+      contextEngine: ctx,
+      policy: {
+        personalMemoriesOfOthers: false,
+        sharedContextOnly: true
+      }
+    };
+  }
+
+  creatorPipeline(user, input = {}) {
+    const plan = creatorPipelinePlan({
+      liveId: input.liveId,
+      title: input.title,
+      language: user.locale || 'uk'
+    });
+    const tracks = localizedContentTracks({
+      originalLanguage: user.locale || 'uk',
+      subtitleLanguages: input.subtitleLanguages || ['pl', 'en', 'de', 'es'],
+      audioLanguages: input.audioLanguages || []
+    });
+    const action = this.proposeAction(user, {
+      type: 'prepare_content_pack',
+      context: 'studio',
+      reason: 'Creator AI pipeline drafted — publish requires confirmation',
+      input: { plan, tracks }
+    });
+    this.recordActivityGraph(user, {
+      type: 'clip_suggested',
+      entityType: 'live',
+      entityId: input.liveId || null,
+      summary: 'Creator pipeline drafted'
+    });
+    return { action, plan, tracks };
+  }
+
+  draftRevenueSplit(user, input = {}) {
+    const draft = revenueSplitDraft({ parties: input.parties || [] });
+    ensureCollections(this.store);
+    const row = { id: this.store.id(), userId: user.id, ...draft, createdAt: this.store.now() };
+    this.store.data.revenueSplits.unshift(row);
+    this.store.save();
+    return row;
+  }
+
+  scienceVerify(user, input = {}) {
+    const claim = scienceClaim({
+      text: input.text,
+      kind: input.kind,
+      sources: input.sources || []
+    });
+    this.recordActivity(user, {
+      kind: 'science_verify',
+      summary: `Science mode: ${claim.kind}`,
+      dataUsed: ['user_claim', 'optional_sources'],
+      reason: 'Strict verification mode',
+      context: 'learning'
+    });
+    return { claim, mode: 'science_verification' };
+  }
+
+  upsertLearningGraph(user, concept, state, reason) {
+    ensureCollections(this.store);
+    let graph = this.store.data.learningGraphs.find(g => g.userId === user.id);
+    if (!graph) {
+      graph = { userId: user.id, nodes: [], updatedAt: this.store.now() };
+      this.store.data.learningGraphs.push(graph);
+    }
+    const node = learningKnowledgeNode({ concept, state, reason });
+    const idx = graph.nodes.findIndex(n => n.concept === node.concept);
+    if (idx >= 0) graph.nodes[idx] = node;
+    else graph.nodes.push(node);
+    graph.updatedAt = this.store.now();
+    this.store.save();
+    return graph;
+  }
+
+  learningGraph(user) {
+    ensureCollections(this.store);
+    return this.store.data.learningGraphs.find(g => g.userId === user.id) || { userId: user.id, nodes: [] };
+  }
+
+  connectService(user, input = {}) {
+    ensureCollections(this.store);
+    const row = connectedServiceRecord({
+      id: this.store.id(),
+      userId: user.id,
+      provider: String(input.provider || '').slice(0, 60),
+      scopes: input.scopes || [],
+      status: 'connected'
+    });
+    this.store.data.connectedServices.push(row);
+    this.store.save();
+    // Never return vault secrets
+    return {
+      id: row.id,
+      provider: row.provider,
+      scopes: row.scopes,
+      status: row.status,
+      lastUsedAt: row.lastUsedAt,
+      tokenStorage: 'server_vault_only'
+    };
+  }
+
+  listConnectedServices(user) {
+    ensureCollections(this.store);
+    return this.store.data.connectedServices
+      .filter(s => s.userId === user.id && s.status !== 'disconnected')
+      .map(s => ({
+        id: s.id,
+        provider: s.provider,
+        scopes: s.scopes,
+        status: s.status,
+        lastUsedAt: s.lastUsedAt,
+        permissions: s.scopes
+      }));
+  }
+
+  disconnectService(user, id) {
+    const row = this.store.data.connectedServices.find(s => s.id === id && s.userId === user.id);
+    if (!row) return false;
+    row.status = 'disconnected';
+    row.tokenRef = null;
+    this.store.save();
+    audit(this.store, user.id, 'integration.disconnected', 'connected_service', id);
+    return true;
+  }
+
+  createBusinessWorkflow(user, input = {}) {
+    ensureCollections(this.store);
+    const wf = {
+      id: this.store.id(),
+      userId: user.id,
+      orgId: input.orgId || null,
+      name: String(input.name || 'Lead workflow').slice(0, 120),
+      steps: (input.steps || [
+        'new_lead', 'qualification', 'meeting', 'summary', 'task', 'follow_up'
+      ]).slice(0, 20),
+      requiresConfirmationFor: ['external_email', 'payment', 'contract'],
+      createdAt: this.store.now()
+    };
+    this.store.data.businessWorkflows.unshift(wf);
+    this.store.save();
+    return wf;
+  }
+
+  guestView(input = {}) {
+    const profile = input.userId
+      ? this.store.data.identities.find(i => i.userId === input.userId)
+      : null;
+    const content = input.contentId
+      ? this.store.data.contentUnderstanding.find(c => c.contentId === input.contentId)
+      : null;
+    const live = input.liveId
+      ? this.store.data.liveRooms.find(r => r.id === input.liveId)
+      : null;
+    return guestPublicView({
+      content: content ? { visibility: content.visibility } : { visibility: input.visibility || 'public' },
+      profile: profile || { privacy: { profile: 'public' } },
+      live: live ? { ...live, visibility: live.visibility || 'public' } : null
+    });
+  }
+
+  onboarding(user) {
+    const done = ['account_created'];
+    if (user.displayName) done.push('profile_name');
+    if (this.listOrgs(user).length) done.push('business_org');
+    if ((this.store.data.videos || []).some(v => v.userId === user.id)) done.push('creator_settings');
+    return onboardingState({ user, stepsDone: done });
+  }
+
+  publicWebMeta(userId) {
+    const user = this.store.data.users.find(u => u.id === userId);
+    const identity = user ? this.ensureIdentity(user) : null;
+    const publicProfile = identity?.privacy?.profile === 'public';
+    return {
+      canonicalPath: publicProfile ? `/u/${user.username}` : null,
+      indexable: publicProfile,
+      openGraph: publicProfile ? {
+        title: identity.displayName || user.displayName,
+        description: identity.creatorPersona?.headline || user.bio || 'SYLORA',
+        type: 'profile'
+      } : null,
+      structuredData: publicProfile ? { '@type': 'Person', name: user.displayName } : null,
+      note: 'Private profiles are not indexed.'
+    };
   }
 
   capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {

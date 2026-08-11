@@ -37,12 +37,31 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/ai/command-center') {
     const user = await requireUser(req, res); if (!user) return true;
     const view = safeText(url.searchParams.get('view') || 'command_center', 40);
+    const query = safeText(url.searchParams.get('q') || '', 500);
     return json(res, 200, {
       ...ecosystem.commandCenterContext(view),
       dashboard: ecosystem.dashboard(user),
       agent: ecosystem.ensurePersonalAgent(user),
-      pack: ecosystem.contextPack(user, view)
+      pack: ecosystem.contextPack(user, view, { query })
     }), true;
+  }
+  if (req.method === 'POST' && p === '/api/ai/context') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, {
+      contextEngine: ecosystem.buildContextEngine(user, {
+        view: safeText(input.view || 'command_center', 40),
+        query: safeText(input.query || input.q || '', 500),
+        spaceId: input.spaceId || null
+      })
+    }), true;
+  }
+  if (req.method === 'POST' && p === '/api/ai/orchestrate') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const text = safeText(input.text || input.q || '', 2000);
+    if (!text) return json(res, 400, { error: 'TEXT_REQUIRED' }), true;
+    return json(res, 200, ecosystem.orchestrate(user, text)), true;
   }
   if (req.method === 'GET' && p === '/api/ai/intelligence') {
     const user = await requireUser(req, res); if (!user) return true;
@@ -505,6 +524,193 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/feature-flags') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 200, { flags: ecosystem.flagsFor(user) }), true;
+  }
+
+  // —— Intelligence Layer / Personal OS ——
+  if (req.method === 'GET' && p === '/api/daily-brief') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { brief: ecosystem.dailyBrief(user) }), true;
+  }
+  if (req.method === 'PATCH' && p === '/api/daily-brief') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, { prefs: ecosystem.setDailyBriefEnabled(user, input.enabled !== false) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/inbox/intelligent') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { inbox: ecosystem.intelligentInbox(user) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/activity-graph') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { events: ecosystem.activityTimeline(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/content/understand') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, ecosystem.indexContent(user, input || {})), true;
+  }
+  if (req.method === 'GET' && p === '/api/content/history') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const q = safeText(url.searchParams.get('q') || '', 500);
+    if (q.length >= 2) return json(res, 200, ecosystem.searchContentHistory(user, q)), true;
+    return json(res, 200, { history: ecosystem.listContentHistory(user) }), true;
+  }
+  if (req.method === 'PATCH' && p === '/api/content/history') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.setContentHistoryEnabled(user, input.enabled !== false)), true;
+  }
+  if (req.method === 'GET' && p === '/api/tasks') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { tasks: ecosystem.listTasks(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/tasks') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    return json(res, 201, { task: ecosystem.createTask(user, input) }), true;
+  }
+  m = route('/api/tasks/:id', p);
+  if (req.method === 'PATCH' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const task = ecosystem.updateTask(user, m.id, await body(req));
+    if (!task) return json(res, 404, { error: 'TASK_NOT_FOUND' }), true;
+    return json(res, 200, { task }), true;
+  }
+  if (req.method === 'GET' && p === '/api/goals') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { goals: ecosystem.listGoals(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/goals') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.title, 160)) return json(res, 400, { error: 'TITLE_REQUIRED' }), true;
+    return json(res, 201, { goal: ecosystem.createUserGoal(user, input) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/decisions') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const q = safeText(url.searchParams.get('q') || '', 200);
+    return json(res, 200, {
+      decisions: q ? ecosystem.findDecisions(user, q) : ecosystem.listDecisions(user, { spaceId: url.searchParams.get('spaceId') })
+    }), true;
+  }
+  if (req.method === 'POST' && p === '/api/decisions') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.decision, 500)) return json(res, 400, { error: 'DECISION_REQUIRED' }), true;
+    return json(res, 201, { decision: ecosystem.recordDecision(user, input) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/shared-memory') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, {
+      memories: ecosystem.listSharedMemory(user, {
+        spaceId: url.searchParams.get('spaceId'),
+        scope: url.searchParams.get('scope')
+      }),
+      knowledgeSpaces: ecosystem.knowledgeSpaces(user)
+    }), true;
+  }
+  if (req.method === 'POST' && p === '/api/shared-memory') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.label, 80) || !safeText(input.value, 4000)) return json(res, 400, { error: 'MEMORY_REQUIRED' }), true;
+    try { return json(res, 201, { memory: ecosystem.addSharedMemory(user, input) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/dashboard') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { dashboard: ecosystem.personalDashboard(user) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/skills') {
+    return json(res, 200, { skills: ecosystem.listSkills(), specialists: ['research', 'creator', 'business', 'translation', 'moderation', 'search', 'planning', 'learning'] }), true;
+  }
+  if (req.method === 'GET' && p === '/api/canvas') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { workspaces: ecosystem.listCanvas(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/canvas') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, { workspace: ecosystem.createCanvas(user, input || {}) }), true;
+  }
+  m = route('/api/spaces/:id/ask', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const out = ecosystem.spaceAsk(user, m.id, safeText(input.question || input.text || '', 2000));
+    return json(res, out.ok ? 200 : 404, out), true;
+  }
+  if (req.method === 'POST' && p === '/api/meetings/result') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, { result: ecosystem.saveMeetingResult(user, input || {}) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/studio/ai/pipeline') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.creatorPipeline(user, input || {})), true;
+  }
+  if (req.method === 'POST' && p === '/api/revenue-split/draft') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, { draft: ecosystem.draftRevenueSplit(user, input || {}) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/verify') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.scienceVerify(user, input || {})), true;
+  }
+  if (req.method === 'GET' && p === '/api/learning/graph') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { graph: ecosystem.learningGraph(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/graph') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, { graph: ecosystem.upsertLearningGraph(user, input.concept, input.state, input.reason) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/integrations') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { services: ecosystem.listConnectedServices(user), note: 'OAuth tokens never exposed to frontend' }), true;
+  }
+  if (req.method === 'POST' && p === '/api/integrations') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!safeText(input.provider, 60)) return json(res, 400, { error: 'PROVIDER_REQUIRED' }), true;
+    return json(res, 201, { service: ecosystem.connectService(user, input) }), true;
+  }
+  m = route('/api/integrations/:id', p);
+  if (req.method === 'DELETE' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    if (!ecosystem.disconnectService(user, m.id)) return json(res, 404, { error: 'NOT_FOUND' }), true;
+    return json(res, 200, { disconnected: true }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/workflows') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, { workflow: ecosystem.createBusinessWorkflow(user, input || {}) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/onboarding') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { onboarding: ecosystem.onboarding(user) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/guest/view') {
+    return json(res, 200, ecosystem.guestView({
+      userId: url.searchParams.get('userId'),
+      contentId: url.searchParams.get('contentId'),
+      liveId: url.searchParams.get('liveId'),
+      visibility: url.searchParams.get('visibility') || 'public'
+    })), true;
+  }
+  m = route('/api/public/u/:username', p);
+  if (req.method === 'GET' && m) {
+    const user = store.data.users.find(u => u.username === m.username);
+    if (!user) return json(res, 404, { error: 'USER_NOT_FOUND' }), true;
+    return json(res, 200, {
+      profile: ecosystem.getPublicIdentity(user, 'public'),
+      web: ecosystem.publicWebMeta(user.id),
+      guest: ecosystem.guestView({ userId: user.id, visibility: 'public' })
+    }), true;
   }
 
   if (req.method === 'GET' && p === '/api/ecosystem/metrics') {

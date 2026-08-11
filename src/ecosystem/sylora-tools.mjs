@@ -79,6 +79,12 @@ export function detectIntent(text = '', locale = 'uk') {
   if (/summary|підсумок|резюме|що\s*я\s*пропустив|what\s*did\s*i\s*miss/i.test(lower)) {
     return { intent: 'summarize', tool: 'summarize_content', confidence: 0.65, slots: { ...slots, text: q }, view: 'ai' };
   }
+  if (/незакінчен|unfinished|open tasks|справи|todo/i.test(lower)) {
+    return { intent: 'list_open_work', tool: 'search_platform', confidence: 0.55, slots: { ...slots, q }, view: 'dashboard', osTool: 'list_open_work' };
+  }
+  if (/що\s*сьогодні|daily brief|важливого сьогодні/i.test(lower)) {
+    return { intent: 'daily_brief', tool: 'manage_notifications', confidence: 0.55, slots, view: 'home', osTool: 'daily_brief' };
+  }
 
   return { intent: 'ask_sylora', tool: 'search_platform', confidence: 0.4, slots: { ...slots, q }, view: 'ai', naturalLanguage: true };
 }

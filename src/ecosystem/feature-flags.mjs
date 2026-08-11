@@ -13,7 +13,13 @@ const DEFAULTS = Object.freeze({
   semantic_embeddings: !!process.env.SYLORA_EMBEDDING_PROVIDER,
   live_ai_copilot: true,
   realtime_translation: true,
-  honesty_labels: true
+  honesty_labels: true,
+  daily_brief: true,
+  intelligent_inbox: true,
+  context_engine: true,
+  canvas_workspace: true,
+  content_history: true,
+  skills_system: true
 });
 
 export function resolveFlags(overrides = {}) {
