@@ -17,7 +17,8 @@ const migrations = [
   { name: '006_live_runtime', file: path.resolve(__dirname, '../infra/postgres/migrations/006_live_runtime.sql') },
   { name: '007_realtime_outbox', file: path.resolve(__dirname, '../infra/postgres/migrations/007_realtime_outbox.sql') },
   { name: '008_resonance_live', file: path.resolve(__dirname, '../infra/postgres/migrations/008_resonance_live.sql') },
-  { name: '009_private_conferences', file: path.resolve(__dirname, '../infra/postgres/migrations/009_private_conferences.sql') }
+  { name: '009_private_conferences', file: path.resolve(__dirname, '../infra/postgres/migrations/009_private_conferences.sql') },
+  { name: '010_ecosystem_foundation', file: path.resolve(__dirname, '../infra/postgres/migrations/010_ecosystem_foundation.sql') }
 ].map(m => ({ ...m, sql: fs.readFileSync(m.file, 'utf8') })).map(m => ({ ...m, checksum: createHash('sha256').update(m.sql).digest('hex') }));
 const { Pool } = pg;
 const pool = new Pool({ connectionString: databaseUrl, max: 2, application_name: 'sylora-migrate' });

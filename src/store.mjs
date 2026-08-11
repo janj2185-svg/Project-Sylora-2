@@ -6,6 +6,9 @@ const initial = () => ({
   users: [], sessions: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
   notifications: [], wallets: [], ledger: [], messages: [], conversations: [],
   aiMessages: [], aiMemories: [], aiActions: [],
+  identityProfiles: [], aiPermissions: [], aiActivityLog: [], knowledgeNodes: [], knowledgeEdges: [],
+  agentCatalog: [], agentInstalls: [], developerApps: [], apiKeys: [], organizations: [], orgMembers: [],
+  orgPolicies: [], reputationScores: [], contentProvenance: [], translationPrefs: [], revenueShares: [], actionAudit: [],
   communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [],
   businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], gifts: [
     { id: 'spark', name: 'Crystal Star', price: 10, tier: 'basic', color: '#e8b95f' },

@@ -1,12 +1,12 @@
 const POSES = {
-  neutral:  { leftShoulder: 0,  leftElbow: 10, leftWrist: 0,  rightShoulder: 0,  rightElbow: -10, rightWrist: 0 },
-  explain:  { leftShoulder: -5, leftElbow: 24, leftWrist: -5, rightShoulder: 9,  rightElbow: -34, rightWrist: 8 },
-  empathy:  { leftShoulder: 7,  leftElbow: 38, leftWrist: -8, rightShoulder: -8, rightElbow: -42, rightWrist: 7 },
-  welcome:  { leftShoulder: -13,leftElbow: 28, leftWrist: -10,rightShoulder: 13, rightElbow: -28, rightWrist: 10 },
-  emphasis: { leftShoulder: -3, leftElbow: 18, leftWrist: -3, rightShoulder: 12, rightElbow: -48, rightWrist: 4 },
-  wave:     { leftShoulder: 0,  leftElbow: 12, leftWrist: 0,  rightShoulder: 17, rightElbow: -58, rightWrist: 13 },
-  thinking: { leftShoulder: -2, leftElbow: 15, leftWrist: -2, rightShoulder: 6,  rightElbow: -36, rightWrist: -4 },
-  positive: { leftShoulder: -10,leftElbow: 31, leftWrist: -8, rightShoulder: 10, rightElbow: -31, rightWrist: 8 }
+  neutral:  { leftShoulder: 0,  leftElbow: 0, leftWrist: 0,  rightShoulder: 0,  rightElbow: 0, rightWrist: 0 },
+  explain:  { leftShoulder: -2, leftElbow: 4, leftWrist: -2, rightShoulder: 5,  rightElbow: -8, rightWrist: 4 },
+  empathy:  { leftShoulder: 3,  leftElbow: 6, leftWrist: -3, rightShoulder: -4, rightElbow: -10, rightWrist: 3 },
+  welcome:  { leftShoulder: -6, leftElbow: 8, leftWrist: -4, rightShoulder: 6,  rightElbow: -8, rightWrist: 4 },
+  emphasis: { leftShoulder: -1, leftElbow: 3, leftWrist: -1, rightShoulder: 7,  rightElbow: -12, rightWrist: 2 },
+  wave:     { leftShoulder: 0,  leftElbow: 2, leftWrist: 0,  rightShoulder: 8,  rightElbow: -14, rightWrist: 6 },
+  thinking: { leftShoulder: -1, leftElbow: 3, leftWrist: -1, rightShoulder: 3,  rightElbow: -9, rightWrist: -2 },
+  positive: { leftShoulder: -4, leftElbow: 6, leftWrist: -3, rightShoulder: 4,  rightElbow: -6, rightWrist: 3 }
 };
 
 const HAND_POSES = {
@@ -20,8 +20,23 @@ const HAND_POSES = {
   positive: 'open'
 };
 
+const GESTURE_FRAMES = {
+  neutral: 0,
+  explain: 1,
+  empathy: 2,
+  welcome: 3,
+  emphasis: 4,
+  wave: 5,
+  thinking: 6,
+  positive: 7
+};
+
 export function handPoseForGesture(name = 'neutral') {
   return HAND_POSES[name] || 'neutral';
+}
+
+export function gestureFrameForName(name = 'neutral') {
+  return GESTURE_FRAMES[name] ?? 0;
 }
 
 export class SpringValue {
@@ -77,7 +92,7 @@ export class SyloraMotionRig {
     this.breathDuration = range[0] + this.random() * (range[1] - range[0]);
     this.breathAmplitude = baseAmplitude * (0.86 + this.random() * 0.28);
     this.breathStartedAt = now;
-    this.bodyRot.target = (this.random() - 0.5) * 0.1;
+    this.bodyRot.target = (this.random() - 0.5) * 0.08;
   }
 
   step(now = 0) {
@@ -101,7 +116,7 @@ export class SyloraMotionRig {
       hairX: this.hairX.step(dt),
       hairY: this.hairY.step(dt),
       hairRot: this.hairRot.step(dt),
-      gestureLift: this.presence === 'speaking' ? -this.voiceEnergy * 2.2 : 0,
+      gestureLift: this.presence === 'speaking' ? -this.voiceEnergy * 1.4 : 0,
       joints: jointValues
     };
   }
@@ -109,18 +124,22 @@ export class SyloraMotionRig {
   attach(hero) {
     if (!hero || typeof requestAnimationFrame !== 'function') return () => {};
     let active = true;
+    const root = () => hero.querySelector('.sylora-rig-root') || hero;
     const frame = now => {
       if (!active || !hero.isConnected) return;
       const pose = this.step(now);
-      hero.style.setProperty('--body-scale', pose.bodyScale.toFixed(5));
-      hero.style.setProperty('--body-y', `${pose.bodyY.toFixed(3)}px`);
-      hero.style.setProperty('--body-rot', `${pose.bodyRot.toFixed(3)}deg`);
-      hero.style.setProperty('--hair-x', `${pose.hairX.toFixed(3)}px`);
-      hero.style.setProperty('--hair-y', `${pose.hairY.toFixed(3)}px`);
-      hero.style.setProperty('--hair-rot', `${pose.hairRot.toFixed(3)}deg`);
-      hero.style.setProperty('--hair-skew', `${(pose.hairRot * 0.42).toFixed(3)}deg`);
-      hero.style.setProperty('--gesture-lift', `${pose.gestureLift.toFixed(3)}px`);
-      for (const [joint, value] of Object.entries(pose.joints)) hero.style.setProperty(`--rig-${joint}`, `${value.toFixed(3)}deg`);
+      const target = root();
+      target.style.setProperty('--body-scale', pose.bodyScale.toFixed(5));
+      target.style.setProperty('--body-y', `${pose.bodyY.toFixed(3)}px`);
+      target.style.setProperty('--body-rot', `${pose.bodyRot.toFixed(3)}deg`);
+      target.style.setProperty('--hair-x', `${pose.hairX.toFixed(3)}px`);
+      target.style.setProperty('--hair-y', `${pose.hairY.toFixed(3)}px`);
+      target.style.setProperty('--hair-rot', `${pose.hairRot.toFixed(3)}deg`);
+      target.style.setProperty('--hair-skew', `${(pose.hairRot * 0.42).toFixed(3)}deg`);
+      target.style.setProperty('--gesture-lift', `${pose.gestureLift.toFixed(3)}px`);
+      for (const [joint, value] of Object.entries(pose.joints)) {
+        target.style.setProperty(`--rig-${joint}`, `${value.toFixed(3)}deg`);
+      }
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
@@ -128,4 +147,4 @@ export class SyloraMotionRig {
   }
 }
 
-export { POSES as SYLORA_RIG_POSES };
+export { POSES as SYLORA_RIG_POSES, GESTURE_FRAMES as SYLORA_GESTURE_FRAMES };

@@ -8,6 +8,9 @@
     "start": "node src/server.mjs",
     "companion": "node src/companion.mjs",
     "db:migrate": "node scripts/migrate.mjs",
+    "lint": "node --check src/server.mjs && node --check src/ecosystem/core.mjs && node --check public/sylora-motion.js && node --check public/app.js",
+    "typecheck": "node --check src/server.mjs && node --check src/ecosystem/core.mjs && node --check src/store.mjs && node --check scripts/migrate.mjs",
+    "build": "node --check src/server.mjs && node --check public/app.js && node --check public/sylora-motion.js",
     "test": "DATABASE_URL= REDIS_URL= node --test --test-force-exit tests/*.test.mjs"
   },
   "engines": {
