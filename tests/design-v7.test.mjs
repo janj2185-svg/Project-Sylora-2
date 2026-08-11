@@ -12,11 +12,11 @@ test('V7 Digital Human layer loads after V6 so assembly overrides win', () => {
   assert.ok(v6 >= 0 && v7 > v6);
 });
 
-test('V7 keeps a continuous shoulder-elbow-wrist chain with calibrated sockets', () => {
-  assert.match(css, /\.sylora-rig-arm-left\{[^}]*left:12\.8%/);
-  assert.match(css, /\.sylora-rig-arm-right\{[^}]*right:12\.8%/);
-  assert.match(css, /\.sylora-rig-forearm\{[^}]*top:78%/);
-  assert.match(css, /\.sylora-ai-hero\.rig-live \.sylora-avatar-body/);
+test('V7 presents an assembled portrait and hides detached limb sprites', () => {
+  assert.match(css, /sylora-avatar-v2-base\.png/);
+  assert.match(css, /\.sylora-rig-arm\{display:none!important\}/);
+  assert.match(css, /\.sylora-avatar-gesture\.gesture-shown/);
+  assert.match(css, /sylora-gestures-v2\.png/);
 });
 
 test('avatar mount creates gesture layers and enables the live kinematic rig', () => {
