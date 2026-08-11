@@ -14,41 +14,18 @@
 ```bash
 ssh <YOUR_USER>@77.42.42.246
 cd /opt/sylora
-
-# 1) Backup metadata (safe)
-mkdir -p .deploy-backup-$(date -u +%Y%m%dT%H%M%SZ)
-git rev-parse HEAD > .deploy-backup-*/HEAD.txt 2>/dev/null || true
-
-# 2) Pull verified Project-Sylora-2 tip (not stale main)
 git fetch origin
 git checkout cursor/sylora-live-ecosystem-34a2
 git pull --ff-only origin cursor/sylora-live-ecosystem-34a2
-
-# 3) Deploy (keeps postgres/redis/data volumes)
-docker compose up -d --build
-
-# 4) Local health
-curl -fsS http://127.0.0.1:8787/api/ready && echo
-
-# 5) From your laptop after deploy:
-# ./scripts/prod-smoke.sh https://getsylora.com
+./scripts/owner-deploy-getsylora.sh /opt/sylora
 ```
 
-Or, after the new script is on the server:
+Then from laptop: `./scripts/prod-smoke.sh https://getsylora.com`
 
-```bash
-cd /opt/sylora
-SYLORA_DEPLOY_REF=cursor/sylora-live-ecosystem-34a2 ./scripts/deploy-prod.sh /opt/sylora deploy
-```
+<details><summary>Expanded manual steps</summary>
 
-## Success criteria
 
-- HTML cache bust contains `20260811` (not `20260809-3`)
-- `GET /live-studio.js` → 200
-- `GET /api/sylora-live/capabilities` → 200
-- `GET /api/wallet` authenticated → 200
-- `GET /api/auth/google` → 503 until keys (honest), not fake Connected
-- `./scripts/prod-smoke.sh https://getsylora.com` → PASS
+</details>
 
 ## Prerequisites on VPS
 

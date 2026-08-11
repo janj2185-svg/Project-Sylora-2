@@ -10,3 +10,6 @@ artifacts/screenshots/*-log.txt
 artifacts/screenshots/home-living-bg/frames/
 
 artifacts/screenshots/home-living-bg-data.json
+
+# Local/on-server deploy metadata backups (never commit)
+.deploy-backup-*/
