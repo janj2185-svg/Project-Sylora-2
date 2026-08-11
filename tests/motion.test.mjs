@@ -45,9 +45,18 @@ test('assembled Digital Human assets and gesture sheet are present', async () =>
   }
   const css = fs.readFileSync('public/design-living-horizon.css', 'utf8');
   assert.match(css, /Digital Human V3 — Assembled Sylora/);
-  assert.match(css, /\.sylora-ai-hero\.sylora-assembled \.sylora-rig-arm\{display:none/);
+  assert.match(css, /\.sylora-ai-hero\.sylora-assembled \.sylora-rig-arm/);
+  const finalCss = fs.readFileSync('public/design-avatar-assembled.css', 'utf8');
+  assert.match(finalCss, /position:absolute!important/);
+  assert.match(finalCss, /sylora-avatar-head/);
+  assert.match(finalCss, /display:none!important/);
+  const html = fs.readFileSync('public/index.html', 'utf8');
+  assert.match(html, /design-avatar-assembled\.css/);
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /sylora-assembled/);
   assert.match(app, /sylora-avatar-gesture/);
-  assert.doesNotMatch(app.split('function mountSyloraAvatarLayers')[1].split('function ')[0], /sylora-rig-arm/);
+  const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
+  assert.doesNotMatch(mount, /sylora-rig-arm/);
+  assert.doesNotMatch(mount, /sylora-avatar-head/);
+  assert.doesNotMatch(mount, /['"]eyes['"]/);
 });

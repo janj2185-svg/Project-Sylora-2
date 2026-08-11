@@ -236,8 +236,8 @@ function mountSyloraAvatarLayers(){
   const body=document.createElement('i');
   body.className='sylora-avatar-body';
   motion.append(body);
-  // Assembled Digital Human: coherent white-suit gesture sheet (2-layer crossfade).
-  // Mismatched pink sleeve tubes are intentionally not mounted.
+  // Assembled Digital Human: one white-suit base + gesture sheet crossfade only.
+  // No pink sleeve tubes, no clipped face/hair overlays (they create a collage look).
   for(let i=0;i<2;i++){
     const gesture=document.createElement('i');
     gesture.className='sylora-avatar-gesture';
@@ -248,11 +248,6 @@ function mountSyloraAvatarLayers(){
     }
     motion.append(gesture);
   }
-  for(const name of['head','hair','eyes','blink']){
-    const layer=document.createElement('i');
-    layer.className=`sylora-avatar-${name}`;
-    motion.append(layer);
-  }
   hero.append(motion);
   hero._syloraGestureLayer=0;
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
@@ -260,6 +255,7 @@ function mountSyloraAvatarLayers(){
     hero._syloraMotionRig=rig;
     rig.setPresence(hero.dataset.presence||'ready');
     hero._syloraMotionDetach=rig.attach(hero);
+    startSyloraBodyLife(hero);
     hero.addEventListener('pointermove',e=>{
       if(e.pointerType==='touch')return;
       const r=motion.getBoundingClientRect();
@@ -274,7 +270,6 @@ function mountSyloraAvatarLayers(){
       hero.style.setProperty('--gaze-y','0px');
       rig.setGaze(0,0);
     });
-    scheduleSyloraLife(hero);
   }
   setSyloraGesture(hero.dataset.gesture||'neutral');
 }
