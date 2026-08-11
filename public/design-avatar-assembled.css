@@ -110,37 +110,54 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
 @media(max-width:720px){
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
     min-height:520px!important;
-    padding:22px 20px 300px!important;
+    padding:22px 20px 280px!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion{
-    inset:auto 14px 96px auto!important;
-    left:auto!important;
-    width:min(72vw,280px)!important;
+    inset:auto auto 118px 50%!important;
+    left:50%!important;
+    right:auto!important;
+    width:min(78vw,300px)!important;
+    transform:translateX(-50%);
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
     right:20px;
-    bottom:110px;
-    width:48%;
+    bottom:118px;
+    width:42%;
   }
-  /* LIVE call: one full portrait, never a sliced collage stage. */
+  /* LIVE: full coherent portrait above a compact control strip — never cut through the torso. */
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live{
-    min-height:78vh!important;
-    padding:54px 14px 210px!important;
+    min-height:74vh!important;
+    padding:16px 12px 156px!important;
+  }
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live>.eyebrow,
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live>h1,
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live>p,
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live>.scene-readout,
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .ai-human-presence{
+    display:none!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .sylora-avatar-motion{
-    inset:52px 14px auto 14px!important;
-    width:calc(100% - 28px)!important;
+    inset:12px 12px 148px 12px!important;
+    left:12px!important;
+    right:12px!important;
+    width:auto!important;
     max-width:none!important;
+    height:auto!important;
+    max-height:calc(74vh - 180px)!important;
     margin:0 auto!important;
-  }
-  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .ai-human-presence{
-    display:none;
+    transform:none!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .realtime-call-deck{
-    left:14px!important;
-    right:14px!important;
-    bottom:18px!important;
+    left:12px!important;
+    right:12px!important;
+    bottom:12px!important;
+    top:auto!important;
     width:auto!important;
+    z-index:5!important;
+    padding:10px 12px!important;
+  }
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .realtime-call-deck p{
+    display:none!important;
   }
 }
 
