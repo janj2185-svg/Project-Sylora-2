@@ -1,0 +1,65 @@
+=== MOBILE ===
+✓ mobile/01-home.png
+✓ mobile/02-discover.png
+✓ mobile/03-live.png
+✓ mobile/04-live-room.png
+✓ mobile/05-gifts-panel-live.png
+✓ mobile/06-resonance-battle.png
+✓ mobile/07-create-live.png
+✓ mobile/08-resonance-battles-tab.png
+✓ mobile/09-live-following.png
+✓ mobile/10-gifts.png
+✓ mobile/11-creator-studio.png
+✓ mobile/12-clips.png
+✓ mobile/13-videos.png
+✓ mobile/14-sylora-ai.png
+✓ mobile/15-sylora-voice-settings-toggle.png
+✓ mobile/16-inbox.png
+✓ mobile/17-private-chat.png
+✓ mobile/18-notifications.png
+✓ mobile/19-inbox-calls.png
+✓ mobile/20-inbox-invites.png
+✓ mobile/21-inbox-priority.png
+✓ mobile/22-communities.png
+✓ mobile/23-community-page.png
+✓ mobile/24-business.png
+✓ mobile/25-business-dashboard.png
+✓ mobile/26-business-hub.png
+✓ mobile/27-learning-science.png
+✓ mobile/28-course.png
+✓ mobile/29-lesson.png
+✓ mobile/30-quiz-test.png
+✓ mobile/31-science.png
+✓ mobile/32-science-tools-hub.png
+✓ mobile/33-conference.png
+✓ mobile/34-universal-search-results.png
+✓ mobile/35-profile.png
+✓ mobile/36-edit-profile.png
+✓ mobile/37-settings.png
+✓ mobile/38-privacy-ai-control.png
+✓ mobile/39-memory-center.png
+✓ mobile/40-security.png
+✓ mobile/41-identity.png
+✓ mobile/42-personal-dashboard.png
+✓ mobile/43-sylora-canvas.png
+✓ mobile/44-agents.png
+✓ mobile/45-developer.png
+✓ mobile/46-language-settings.png
+✓ mobile/47-wallet-earnings.png
+✓ mobile/48-admin.png
+✓ mobile/49-auth.png
+✓ mobile/50-home-full.png (full)
+✓ mobile/51-business-full.png (full)
+✓ mobile/52-learning-full.png (full)
+✓ mobile/53-settings-full.png (full)
+ProtocolError: Runtime.callFunctionOn timed out. Increase the 'protocolTimeout' setting in launch/connect calls for a higher timeout if needed.
+    at <instance_members_initializer> (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/common/CallbackRegistry.js:102:14)
+    at new Callback (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/common/CallbackRegistry.js:106:16)
+    at CallbackRegistry.create (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/common/CallbackRegistry.js:24:26)
+    at Connection._rawSend (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/Connection.js:99:26)
+    at CdpCDPSession.send (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/CdpSession.js:73:33)
+    at #evaluate (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/ExecutionContext.js:363:50)
+    at ExecutionContext.evaluate (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/ExecutionContext.js:277:36)
+    at IsolatedWorld.evaluate (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/cdp/IsolatedWorld.js:100:30)
+    at CdpFrame.evaluate (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/api/Frame.js:364:43)
+    at CdpFrame.<anonymous> (/workspace/node_modules/puppeteer-core/lib/cjs/puppeteer/util/decorators.js:109:27)

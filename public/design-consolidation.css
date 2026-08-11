@@ -100,6 +100,19 @@
 }
 
 @media(min-width:721px) and (max-width:1100px){
+  /* Fix tablet shell: design-v2 sets main{display:block} ≤820px and collapses the rail+app grid. */
+  main{
+    display:grid!important;
+    grid-template-columns:72px minmax(0,1fr)!important;
+    gap:16px!important;
+    margin:18px auto!important;
+    padding:0 16px!important;
+    max-width:1100px!important;
+  }
+  main>aside.left-rail{display:flex!important;width:72px;max-width:72px}
+  main>#app{min-width:0;width:auto!important}
+  main>aside.right{display:none!important}
+  .mobile-dock{display:none!important}
   .eco-card{flex-basis:200px}
   .science-research-grid{grid-template-columns:1fr 1fr}
 }
@@ -123,7 +136,7 @@
 
 /* P0 Call Engine + incoming ring */
 .incoming-call-banner{
-  position:fixed;z-index:90;left:50%;transform:translateX(-50%);
+  position:fixed;z-index:95;left:50%;transform:translateX(-50%);
   bottom:max(88px,calc(72px + env(safe-area-inset-bottom)));
   width:min(520px,calc(100% - 24px));
   display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -132,7 +145,9 @@
   background:rgba(255,251,248,.96);
   box-shadow:0 18px 40px rgba(84,65,75,.18);
 }
-.incoming-call-banner span{display:grid;gap:2px}
+.incoming-call-banner>span{display:grid;gap:2px;min-width:0;flex:1 1 auto}
+.incoming-call-banner>span b{font-size:14px;line-height:1.2}
+.incoming-call-banner>div.row{flex:0 0 auto;flex-wrap:nowrap}
 .incoming-call-banner small{color:#7c7480}
 .call-stage{min-height:420px}
 .call-media{position:relative;margin:14px 0;min-height:180px;border-radius:18px;background:#120f16;overflow:hidden}
