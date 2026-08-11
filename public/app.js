@@ -4,7 +4,7 @@ import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';
 import { ObsWebSocketClient, normalizeObsUrl } from './obs-client.js';
 import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client.js';
-const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover'};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null;const studioPeers=new Map();
+const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null;const studioPeers=new Map();
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0;
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
 const STUDIO_P2P_PEER_LIMIT=6;
@@ -17,7 +17,7 @@ function degradedBannerHtml(){return '<div id="syloraDegraded" class="sylora-deg
 async function api(path,opts={}){const h={'content-type':'application/json',...(opts.headers||{})};if(state.token)h.authorization=`Bearer ${state.token}`;const r=await fetch(path,{...opts,headers:h});const j=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(j.error||'REQUEST_FAILED'),{status:r.status,data:j});return j}
 function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
 function applyShellLanguage(){document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n))}
-function account(){const el=document.querySelector('#account');el.innerHTML=`<select id="localeSwitch" class="ghost" aria-label="Language"><option value="uk">UA</option><option value="pl">PL</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option><option value="fr">FR</option><option value="it">IT</option><option value="pt">PT</option><option value="cs">CS</option><option value="sk">SK</option><option value="ro">RO</option><option value="nl">NL</option><option value="tr">TR</option></select>${state.me?`<button class="header-balance" data-account-view="gifts" title="LUMEN">◈ ${(state.wallet?.balance||0).toLocaleString()} <small class="muted">TEST</small></button><button class="header-icon" data-account-view="gifts" title="Подарунки">♢</button><button class="header-icon" data-account-view="messages" title="Inbox">♧</button><button class="header-icon" data-account-view="messages" title="Повідомлення">◌</button><button class="header-avatar" data-account-view="profile" title="Профіль">${esc((state.me.displayName||state.me.username||'S').slice(0,1).toUpperCase())}</button><button class="header-exit" id="logout" title="Вийти">↪</button>`:`<button class="primary" id="signin">${t('signin')}</button>`}`;el.querySelector('#localeSwitch').value=getLocale();el.querySelector('#localeSwitch').onchange=async e=>{const locale=setLocale(e.target.value);applyShellLanguage();if(state.me){const out=await api('/api/me',{method:'PATCH',body:JSON.stringify({locale})});state.me=out.user}account();render()};el.querySelectorAll('[data-account-view]').forEach(b=>b.onclick=()=>nav(b.dataset.accountView));el.querySelector(state.me?'#logout':'#signin').onclick=()=>state.me?logout():renderAuth()}
+function account(){const el=document.querySelector('#account');el.innerHTML=`<select id="localeSwitch" class="ghost" aria-label="Language"><option value="uk">UA</option><option value="pl">PL</option><option value="en">EN</option><option value="de">DE</option><option value="es">ES</option><option value="fr">FR</option><option value="it">IT</option><option value="pt">PT</option><option value="cs">CS</option><option value="sk">SK</option><option value="ro">RO</option><option value="nl">NL</option><option value="tr">TR</option></select>${state.me?`<button class="header-balance" data-account-view="gifts" title="LUMEN">◈ ${(state.wallet?.balance||0).toLocaleString()} <small class="muted">TEST</small></button><button class="header-icon" data-account-view="gifts" title="Подарунки">♢</button><button class="header-icon" data-account-view="messages" title="Inbox">◌</button><button class="header-avatar" data-account-view="profile" title="Профіль">${esc((state.me.displayName||state.me.username||'S').slice(0,1).toUpperCase())}</button><button class="header-exit" id="logout" title="Вийти">↪</button>`:`<button class="primary" id="signin">${t('signin')}</button>`}`;el.querySelector('#localeSwitch').value=getLocale();el.querySelector('#localeSwitch').onchange=async e=>{const locale=setLocale(e.target.value);applyShellLanguage();if(state.me){const out=await api('/api/me',{method:'PATCH',body:JSON.stringify({locale})});state.me=out.user}account();render()};el.querySelectorAll('[data-account-view]').forEach(b=>b.onclick=()=>nav(b.dataset.accountView));el.querySelector(state.me?'#logout':'#signin').onclick=()=>state.me?logout():renderAuth()}
 async function refreshRightRail(){const rail=document.querySelector('aside.right');if(!rail)return;let users=[],rooms=[];try{rooms=(await api('/api/live')).rooms||[]}catch{}if(state.me)try{users=((await api('/api/users')).users||[]).filter(u=>u.id!==state.me.id).slice(0,3)}catch{}rail.innerHTML=`<div class="mini-card shell-people"><div class="shell-card-title"><b>Люди, яких ти можеш знати</b><button data-shell-view="explore">Показати всі</button></div>${users.map(u=>`<div class="shell-person"><span>${esc((u.displayName||u.username||'?').slice(0,1).toUpperCase())}</span><div><b>${esc(u.displayName||u.username)}</b><small>@${esc(u.username)}</small></div><button data-shell-view="explore">＋</button></div>`).join('')||'<p class="shell-empty">Нові люди з’являться тут.</p>'}</div><div class="mini-card shell-events"><div class="shell-card-title"><b>Популярні зараз</b><button data-shell-view="live">Дивитися</button></div>${rooms.slice(0,4).map(r=>`<button class="shell-event" data-shell-view="live"><i>◉</i><span><b>${esc(r.title)}</b><small>@${esc(r.host?.username||'creator')} · ${r.viewerCount||0}</small></span><em>LIVE</em></button>`).join('')||'<p class="shell-empty">Очікуємо наступні LIVE.</p>'}</div>${state.me?`<button class="mini-card shell-wallet" data-shell-view="profile"><span><small>МІЙ LUMEN</small><b>◈ ${(state.wallet?.balance||0).toLocaleString()}</b></span><i><img src="/assets/sylora-mark-v2.svg" alt=""></i></button>`:`<button class="mini-card shell-wallet" data-shell-view="ai"><span><small>SYLORA</small><b>Я поруч</b></span><i><img src="/assets/sylora-mark-v2.svg" alt=""></i></button>`}`;rail.querySelectorAll('[data-shell-view]').forEach(x=>x.onclick=()=>nav(x.dataset.shellView))}
 async function refreshRailProgress(){const box=document.querySelector('#railProgress');if(!box)return;if(!state.me){box.innerHTML='';return}try{const p=await api('/api/progress'),level=p.orbitLevel||1,xp=Number(p.donorXp)||0,start=120*(level-1)**2,next=120*level**2,pct=Math.max(2,Math.min(100,Math.round((xp-start)/Math.max(1,next-start)*100)));box.innerHTML=`<button class="rail-orbit" data-rail-progress><span class="rail-orbit-mark">✧</span><span><small>ORBIT РІВЕНЬ</small><b>${level}</b><i><em style="width:${pct}%"></em></i><u>${xp.toLocaleString()} XP</u></span></button>`;box.querySelector('[data-rail-progress]').onclick=()=>nav('profile')}catch{box.innerHTML=''}}
 function reportClientIssue(phase,error){
@@ -52,8 +52,40 @@ async function bootstrap(){
 }
 async function startUserEvents(){if(!state.token)return;if(userEventsAbort)userEventsAbort.abort();const controller=new AbortController();userEventsAbort=controller;try{const response=await fetch('/api/events',{headers:{authorization:`Bearer ${state.token}`},signal:controller.signal});if(!response.ok)throw new Error('EVENT_STREAM_FAILED');const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';while(!controller.signal.aborted){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});let boundary;while((boundary=buffer.indexOf('\n\n'))>=0){const raw=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);let event='message',data='';for(const line of raw.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();if(line.startsWith('data:'))data+=line.slice(5).trim()}if(data)try{handleUserEvent(event,JSON.parse(data))}catch{}}}}catch(e){if(e.name!=='AbortError'&&state.token&&userEventsAbort===controller)setTimeout(()=>{if(state.token)startUserEvents()},1800)}}
 function realtimeDuplicate(scope,id){if(!id)return false;const key=`${scope}:${id}`,now=Date.now();for(const [candidate,expires] of recentRealtimeIds)if(expires<=now)recentRealtimeIds.delete(candidate);if(recentRealtimeIds.has(key))return true;recentRealtimeIds.set(key,now+5*60_000);return false}
-function handleUserEvent(event,data){if(event==='notification'&&realtimeDuplicate('notification',data?.id))return;if(event==='notification'&&data.type!=='message')toast(`${data.actor?.username||'SYLORA'} · ${data.type}`);if(event==='message'){toast(`@${data.actor?.username||'user'} · new message`);if(state.view==='messages')renderMessages()}}
-function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
+function handleUserEvent(event,data){
+  if(event==='notification'&&realtimeDuplicate('notification',data?.id))return;
+  if(event==='notification'){
+    const type=String(data.type||'');
+    if(type==='voice_call'||type==='video_call'){
+      state.incomingCall={callId:data.payload?.callId||data.callId,kind:data.payload?.kind||(type==='video_call'?'video':'voice'),actor:data.actor};
+      showIncomingCallBanner();
+      return;
+    }
+    if(type!=='message')toast(`${data.actor?.username||'SYLORA'} · ${type}`);
+  }
+  if(event==='message'){toast(`@${data.actor?.username||'user'} · new message`);if(state.view==='messages')renderMessages()}
+}
+function showIncomingCallBanner(){
+  const call=state.incomingCall;if(!call?.callId)return;
+  document.querySelector('#incomingCallBanner')?.remove();
+  const el=document.createElement('div');
+  el.id='incomingCallBanner';
+  el.className='incoming-call-banner';
+  el.innerHTML=`<span><b>Incoming ${esc(call.kind)} call</b><small>@${esc(call.actor?.username||'user')}</small></span><div class="row"><button type="button" class="primary" id="acceptIncomingCall">Accept</button><button type="button" class="ghost" id="declineIncomingCall">Decline</button></div>`;
+  document.body.append(el);
+  document.querySelector('#acceptIncomingCall').onclick=async()=>{
+    try{
+      await api(`/api/calls/${call.callId}/accept`,{method:'POST',body:'{}'});
+      state.incomingCall=null;el.remove();
+      await openCallSession(call.callId,{asCallee:true});
+    }catch(e){toast(humanError(e.message))}
+  };
+  document.querySelector('#declineIncomingCall').onclick=async()=>{
+    try{await api(`/api/calls/${call.callId}/decline`,{method:'POST',body:'{}'})}catch{}
+    state.incomingCall=null;el.remove();
+  };
+}
+function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
 document.querySelectorAll('.nav').forEach(x=>x.onclick=()=>nav(x.dataset.view));
 document.querySelector('#globalSearch')?.addEventListener('click',launchCommandPalette);
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();launchCommandPalette()}});
@@ -123,13 +155,16 @@ async function renderExplore(){app.innerHTML=`<div class="card hero"><span class
 
 async function renderLive(){
   cleanupLiveViewer();
-  if(state.intent==='event'){state.intent=null;state.liveTab='create'}
+  if(state.intent==='event'||state.intent==='create'||state.intent==='live'){state.intent=null;state.liveTab='create'}
   const tab=state.liveTab||'discover';
   const [{rooms},ent]=await Promise.all([api('/api/live'),api('/api/live/entertainment').catch(()=>({battleModes:[],roomKinds:[]}))]);
   const viewers=rooms.reduce((sum,r)=>sum+(Number(r.viewerCount)||0),0);
-  // Following tab: without a dedicated following-hosts API, show empty honest state when selected.
+  // Following tab: no following-hosts API yet — honest empty, not fake lives.
   const list=tab==='following'?[]:rooms;
   const battles=rooms.filter(r=>rooms.some(x=>x.id!==r.id&&x.host?.id!==r.host?.id));
+  const emptyCopy=tab==='following'
+    ?'<div class="card empty"><p class="muted">Following LIVE feed needs a follow-hosts API — not faking streams.</p></div>'
+    :'<div class="card empty">—</div>';
   app.innerHTML=`<div class="card hero"><span class="eyebrow"><i class="live-dot"></i>SYLORA LIVE · ENTERTAINMENT ENGINE</span><h1>LIVE</h1><p>Battles 2.0 · Resonance World · Challenges · Quizzes · Stage · Timers — shared realtime core</p><div class="scene-readout"><span><small>LIVE</small><b>${rooms.length}</b></span><span><small>VIEWERS</small><b>${viewers.toLocaleString()}</b></span><span><small>MODES</small><b>${(ent.battleModes||[]).length}</b></span></div>
   <p class="muted" style="margin-top:8px">${(ent.battleModes||[]).slice(0,6).join(' · ')} · rooms: ${(ent.roomKinds||[]).slice(0,5).join(', ')}</p>
   <div class="live-hub-tabs">
@@ -141,7 +176,7 @@ async function renderLive(){
   </div>
   ${state.me&&tab==='create'?`<div class="card fields"><input id="liveTitle" maxlength="120" placeholder="LIVE"><button id="goLive" class="primary">＋ ${esc(t('createLive'))}</button><button class="ghost" id="openStudioFromLive">Creator Studio</button><hr><input id="eventTitle" maxlength="160" placeholder="Event title"><input id="eventWhen" maxlength="80" placeholder="Starts (e.g. tomorrow 20:00)"><button id="createEventBtn" class="ghost">＋ ${esc(t('createEvent'))}</button></div>`:(state.me?'':`<button id="liveLogin" class="primary">${esc(t('signin'))}</button>`)}
   </div>
-  <div class="live-room-grid">${(tab==='battles'?battles:list).map(r=>{const opponent=rooms.find(x=>x.id!==r.id&&x.host?.id!==r.host?.id);return`<div class="card live-room-card"><div class="row"><div><span class="badge">● LIVE · ${r.viewerCount||0}</span><h3>${esc(r.title)}</h3><p class="muted">@${esc(r.host.username)}</p></div></div><div class="live-tools"><button class="primary watch-live" data-id="${r.id}">Watch</button><button class="ghost open-live" data-id="${r.id}">Chat</button>${state.me?`<button class="ghost ask-live" data-id="${r.id}">Ask Sylora</button>`:''}${state.me?.id===r.host?.id&&opponent?`<button class="ghost resonance-start" data-id="${r.id}" data-opponent="${opponent.id}">✦ Battle</button>`:''}${state.me?.id===r.host?.id?`<button class="ghost live-copilot" data-id="${r.id}">Copilot</button>`:''}</div></div>`}).join('')||'<div class="card empty">—</div>'}</div>
+  <div class="live-room-grid">${(tab==='battles'?battles:list).map(r=>{const opponent=rooms.find(x=>x.id!==r.id&&x.host?.id!==r.host?.id);return`<div class="card live-room-card"><div class="row"><div><span class="badge">● LIVE · ${r.viewerCount||0}</span><h3>${esc(r.title)}</h3><p class="muted">@${esc(r.host.username)}</p></div></div><div class="live-tools"><button class="primary watch-live" data-id="${r.id}">Watch</button><button class="ghost open-live" data-id="${r.id}">Chat</button>${state.me?`<button class="ghost ask-live" data-id="${r.id}">Ask Sylora</button>`:''}${state.me?.id===r.host?.id&&opponent?`<button class="ghost resonance-start" data-id="${r.id}" data-opponent="${opponent.id}">✦ Battle</button>`:''}${state.me?.id===r.host?.id?`<button class="ghost live-copilot" data-id="${r.id}">Copilot</button>`:''}</div></div>`}).join('')||emptyCopy}</div>
   <div id="livePlayer"></div><div id="liveChat"></div>`;
   document.querySelectorAll('[data-live-tab]').forEach(b=>b.onclick=()=>{const v=b.dataset.liveTab;if(v==='studio')return nav('studio');state.liveTab=v;renderLive()});
   document.querySelector('#liveLogin')?.addEventListener('click',renderAuth);
@@ -270,11 +305,10 @@ async function renderMessages(){
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go));
   if(tab==='calls'){
     const startCall=async kind=>{
-      if(kind==='sylora'){const {call}=await api('/api/calls/sylora',{method:'POST',body:JSON.stringify({mode:'voice'})});toast(`Sylora call · ${call.id.slice(0,8)}`);return}
+      if(kind==='sylora'){nav('ai');requestAnimationFrame(()=>document.querySelector('#aiRealtime')?.click());return}
       const userId=document.querySelector('#callRecipient')?.value;if(!userId)return toast('Select recipient');
       const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId})});
-      toast(`${kind} · ringing · ${call.id.slice(0,8)}`);
-      renderMessages();
+      await openCallSession(call.id,{asCallee:false,kind});
     };
     document.querySelector('#startVoiceCall')?.addEventListener('click',()=>startCall('voice'));
     document.querySelector('#startVideoCall')?.addEventListener('click',()=>startCall('video'));
@@ -294,9 +328,101 @@ async function openConversation(id){
   const other=(conversation?.members||[]).find(x=>x.id!==state.me.id);
   box.innerHTML=`<div class="card chat-card"><div class="chat-head"><span><i></i> приватна розмова</span><b>Sylora Messages</b><div class="row"><button type="button" class="ghost" id="dmVoiceCall">Voice</button><button type="button" class="ghost" id="dmVideoCall">Video</button></div></div><div class="message-stream">${messages.map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'}</small><p>${esc(m.text)}</p></div>`).join('')||'<p class="muted chat-empty">Почни розмову.</p>'}</div><form id="messageForm" class="message-compose"><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button class="primary" aria-label="Надіслати">↑</button></form></div>`;
   document.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text})});openConversation(id)};
-  const startDmCall=async kind=>{if(!other)return toast('Peer required');await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});toast(`${kind} call · Call Engine`);state.inboxTab='calls';renderMessages()};
+  const startDmCall=async kind=>{
+    if(!other)return toast('Peer required');
+    const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});
+    await openCallSession(call.id,{asCallee:false,kind});
+  };
   document.querySelector('#dmVoiceCall')?.addEventListener('click',()=>startDmCall('voice'));
   document.querySelector('#dmVideoCall')?.addEventListener('click',()=>startDmCall('video'));
+}
+
+/** Shared Call Engine UI — real WebRTC (same ICE path as LIVE/conference). */
+async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
+  if(!state.me)return renderAuth();
+  if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}
+  if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)return toast('WebRTC not supported in this browser');
+  const [{call},rtc]=await Promise.all([
+    api(`/api/calls/${callId}`),
+    api('/api/calls/rtc-config').catch(()=>liveRtcConfig())
+  ]);
+  const wantVideo=String(call.kind||kind).includes('video');
+  const peerId=crypto.randomUUID();
+  let localStream=null,pc=null,remoteStream=new MediaStream(),closed=false,controller=new AbortController();
+  const startedAt=Date.now();
+  app.innerHTML=`<section class="card call-stage" id="callStage"><span class="eyebrow">SYLORA · CALL ENGINE</span><h1>${wantVideo?'Video':'Voice'} call</h1><p class="muted">${esc(call.status)} · shared WebRTC · ${rtc.turnConfigured?'TURN ready':'P2P / configure TURN for NAT'}</p>
+  <div class="call-media"><video id="callRemote" autoplay playsinline ${wantVideo?'':'hidden'}></video><video id="callLocal" autoplay muted playsinline ${wantVideo?'':'hidden'}></video><audio id="callRemoteAudio" autoplay></audio></div>
+  <div class="row call-controls"><button type="button" class="ghost" id="callMute">Mute</button>${wantVideo?'<button type="button" class="ghost" id="callCam">Camera</button>':''}<button type="button" class="primary" id="callEnd">End</button><span class="badge" id="callNet">CONNECTING</span><span class="badge" id="callTimer">00:00</span></div></section>`;
+  state.view='messages';state.inboxTab='calls';
+  const tick=()=>{const el=document.querySelector('#callTimer');if(!el)return;const s=Math.floor((Date.now()-startedAt)/1000);el.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
+  const timerIv=setInterval(tick,1000);tick();
+  const cleanup=()=>{closed=true;clearInterval(timerIv);controller.abort();try{localStream?.getTracks().forEach(t=>t.stop())}catch{}try{pc?.close()}catch{};activeCallCleanup=null};
+  activeCallCleanup=cleanup;
+  const setNet=t=>{const el=document.querySelector('#callNet');if(el)el.textContent=t};
+  const sendSignal=async(kind,toPeerId,data)=>api(`/api/calls/${callId}/signal`,{method:'POST',body:JSON.stringify({kind,fromPeerId:peerId,toPeerId,data})});
+  try{
+    localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:wantVideo});
+    const localVideo=document.querySelector('#callLocal');
+    if(localVideo&&wantVideo){localVideo.srcObject=localStream;localVideo.hidden=false}
+  }catch{toast('Microphone/camera permission required');cleanup();return renderMessages()}
+  pc=new RTCPeerConnection({iceServers:rtc.iceServers||[]});
+  for(const track of localStream.getTracks())pc.addTrack(track,localStream);
+  pc.ontrack=e=>{
+    remoteStream.addTrack(e.track);
+    const v=document.querySelector('#callRemote'),a=document.querySelector('#callRemoteAudio');
+    if(wantVideo&&v){v.srcObject=remoteStream;v.hidden=false}
+    if(a)a.srcObject=remoteStream;
+    setNet('CONNECTED');
+  };
+  pc.onicecandidate=e=>{if(e.candidate&&window.__syloraCallRemotePeer)sendSignal('ice',window.__syloraCallRemotePeer,e.candidate.toJSON()).catch(()=>{})};
+  pc.onconnectionstatechange=()=>setNet((pc.connectionState||'').toUpperCase());
+  document.querySelector('#callMute').onclick=()=>{const t=localStream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;document.querySelector('#callMute').textContent=t.enabled?'Mute':'Unmute'};
+  document.querySelector('#callCam')?.addEventListener('click',()=>{const t=localStream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled});
+  document.querySelector('#callEnd').onclick=async()=>{try{await api(`/api/calls/${callId}/end`,{method:'POST',body:'{}'})}catch{}cleanup();renderMessages()};
+  const onSignal=async s=>{
+    if(closed||s.fromPeerId===peerId)return;
+    if(s.kind==='peer-left'){setNet('PEER LEFT');return}
+    if(s.kind==='peer-join'){
+      window.__syloraCallRemotePeer=s.fromPeerId;
+      const offer=await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendSignal('offer',s.fromPeerId,pc.localDescription);
+      return;
+    }
+    if(s.toPeerId&&s.toPeerId!==peerId)return;
+    window.__syloraCallRemotePeer=s.fromPeerId;
+    if(s.kind==='offer'){
+      await pc.setRemoteDescription(s.data);
+      const answer=await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await sendSignal('answer',s.fromPeerId,pc.localDescription);
+    }else if(s.kind==='answer'){
+      await pc.setRemoteDescription(s.data);
+    }else if(s.kind==='ice'){
+      try{await pc.addIceCandidate(s.data)}catch{}
+    }
+  };
+  (async()=>{
+    try{
+      const response=await fetch(`/api/calls/${callId}/events`,{headers:{authorization:`Bearer ${state.token}`},signal:controller.signal});
+      if(!response.ok)throw new Error('CALL_EVENT_STREAM_FAILED');
+      setNet('SIGNALING');
+      await sendSignal('peer-join',null,{media:wantVideo?'video':'audio'});
+      const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+      while(!closed){
+        const {done,value}=await reader.read();if(done)break;
+        buffer+=decoder.decode(value,{stream:true});
+        let boundary;
+        while((boundary=buffer.indexOf('\n\n'))>=0){
+          const raw=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);
+          let event='',data='';
+          for(const line of raw.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();else if(line.startsWith('data:'))data+=line.slice(5).trim()}
+          if(event==='signal'&&data)try{await onSignal(JSON.parse(data))}catch{}
+          if(event==='call'&&data){try{const payload=JSON.parse(data);if(['ended','missed'].includes(payload.call?.status)||payload.action==='end'){cleanup();toast('Call ended');renderMessages()}}catch{}}
+        }
+      }
+    }catch(e){if(e.name!=='AbortError'){setNet('ERROR');toast(humanError(e.message))}}
+  })();
 }
 
 function renderMore(){app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Спокійні налаштування профілю, приватності, Sylora AI та всієї екосистеми.</p></div><section class="settings-scene"><div class="settings-copy"><span class="eyebrow">НАЛАШТУВАННЯ</span><h2>Усе під твоїм контролем.</h2><p>SYLORA не ховає важливі рішення: профіль, пам’ять AI та комунікації відкриваються окремо.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><div class="module-grid settings-grid"><div class="card module" data-go="profile"><span class="icon">○</span><h3>Акаунт і профіль</h3><p>Ім’я, мова, профіль, гаманець і статистика.</p></div><div class="card module" data-go="identity"><span class="icon">◈</span><h3>SYLORA Identity</h3><p>Цифрова ідентичність, навички, портфоліо та рівні приватності.</p></div><div class="card module" data-go="ai"><span class="icon">✦</span><h3>Sylora AI</h3><p>Один Personal AI, пам’ять, дозволи та прозора історія дій.</p></div>

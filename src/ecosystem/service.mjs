@@ -234,9 +234,15 @@ export class EcosystemService {
     this.store = store;
     this.repo = repo;
     this.metrics = createMetricsRegistry();
+    /** Optional realtime hooks from server (notifyUser, emitCall). */
+    this.hooks = { notifyUser: null, emitCall: null };
     ensureCollections(store);
     this._catalogReady = null;
     this.seedCatalog();
+  }
+
+  setHooks(hooks = {}) {
+    this.hooks = { ...this.hooks, ...hooks };
   }
 
   get pg() { return this.repo?.enabled ? this.repo : null; }
@@ -3217,6 +3223,19 @@ export class EcosystemService {
   }
 
   // —— Call Engine (194–198) ——
+  getCall(callId) {
+    return (this.store.data.callSessions || []).find(c => c.id === callId) || null;
+  }
+
+  assertCallParticipant(call, userId) {
+    if (!call) throw new Error('CALL_NOT_FOUND');
+    if (call.kind === 'sylora') {
+      if (call.userId !== userId) throw new Error('NOT_PARTICIPANT');
+      return;
+    }
+    if (!(call.participants || []).some(p => p.userId === userId)) throw new Error('NOT_PARTICIPANT');
+  }
+
   startCall(user, input = {}) {
     const kind = input.kind || 'voice';
     const call = createCallSession({
@@ -3228,18 +3247,30 @@ export class EcosystemService {
       groupId: input.groupId || null
     });
     this.store.data.callSessions.push(call);
-    for (const p of call.participants) {
-      if (p.userId !== user.id) {
-        this.store.notify(p.userId, kind.includes('video') ? 'video_call' : 'voice_call', user.id, { callId: call.id, kind });
-      }
-    }
     this.store.save();
+    const type = kind.includes('video') ? 'video_call' : 'voice_call';
+    for (const p of call.participants) {
+      if (p.userId === user.id) continue;
+      const payload = { callId: call.id, kind, conversationId: call.conversationId };
+      if (typeof this.hooks.notifyUser === 'function') {
+        this.hooks.notifyUser(p.userId, type, user.id, payload);
+      } else {
+        this.store.notify(p.userId, type, user.id, payload);
+      }
+      this.hooks.emitCall?.(call.id, 'ring', {
+        callId: call.id,
+        kind,
+        fromUserId: user.id,
+        toUserId: p.userId
+      });
+    }
     return call;
   }
 
   callAction(user, callId, action, patch = {}) {
     const call = this.store.data.callSessions.find(c => c.id === callId);
     if (!call) throw new Error('CALL_NOT_FOUND');
+    this.assertCallParticipant(call, user.id);
     let out;
     if (action === 'accept') out = acceptCall(call, user.id);
     else if (action === 'decline') out = declineCall(call, user.id);
@@ -3252,6 +3283,13 @@ export class EcosystemService {
       this.store.data.callHistory.unshift(callHistoryEntry(call));
     }
     this.store.save();
+    this.hooks.emitCall?.(call.id, 'call', { call, action, byUserId: user.id });
+    for (const p of call.participants || []) {
+      if (p.userId === user.id) continue;
+      if (typeof this.hooks.notifyUser === 'function') {
+        this.hooks.notifyUser(p.userId, `call_${action}`, user.id, { callId: call.id, status: call.status, kind: call.kind });
+      }
+    }
     return call;
   }
 

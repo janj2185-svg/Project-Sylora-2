@@ -57,6 +57,8 @@ const liveFanout=new LiveFanout({redis,dispatch:dispatchLiveLocal});
 const livePeerRegistry=new LivePeerRegistry(redis);
 const conferenceFanout=new ConferenceFanout({redis,dispatch:dispatchConferenceLocal});
 const conferencePeerRegistry=new LivePeerRegistry(redis,'conference');
+const callPeerRegistry=new LivePeerRegistry(redis,'call');
+const callStreams=new Map();
 const realtimeFanout=new RealtimeFanout({redis,dispatch:dispatchOutboxLocal});
 const authSocial=new PostgresAuthSocialRepository(postgres.pool);
 const walletRepo=new PostgresWalletRepository(postgres.pool);
@@ -67,6 +69,15 @@ const conferenceRepo=new PostgresConferenceRepository(postgres.pool);
 const realtimeOutbox=new RealtimeOutbox({repository:outboxRepo,dispatch:dispatchOutboxEvent});
 const ecosystemRepo=new PostgresEcosystemRepository(postgres.pool);
 const ecosystem=new EcosystemService(store, ecosystemRepo);
+function emitCall(callId,type,event){
+  const payload=`event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;
+  const targets=callStreams.get(callId);
+  if(targets)for(const res of targets)res.write(payload);
+}
+ecosystem.setHooks({
+  notifyUser:(userId,type,actorId,payload)=>notifyUser(userId,type,actorId,payload),
+  emitCall
+});
 
 function json(res, status, body) {
   const value = JSON.stringify(body);
@@ -268,7 +279,7 @@ async function api(req, res, url) {
   const p = url.pathname;
   if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',ecosystem:'personal-ai-identity-kg-agents-developers',ecosystemPersistence:ecosystemRepo.enabled?'postgres+json-cache':'json',dependencies})}
   if(req.method==='GET'&&p==='/api/ready'){const dependencies=await dependencyHealth();return json(res,dependencies.ready?200:503,{ready:dependencies.ready,dependencies})}
-  if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions })) return;
+  if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
     const user=await requireUser(req,res);if(!user)return;if(!process.env.OPENAI_API_KEY)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});

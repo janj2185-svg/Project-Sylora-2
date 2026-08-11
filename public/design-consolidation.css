@@ -90,7 +90,9 @@
   .sylora-presence{top:auto!important;position:relative!important;left:18px!important;right:18px!important;width:auto!important;margin-top:8px}
   .messages-shell{grid-template-columns:1fr!important;min-height:auto}
   .chat-placeholder,.chat-card{min-height:360px}
-  .message-compose{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .message-compose{padding-bottom:calc(72px + env(safe-area-inset-bottom))!important;position:sticky;bottom:0;background:rgba(255,251,248,.94);z-index:5}
+  .chat-card{padding-bottom:8px}
+  .incoming-call-banner{left:10px;right:10px;bottom:calc(78px + env(safe-area-inset-bottom))}
   .ai-compose,.composer{margin-bottom:8px}
   .science-research-grid,.org-workspace .grid3{grid-template-columns:1fr}
   .create-hub{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
@@ -118,3 +120,22 @@
 .privacy-toggle{display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.55)}
 @media(max-width:720px){.privacy-grid{grid-template-columns:1fr}}
 .home-continue .eco-card{background:linear-gradient(145deg,rgba(255,248,230,.95),rgba(246,241,255,.85))}
+
+/* P0 Call Engine + incoming ring */
+.incoming-call-banner{
+  position:fixed;z-index:90;left:50%;transform:translateX(-50%);
+  bottom:max(88px,calc(72px + env(safe-area-inset-bottom)));
+  width:min(520px,calc(100% - 24px));
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-radius:18px;
+  border:1px solid rgba(255,255,255,.95);
+  background:rgba(255,251,248,.96);
+  box-shadow:0 18px 40px rgba(84,65,75,.18);
+}
+.incoming-call-banner span{display:grid;gap:2px}
+.incoming-call-banner small{color:#7c7480}
+.call-stage{min-height:420px}
+.call-media{position:relative;margin:14px 0;min-height:180px;border-radius:18px;background:#120f16;overflow:hidden}
+.call-media video#callRemote{width:100%;min-height:220px;object-fit:cover;background:#0b0910}
+.call-media video#callLocal{position:absolute;right:10px;bottom:10px;width:28%;max-width:160px;border-radius:12px;border:1px solid rgba(255,255,255,.4)}
+.call-controls{flex-wrap:wrap;gap:8px}

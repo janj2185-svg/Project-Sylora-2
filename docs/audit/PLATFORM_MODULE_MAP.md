@@ -234,3 +234,13 @@ Priority (254): P0 calls/LIVE stability/intelligence/nav/auth/security → P1 en
 - Science citations integrity: reject unverified DOI (prior) + experiment immutability (238)
 - Business owner/employee/accountant: accountant invite scopes exist; full RBAC matrix pending
 - Production VPS deployment deferred to final phase
+
+---
+
+# Master execution P0 (2026-08-11)
+
+See `docs/audit/MASTER_AUDIT_P0.md` for full inventory.
+
+**IMPLEMENTED this milestone:** Call Engine WebRTC signaling (`/api/calls/:id/events|signal`), SSE ring via `notifyUser`, client `openCallSession` with RTCPeerConnection, Create Hub → LIVE create intent, Inbox icon dedupe, Following tab honesty, mobile compose dock padding.
+
+**NOT DONE / BLOCKED:** two-browser manual media QA in this environment; TURN across NAT (`SYLORA_ICE_SERVERS_JSON`); production VPS; real payments; full i18n string migration.

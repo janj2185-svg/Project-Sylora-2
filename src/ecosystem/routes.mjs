@@ -5,7 +5,7 @@
 export async function handleEcosystemRoutes(ctx) {
   const {
     req, res, url, json, body, requireUser, route, safeText, ecosystem, store,
-    aiListPendingActions
+    aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer
   } = ctx;
   const p = url.pathname;
   let m;
@@ -826,6 +826,15 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 201, { session: ecosystem.startFocus(user, await body(req)) }), true;
   }
 
+  if (req.method === 'GET' && p === '/api/calls/rtc-config') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const iceServers = liveIceServers || [];
+    return json(res, 200, {
+      iceServers,
+      turnConfigured: typeof hasTurnServer === 'function' ? hasTurnServer(iceServers) : false,
+      engine: 'call_engine_shared_webrtc'
+    }), true;
+  }
   if (req.method === 'POST' && p === '/api/calls') {
     const user = await requireUser(req, res); if (!user) return true;
     try { return json(res, 201, { call: ecosystem.startCall(user, await body(req)) }), true; }
@@ -845,6 +854,81 @@ export async function handleEcosystemRoutes(ctx) {
     const user = await requireUser(req, res); if (!user) return true;
     try { return json(res, 200, { call: ecosystem.setSyloraCallPermission(user, m.id, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/calls/:id/events', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const call = ecosystem.getCall(m.id);
+    try { ecosystem.assertCallParticipant(call, user.id); }
+    catch (e) { return json(res, e.message === 'CALL_NOT_FOUND' ? 404 : 403, { error: e.message }), true; }
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    res.write(`event: presence\ndata: ${JSON.stringify({ status: 'connected', userId: user.id, callId: call.id })}\n\n`);
+    if (callStreams) {
+      if (!callStreams.has(call.id)) callStreams.set(call.id, new Set());
+      const targets = callStreams.get(call.id);
+      targets.add(res);
+      const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 25_000);
+      req.on('close', () => {
+        clearInterval(heartbeat);
+        targets.delete(res);
+        if (!targets.size) callStreams.delete(call.id);
+      });
+    }
+    return true;
+  }
+  m = route('/api/calls/:id/signal', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const call = ecosystem.getCall(m.id);
+    try { ecosystem.assertCallParticipant(call, user.id); }
+    catch (e) { return json(res, e.message === 'CALL_NOT_FOUND' ? 404 : 403, { error: e.message }), true; }
+    if (!['ringing', 'active'].includes(call.status)) return json(res, 409, { error: 'CALL_NOT_ACTIVE' }), true;
+    const input = await body(req);
+    const kind = safeText(input.kind, 30);
+    const fromPeerId = safeText(input.fromPeerId, 80);
+    const toPeerId = safeText(input.toPeerId, 80);
+    if (!['peer-join', 'offer', 'answer', 'ice', 'peer-left'].includes(kind) || !fromPeerId) {
+      return json(res, 400, { error: 'INVALID_SIGNAL' }), true;
+    }
+    if (callPeerRegistry) {
+      if (kind === 'peer-join') {
+        if (!await callPeerRegistry.claim(call.id, fromPeerId, user.id)) {
+          return json(res, 409, { error: 'PEER_ID_IN_USE' }), true;
+        }
+      } else {
+        if (await callPeerRegistry.owner(call.id, fromPeerId) !== user.id) {
+          return json(res, 403, { error: 'SIGNAL_PEER_FORBIDDEN' }), true;
+        }
+        if (toPeerId) {
+          const targetUserId = await callPeerRegistry.owner(call.id, toPeerId);
+          if (!targetUserId || !(call.participants || []).some(x => x.userId === targetUserId)) {
+            return json(res, 409, { error: 'SIGNAL_TARGET_UNKNOWN' }), true;
+          }
+        }
+      }
+    }
+    const signal = {
+      kind,
+      fromPeerId,
+      toPeerId: toPeerId || null,
+      userId: user.id,
+      data: input.data ?? null,
+      at: store.now()
+    };
+    if (callStreams) {
+      const payload = `event: signal\ndata: ${JSON.stringify(signal)}\n\n`;
+      const targets = callStreams.get(call.id);
+      if (targets) for (const target of targets) target.write(payload);
+    }
+    return json(res, 200, { ok: true, signal }), true;
+  }
+  m = route('/api/calls/:id', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const call = ecosystem.getCall(m.id);
+    try { ecosystem.assertCallParticipant(call, user.id); }
+    catch (e) { return json(res, e.message === 'CALL_NOT_FOUND' ? 404 : 403, { error: e.message }), true; }
+    return json(res, 200, { call }), true;
   }
   m = route('/api/calls/:id/:action', p);
   if (req.method === 'POST' && m) {
