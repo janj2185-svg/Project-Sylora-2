@@ -1,0 +1,18 @@
+# SYLORA LIVE — Platform capability matrix
+
+Statuses: **WORKING** · **WORKING_LOCAL** · **PARTIAL** · **BLOCKED_EXTERNAL** / **SETUP_REQUIRED** · **UNAVAILABLE** · **N/A**
+
+| Platform | Read Chat | Send Chat | Gifts/Donations | Moderation | Stream Control | OAuth | Status | Notes |
+|---|---|---|---|---|---|---|---|---|
+| SYLORA LIVE | WORKING | WORKING | WORKING | WORKING | WORKING | N/A | WORKING | First-party WebRTC + SSE |
+| OBS | N/A | N/A | N/A | N/A | WORKING_LOCAL | N/A | WORKING | Local WebSocket + Companion |
+| Custom RTMP | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | PARTIAL | N/A | PARTIAL | Destination vault only; push via OBS/media server |
+| TikTok LIVE | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | SETUP_REQUIRED | Needs TikTok developer LIVE access |
+| YouTube Live | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | SETUP_REQUIRED | YouTube Data + Live Streaming API |
+| Twitch | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | SETUP_REQUIRED | Helix + EventSub + chat |
+| Facebook Live | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | SETUP_REQUIRED | Meta Graph + app review |
+| Instagram Live | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | UNAVAILABLE | BLOCKED_EXTERNAL | UNAVAILABLE | No stable public LIVE chat/control API |
+| Kick | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | SETUP_REQUIRED | Kick API when approved |
+| Discord | BLOCKED_EXTERNAL | BLOCKED_EXTERNAL | N/A | BLOCKED_EXTERNAL | UNAVAILABLE | BLOCKED_EXTERNAL | SETUP_REQUIRED | Bot/channel bridge ≠ LIVE ingest |
+
+Source of truth in code: `src/live/platforms/capabilities.mjs` · API: `GET /api/sylora-live/capabilities`

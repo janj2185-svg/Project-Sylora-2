@@ -1,6 +1,6 @@
 # SYLORA Real Working Audit (updated)
 
-Branch: `cursor/sylora-real-working-34a2`  
+Branch: `cursor/sylora-live-ecosystem-34a2` (continues Project-Sylora-2; prior matrix on `cursor/sylora-real-working-34a2`)  
 Production `/opt/sylora` / getsylora.com deploy: **BLOCKED_EXTERNAL** (no SSH on this agent). No destructive reset.
 
 Legend: **WORKING** · **PARTIAL** · **MOCK** · **NOT_IMPLEMENTED** · **BLOCKED_EXTERNAL**
@@ -74,7 +74,40 @@ Legend: **WORKING** · **PARTIAL** · **MOCK** · **NOT_IMPLEMENTED** · **BLOCK
 | Artifacts `64`/`T`/`rn` | N/A | Not in repo — see `RUNTIME_ARTIFACTS.md` |
 | `bootstrap-diagnostics.js` | WORKING | Keep |
 
-## Closure of prior gaps (this pass)
+## SYLORA LIVE (streaming ecosystem)
+
+See also: `LIVE_ARCHITECTURE.md`, `LIVE_PLATFORM_CAPABILITIES.md`, `LIVE_OWNER_ACTION_REQUIRED.md`.
+
+| Area | Status | Notes |
+|---|---|---|
+| Isolated `src/live/` domain | WORKING | Does not replace core LIVE/WebRTC/gifts |
+| Unified Event Bus | WORKING | Dedupe, rate limit, backpressure, ordering seq |
+| Platform adapter contract + registry | WORKING | Extensible providers |
+| SYLORA native adapter | WORKING | Bridges existing chat/gifts into bus |
+| OBS adapter / Companion path | WORKING | Local; automation plans OBS actions |
+| Custom RTMP destination vault | PARTIAL | URL/key vault; no fake chat; push via OBS |
+| TikTok / YouTube / Twitch / Facebook / Kick / Discord adapters | BLOCKED_EXTERNAL | Honest AUTH_REQUIRED shells |
+| Instagram LIVE | UNAVAILABLE / NOT_IMPLEMENTED as product claim | No stable public API — not faked |
+| Unified multipplatform chat UI + API | WORKING | Badges, slow-mode, pin, filters, priority |
+| AI co-host autonomy (OFF/ASSIST/CO-HOST/AUTONOMOUS) | WORKING | Local co-host tool; model path needs key |
+| Voice turn-taking / VAD policy | WORKING | Browser VAD; STT/TTS BLOCKED_EXTERNAL without key |
+| LIVE memory + privacy clear | WORKING | Short-term + optional viewer memory |
+| Chat priority engine | WORKING | Mentions, questions, VIP/gift, spam downrank |
+| Gift intelligence + varied reactions | WORKING | Contextual plans + effects list |
+| Automation WHEN/IF/THEN | WORKING | Templates + custom rules; actions planned |
+| AI Director suggestions | WORKING | Non-intrusive; never auto-hijacks |
+| Broadcast Center prefs/API | WORKING | Device prefs; capture in browser/Studio |
+| Command Center UI (desktop + mobile sheets) | WORKING | View `liveStudio` |
+| Guests / multi-person (Sylora WebRTC) | PARTIAL | Roles stub + existing call/LIVE peers |
+| Moderation assistant | WORKING | suggest/auto-hide policies; platform enforce may be blocked |
+| Realtime analytics | WORKING | Derived from real bus events only |
+| Stream recap / repurposing drafts | WORKING | `publish:false` always until user confirms |
+| Connection Manager honesty | WORKING | Real states: CONNECTED / AUTH_REQUIRED / UNAVAILABLE… |
+| Resilience (per-platform isolation) | WORKING | One platform down ≠ stop SYLORA |
+| External platform OAuth live E2E | BLOCKED_EXTERNAL | Owner credentials required |
+| FAILED_TEST (LIVE ecosystem) | 0 | Covered in `tests/sylora-live-ecosystem.test.mjs` |
+
+## Closure of prior gaps (previous pass)
 
 | Prior item | Was | Now | Evidence |
 |---|---|---|---|
@@ -89,22 +122,27 @@ Legend: **WORKING** · **PARTIAL** · **MOCK** · **NOT_IMPLEMENTED** · **BLOCK
 ## Counts (this pass)
 | Status | Count |
 |---|---|
-| WORKING | 68 |
-| PARTIAL | 0 |
+| WORKING | 88 |
+| PARTIAL | 3 |
 | MOCK | 0 |
 | NOT_IMPLEMENTED | 0 |
-| BLOCKED_EXTERNAL | 7 |
+| BLOCKED_EXTERNAL | 12 |
+| UNAVAILABLE (honest platform) | 1 |
 | BROKEN | 0 |
 | FAILED TESTS | 0 |
-| TESTS | 144 PASS |
+| TESTS | 151 PASS |
 
-### BLOCKED_EXTERNAL (owner-only) — 7
-1. `OPENAI_API_KEY` — live model chat / stream / realtime voice E2E  
-2. `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` — live Google login  
-3. Payment PSP (`SYLORA_PAYMENT_*`) — real card capture  
-4. TURN in `SYLORA_ICE_SERVERS_JSON` — cross-NAT WebRTC  
-5. External streaming / RTMP CDN keys — cloud broadcast ingest  
-6. Mail provider — password-reset inbox delivery  
-7. Production SSH to `/opt/sylora` — getsylora.com deploy  
+### BLOCKED_EXTERNAL / owner-only (ordered)
+See **`LIVE_OWNER_ACTION_REQUIRED.md`** for LIVE-specific items and **`OWNER_ACTION_REQUIRED.md`** for platform-wide.
 
-See also: `OWNER_ACTION_REQUIRED.md`, `RUNTIME_ARTIFACTS.md`, `WORKING_FLOWS_BACKLOG.md`.
+Core + LIVE combined:
+1. `OPENAI_API_KEY` — model chat/stream + LIVE generative voice/STT/TTS  
+2. Google OAuth (`GOOGLE_*`) — login + YouTube Live path  
+3. TikTok / Twitch / Meta / Kick / Discord developer credentials — external LIVE adapters  
+4. Payment PSP — real card capture  
+5. TURN (`SYLORA_ICE_SERVERS_JSON`) — cross-NAT WebRTC  
+6. Custom RTMP/CDN credentials — external push beyond OBS-local  
+7. Mail provider — password-reset delivery  
+8. Production SSH `/opt/sylora`  
+
+See also: `OWNER_ACTION_REQUIRED.md`, `LIVE_OWNER_ACTION_REQUIRED.md`, `RUNTIME_ARTIFACTS.md`.
