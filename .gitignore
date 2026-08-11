@@ -8,3 +8,5 @@ artifacts/screenshots/seed.json
 artifacts/screenshots/*-log.txt
 
 artifacts/screenshots/home-living-bg/frames/
+
+artifacts/screenshots/home-living-bg-data.json
