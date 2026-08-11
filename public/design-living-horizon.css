@@ -124,3 +124,25 @@ body[data-view="learning"] .progress{height:7px;background:#eee8e3;border-radius
 @media(prefers-reduced-motion:reduce){.sylora-avatar-gesture{transition:none}.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:1}}
 @keyframes sylora-gesture-layer{0%,100%{transform:translateY(var(--gesture-lift,0px)) rotate(0deg)}42%{transform:translateY(calc(var(--gesture-lift,0px) - 1px)) rotate(-.12deg)}74%{transform:translateY(var(--gesture-lift,0px)) rotate(.1deg)}}
 @media(prefers-reduced-motion:reduce){.sylora-ai-hero.gesture-active .sylora-avatar-gesture{opacity:0}.sylora-avatar-gesture.gesture-shown{opacity:1}}
+
+/* Digital Human V3 — Assembled Sylora.
+   Coherent white-suit base + gesture sheet. Mismatched pink sleeve tubes disabled. */
+.sylora-ai-hero.sylora-assembled .sylora-avatar-motion,
+.sylora-ai-hero .sylora-avatar-motion{display:block;overflow:visible;z-index:1;background:transparent;border:0;box-shadow:none}
+.sylora-ai-hero.sylora-assembled:after,
+.sylora-ai-hero.sylora-assembled:before{opacity:0!important}
+.sylora-ai-hero.sylora-assembled .sylora-avatar-body,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture{
+  background:none!important;
+  background-image:none!important;
+}
+.sylora-ai-hero.sylora-assembled .sylora-rig-arm,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-head,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-hair,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-eyes,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-blink,
+.sylora-ai-hero.sylora-assembled .sylora-avatar-motion>i{display:none!important}
+@media(max-width:720px){
+  .sylora-ai-hero.sylora-assembled{min-height:520px;padding-bottom:300px}
+  .sylora-ai-hero.sylora-assembled .sylora-avatar-motion{inset:auto 14px 96px auto;width:min(58vw,250px)}
+}
