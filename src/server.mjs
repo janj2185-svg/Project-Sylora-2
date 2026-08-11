@@ -21,6 +21,8 @@ import { PostgresOutboxRepository } from './repositories/postgres-outbox.mjs';
 import { PostgresConferenceRepository } from './repositories/postgres-conference.mjs';
 import { RealtimeOutbox } from './realtime-outbox.mjs';
 import { RealtimeFanout } from './realtime-fanout.mjs';
+import { EcosystemService } from './ecosystem/service.mjs';
+import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -62,6 +64,7 @@ const liveRepo=new PostgresLiveRepository(postgres.pool);
 const outboxRepo=new PostgresOutboxRepository(postgres.pool);
 const conferenceRepo=new PostgresConferenceRepository(postgres.pool);
 const realtimeOutbox=new RealtimeOutbox({repository:outboxRepo,dispatch:dispatchOutboxEvent});
+const ecosystem=new EcosystemService(store);
 
 function json(res, status, body) {
   const value = JSON.stringify(body);
@@ -236,8 +239,9 @@ function serveHls(req,res,mediaId,fileName){if(!/^(index\.m3u8|seg-\d{5}\.ts)$/.
 
 async function api(req, res, url) {
   const p = url.pathname;
-  if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',dependencies})}
+  if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',ecosystem:'personal-ai-identity-kg-agents-developers',dependencies})}
   if(req.method==='GET'&&p==='/api/ready'){const dependencies=await dependencyHealth();return json(res,dependencies.ready?200:503,{ready:dependencies.ready,dependencies})}
+  if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
     const user=await requireUser(req,res);if(!user)return;if(!process.env.OPENAI_API_KEY)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
@@ -338,15 +342,28 @@ async function api(req, res, url) {
     const user = await requireUser(req, res); if (!user) return; return json(res, 200, { entries: authSocial.enabled?await walletRepo.listLedger(user.id):store.data.ledger.filter(e => e.fromUserId === user.id || e.toUserId === user.id).slice(0,100) });
   }
   if (req.method === 'GET' && p === '/api/search') {
-    const q = safeText(url.searchParams.get('q'), 100).toLowerCase(),viewer=await sessionUser(req); if (q.length < 2) return json(res, 200, { users: [], posts: [], communities: [], courses: [], businesses: [] });
+    const q = safeText(url.searchParams.get('q'), 100).toLowerCase(),viewer=await sessionUser(req); if (q.length < 2) return json(res, 200, { users: [], posts: [], communities: [], courses: [], businesses: [], agents: [], lives: [] });
     const has = x => String(x || '').toLowerCase().includes(q);
     const dbUsers=authSocial.enabled?await authSocial.listUsers(q):null,dbPosts=authSocial.enabled?await authSocial.listPosts(100):null,blocked=authSocial.enabled&&viewer?new Set(await authSocial.blockedUserIds(viewer.id)):null,engagement=dbPosts?await authSocial.engagementForPosts(dbPosts.map(x=>x.post.id),viewer?.id||null):null;
+    const eco = ecosystem.search(q, {
+      users: (dbUsers||store.data.users).map(u => store.publicUser(u)),
+      posts: store.data.posts,
+      communities: store.data.communities,
+      courses: store.data.courses.filter(x => x.published),
+      businesses: store.data.businesses,
+      agents: ecosystem.listAgents(),
+      lives: store.data.liveRooms.filter(x => x.status === 'live')
+    });
     return json(res, 200, {
       users: (dbUsers||store.data.users).filter(u => (!viewer||(blocked?!blocked.has(u.id):!blockedBetween(viewer.id,u.id)))&&(has(u.username) || has(u.displayName) || has(u.bio))).slice(0,20).map(u => store.publicUser(u)),
       posts: (dbPosts?dbPosts.map(({post,author})=>{cachePost(post);cacheUser(author);return{post,author}}):store.data.posts.map(post=>({post,author:null}))).filter(x => (!viewer||(blocked?!blocked.has(x.post.userId):!blockedBetween(viewer.id,x.post.userId)))&&has(x.post.text)).slice(0,20).map(({post,author}) => enrichedPost(post, viewer,author,engagement?.get(post.id))),
       communities: store.data.communities.filter(x => has(x.name) || has(x.description)).slice(0,20),
       courses: store.data.courses.filter(x => x.published && (has(x.title) || has(x.description))).slice(0,20),
-      businesses: store.data.businesses.filter(x => has(x.name) || has(x.description)).slice(0,20)
+      businesses: store.data.businesses.filter(x => has(x.name) || has(x.description)).slice(0,20),
+      agents: ecosystem.listAgents().filter(a => has(a.name) || has(a.summary) || has(a.category)).slice(0,20),
+      lives: (await listLiveRooms()).filter(x => has(x.title)).slice(0,20),
+      aiPlan: ecosystem.aiSearch(q),
+      unified: eco.results.slice(0, 30)
     });
   }
   if (req.method === 'GET' && p === '/api/users') {
@@ -417,6 +434,9 @@ async function api(req, res, url) {
       const response=await runSyloraAi(user,text);
       const answer=safeText(response.output_text,12000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});
       const now=store.now();await aiCreateMessages([{id:store.id(),userId:user.id,role:'user',text,source:'chat',sourceEventId:null,createdAt:now},{id:store.id(),userId:user.id,role:'assistant',text:answer,source:'chat',sourceEventId:null,createdAt:store.now()}]);
+      ecosystem.ensurePersonalAgent(user);
+      ecosystem.recordActivity(user,{kind:'chat',summary:'Personal AI answered a command-center message',dataUsed:['profile_context','memory_read'],reason:'User initiated chat',context:'command_center'});
+      ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat'});
       return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10)});
     }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'});}
   }

@@ -158,3 +158,16 @@ The V2 foundation lives in `public/gift-v2/` and starts from story beats and sem
 The fourteen future-facing product capabilities are now reserved as explicit architecture contracts rather than disconnected feature ideas. Their canonical roadmap is [SYLORA — 14 Capability Architecture Roadmap](docs/SYLORA-14-CAPABILITY-ROADMAP.md), with machine-testable capability/event registration in `src/platform-vision.mjs`.
 
 Registration is intentionally not a completion claim. The immediate proof remains a vertical slice that connects Phoenix Rebirth on Gift Runtime V2 to real LIVE composition, a Living Sylora reaction, an AI Director cue and a Living World reaction. Only after that slice passes visual, runtime and performance gates should the wider capability set be implemented in parallel product horizons.
+
+## Ecosystem core (Human + Personal AI + Identity + Knowledge + Economy + Developers)
+
+SYLORA is being rebuilt around one product class — an AI ecosystem — not a pile of social clones. Audit and status live in:
+
+- [CURRENT_STATE](docs/audit/CURRENT_STATE.md)
+- [IMPLEMENTATION_PLAN](docs/audit/IMPLEMENTATION_PLAN.md)
+- [FINAL_IMPLEMENTATION_REPORT](docs/FINAL_IMPLEMENTATION_REPORT.md)
+- [SYLORA Protocol (future)](docs/SYLORA-PROTOCOL.md)
+
+Working foundation modules under `src/ecosystem/` expose Identity, Personal AI dashboard/permissions/activity, permission-aware Knowledge Graph, Action Engine levels, Agent Marketplace, Developer apps/API keys, translation plane, Business OS orgs + Enterprise AI Control Plane, reputation, provenance, sandbox commerce, and AI Creator Studio planning inside the existing Studio surface.
+
+The Digital Human avatar is reassembled from the coherent white-suit gesture sheet (mismatched pink sleeve tubes are disabled) so Sylora appears whole and can gesture normally.

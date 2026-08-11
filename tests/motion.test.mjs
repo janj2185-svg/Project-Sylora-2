@@ -35,3 +35,19 @@ test('semantic gestures choose anatomical whole-hand poses', () => {
   assert.equal(handPoseForGesture('emphasis'), 'emphasis');
   assert.equal(handPoseForGesture('unknown'), 'neutral');
 });
+
+test('assembled Digital Human assets and gesture sheet are present', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const root = path.resolve('public/assets');
+  for (const file of ['sylora-avatar-v2-base.png', 'sylora-gestures-v2.png', 'sylora-visemes-v2.png', 'sylora-expressions-v2.png']) {
+    assert.ok(fs.existsSync(path.join(root, file)), file);
+  }
+  const css = fs.readFileSync('public/design-living-horizon.css', 'utf8');
+  assert.match(css, /Digital Human V3 — Assembled Sylora/);
+  assert.match(css, /\.sylora-ai-hero\.sylora-assembled \.sylora-rig-arm\{display:none/);
+  const app = fs.readFileSync('public/app.js', 'utf8');
+  assert.match(app, /sylora-assembled/);
+  assert.match(app, /sylora-avatar-gesture/);
+  assert.doesNotMatch(app.split('function mountSyloraAvatarLayers')[1].split('function ')[0], /sylora-rig-arm/);
+});
