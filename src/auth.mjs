@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export function hashPassword(password) {
   const salt = randomBytes(16).toString('hex');
@@ -16,4 +16,8 @@ export function verifyPassword(password, encoded) {
 
 export function makeToken() {
   return randomBytes(32).toString('base64url');
+}
+
+export function hashResetToken(token) {
+  return createHash('sha256').update(String(token || '')).digest('hex');
 }

@@ -55,12 +55,13 @@ export function scopeAllows(appScopes = [], required) {
 }
 
 export const OAUTH_DOC = Object.freeze({
+  status: 'not_implemented',
   flows: ['authorization_code', 'refresh_token'],
   oidc: true,
   tokenEndpoint: '/api/v1/oauth/token',
   authorizeEndpoint: '/api/v1/oauth/authorize',
   jwks: '/api/v1/oauth/jwks',
-  note: 'OAuth/OIDC scaffolding is prepared; production identity provider keys are BLOCKED until configured.'
+  note: 'OAuth/OIDC endpoints are documented but NOT live. Do not treat as working auth. Production IdP keys BLOCKED until configured.'
 });
 
 export { DEVELOPER_SCOPES };

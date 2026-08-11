@@ -2,7 +2,9 @@
 
 **Status:** prepared offline. Live deploy waits for secure SSH access.  
 **Host (confirmed):** `77.42.42.246` (`getsylora.com`)  
-**Do not invent** `PROD_SSH_USER`, `PROD_SSH_PRIVATE_KEY`, `PROD_SSH_PORT`, or `PROD_DEPLOY_PATH`.
+**Deployment path (operator):** `/opt/sylora`  
+**Do not invent** `PROD_SSH_USER`, `PROD_SSH_PRIVATE_KEY`, `PROD_SSH_PORT`, or `PROD_DEPLOY_PATH`.  
+**Do not** destructive `git reset --hard` / delete local production backup commits without analysis.
 
 ## Prerequisites
 

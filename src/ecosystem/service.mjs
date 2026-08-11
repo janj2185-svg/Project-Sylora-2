@@ -980,6 +980,7 @@ export class EcosystemService {
       excerpt = this.store.data.lessons.find(l => l.id === contentId)?.title
         || this.store.data.courses.find(c => c.id === contentId)?.title || '';
     }
+    const providerReady = !!process.env.OPENAI_API_KEY;
     const summary = this.executeTool(user, 'summarize_content', { text: `${q}\n\n${excerpt}` });
     this.recordActivity(user, {
       kind: 'ask_sylora_context',
@@ -988,12 +989,22 @@ export class EcosystemService {
       reason: q.slice(0, 200),
       context: view || 'ai'
     });
+    const local = summary.result?.summary || 'Need more context on this surface.';
+    const answer = providerReady
+      ? local
+      : `[Local extract — not model AI] ${local}`;
     return {
       plan,
       context,
-      answer: summary.result?.summary || 'Need more context on this surface.',
+      mode: providerReady ? 'provider_or_extractive' : 'extractive_local',
+      answer,
       originalAvailable: true,
-      honesty: summary.result?.honesty
+      modelChat: false,
+      honesty: {
+        ...(summary.result?.honesty || {}),
+        state: providerReady ? 'extractive_with_provider_available' : 'extractive_local_not_model',
+        note: 'Ask-about-context uses extractive local summary of the surface. Full conversational AI is /api/ai/chat when OPENAI_API_KEY is set.'
+      }
     };
   }
 
@@ -1003,9 +1014,11 @@ export class EcosystemService {
     if (room.hostId !== user.id) return { ok: false, error: 'LIVE_HOST_REQUIRED' };
     const chat = (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-80);
     const questions = chat.filter(m => /\?|як|what|how|чому/i.test(m.text || '')).slice(-10);
+    const providerReady = !!process.env.OPENAI_API_KEY;
     return {
       ok: true,
       liveId,
+      mode: 'local_heuristic',
       highlights: questions.map(m => ({ id: m.id, text: m.text, userId: m.userId })),
       suggestions: [
         'Answer top chat question',
@@ -1017,7 +1030,11 @@ export class EcosystemService {
         speakAsStreamer: false,
         note: 'Sylora assists the host — never speaks as the streamer without explicit control.'
       },
-      translationReady: !!process.env.OPENAI_API_KEY || !!process.env.SYLORA_TRANSLATE_API_KEY
+      honesty: {
+        state: 'local_heuristic_not_model',
+        note: 'Copilot highlights are chat heuristics, not generative AI answers.'
+      },
+      translationReady: providerReady || !!process.env.SYLORA_TRANSLATE_API_KEY
     };
   }
 

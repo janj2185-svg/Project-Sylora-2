@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const initial = () => ({
-  users: [], sessions: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
+  users: [], sessions: [], passwordResets: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
   notifications: [], wallets: [], ledger: [], messages: [], conversations: [],
   aiMessages: [], aiMemories: [], aiActions: [],
   identities: [], personalAgents: [], aiActivity: [], kgNodes: [], kgEdges: [], ecosystemActions: [],

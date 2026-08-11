@@ -30,6 +30,7 @@ export function createCommerceItem({
   };
 }
 
+/** Sandbox only — never claim real PSP capture. Production mode stays blocked until provider secrets exist. */
 export function sandboxCheckout({ id, buyerId, item, platformFeeBps = 1500 }) {
   if (item.paymentMode === 'production') {
     return { ok: false, error: 'PAYMENT_PROVIDER_REQUIRED' };
@@ -50,6 +51,10 @@ export function sandboxCheckout({ id, buyerId, item, platformFeeBps = 1500 }) {
       currency: item.currency,
       mode: 'sandbox',
       status: 'sandbox_paid',
+      honesty: {
+        state: 'sandbox_not_real_payment',
+        note: 'Sandbox marker only. Real card/PSP success requires SYLORA_PAYMENT_* credentials.'
+      },
       createdAt: new Date().toISOString()
     }
   };

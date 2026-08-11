@@ -20,6 +20,18 @@ AFTER (working-flows milestone, 2026-08-11):
 | BROKEN | 0 |
 | BLOCKED | 4 (VPS, payments, TURN NAT cross-network, OpenAI key E2E) |
 
+AFTER real-working pass (same day) — see `REAL_WORKING_AUDIT.md`:
+
+| Status | Count (approx) |
+|---|---|
+| WORKING | ~42 |
+| PARTIAL | ~28 |
+| MOCK | ~3 |
+| BROKEN | 0 |
+| BLOCKED | 5 (+ Google OAuth secrets; VPS still blocked) |
+
+Added: LIVE `/api/live/following`, password reset (email delivery blocked), `/api/wallet`, `/api/ai/chat/stream`, Ask/Copilot honesty labels, wallet dual-write fix.
+
 ## Became WORKING this milestone
 - Messaging: delivery, read receipts, typing, unread, pagination, clientId idempotency, optimistic UI
 - Call Engine: cancel outgoing, ring timeout → missed, media mute action, signaling state-machine tests

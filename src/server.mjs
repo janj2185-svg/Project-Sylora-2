@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import OpenAI from 'openai';
 import { Store } from './store.mjs';
-import { hashPassword, makeToken, verifyPassword } from './auth.mjs';
+import { hashPassword, hashResetToken, makeToken, verifyPassword } from './auth.mjs';
 import { PostgresService } from './infra/postgres.mjs';
 import { RedisService } from './infra/redis.mjs';
 import { PostgresAuthSocialRepository } from './repositories/postgres-auth-social.mjs';
@@ -322,8 +322,82 @@ async function api(req, res, url) {
     const user = { id: store.id(), email, username, displayName: username, bio: '', locale: 'uk', avatar: '', role:adminEmails.has(email)?'admin':'user', passwordHash: hashPassword(String(input.password)), createdAt: store.now() };
     const t = makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlMs).toISOString()};
     if(authSocial.enabled){try{await authSocial.register(user,session)}catch(error){if(error?.code==='23505')return json(res,409,{error:'ACCOUNT_EXISTS'});throw error}}else store.data.sessions.push(session);
-    cacheUser(user); if(authSocial.enabled)await walletRepo.ensureWallet(user.id);if(!store.data.wallets.some(w=>w.userId===user.id))store.data.wallets.push({ userId: user.id, balance: 10000, earnings: 0, currency: 'LUMEN' }); store.save();
+    cacheUser(user);
+    if (authSocial.enabled) await walletRepo.ensureWallet(user.id);
+    else if (!store.data.wallets.some(w => w.userId === user.id)) {
+      store.data.wallets.push({ userId: user.id, balance: 10000, earnings: 0, currency: 'LUMEN' });
+    }
+    store.save();
     return json(res, 201, { token: t, user: {...store.publicUser(user),email:user.email,role:user.role} });
+  }
+  if (req.method === 'POST' && p === '/api/auth/password-reset/request') {
+    const input = await body(req);
+    const email = safeText(input.email, 254).toLowerCase();
+    const generic = {
+      ok: true,
+      accepted: true,
+      emailDelivery: 'blocked_until_mail_provider',
+      note: 'If an account exists, a reset token was issued. Email send is not claimed as success without a mail provider.'
+    };
+    if (!/^\S+@\S+\.\S+$/.test(email)) return json(res, 200, generic);
+    const user = authSocial.enabled
+      ? await authSocial.findUserByIdentity(email)
+      : store.data.users.find(u => u.email === email);
+    if (!user) return json(res, 200, generic);
+    const raw = makeToken();
+    const reset = {
+      id: store.id(),
+      userId: user.id,
+      tokenHash: hashResetToken(raw),
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      createdAt: store.now(),
+      usedAt: null
+    };
+    store.data.passwordResets = (store.data.passwordResets || []).filter(r => r.userId !== user.id || r.usedAt);
+    store.data.passwordResets.push(reset);
+    store.save();
+    const allowDevToken = process.env.ALLOW_DEV_RESET_TOKEN === '1' || process.env.NODE_ENV === 'test';
+    return json(res, 200, allowDevToken ? { ...generic, resetToken: raw, expiresAt: reset.expiresAt } : generic);
+  }
+  if (req.method === 'POST' && p === '/api/auth/password-reset/confirm') {
+    const input = await body(req);
+    const raw = safeText(input.token || input.resetToken, 200);
+    const password = String(input.password || '');
+    if (!raw || password.length < 8) return json(res, 400, { error: 'INVALID_RESET' });
+    const hashed = hashResetToken(raw);
+    const entry = (store.data.passwordResets || []).find(r => r.tokenHash === hashed && !r.usedAt);
+    if (!entry || new Date(entry.expiresAt).getTime() <= Date.now()) return json(res, 400, { error: 'RESET_TOKEN_INVALID' });
+    let user = authSocial.enabled ? await authSocial.findUserById(entry.userId) : store.data.users.find(u => u.id === entry.userId);
+    if (!user) return json(res, 400, { error: 'RESET_TOKEN_INVALID' });
+    user.passwordHash = hashPassword(password);
+    if (authSocial.enabled) {
+      await postgres.pool.query('UPDATE users SET password_hash=$2 WHERE id=$1', [user.id, user.passwordHash]);
+    }
+    cacheUser(user);
+    entry.usedAt = store.now();
+    // Invalidate sessions for this user (JSON store); Postgres deletes current-looking sessions via token wipe of all sessions for user
+    if (authSocial.enabled) {
+      try { await postgres.pool.query('DELETE FROM sessions WHERE user_id=$1', [user.id]); } catch {}
+    } else {
+      store.data.sessions = store.data.sessions.filter(s => s.userId !== user.id);
+    }
+    store.save();
+    return json(res, 200, { ok: true, reset: true });
+  }
+  if (req.method === 'GET' && p === '/api/auth/google') {
+    const clientId = process.env.GOOGLE_CLIENT_ID || '';
+    if (!clientId || !process.env.GOOGLE_CLIENT_SECRET) {
+      return json(res, 503, {
+        error: 'GOOGLE_OAUTH_NOT_CONFIGURED',
+        status: 'not_implemented',
+        note: 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in server env — never in frontend or git.'
+      });
+    }
+    return json(res, 501, {
+      error: 'GOOGLE_OAUTH_HANDLER_PENDING',
+      status: 'partial',
+      note: 'Credentials present but full OAuth redirect handler is not wired in this build.'
+    });
   }
   if (req.method === 'POST' && p === '/api/auth/login') {
     const input = await body(req); const identity = safeText(input.identity, 254).toLowerCase();
@@ -576,6 +650,41 @@ async function api(req, res, url) {
   if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});return json(res,201,{live});}
   if(req.method==='GET'&&p==='/api/live/rtc-config'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{iceServers:liveIceServers,turnConfigured:hasTurnServer(liveIceServers)})}
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
+  if(req.method==='GET'&&p==='/api/live/following'){
+    const user=await requireUser(req,res);if(!user)return;
+    const followingIds=new Set(
+      authSocial.enabled
+        ? await authSocial.listFollowingIds(user.id)
+        : store.data.follows.filter(f=>f.followerId===user.id).map(f=>f.followingId)
+    );
+    const source=await listLiveRooms();
+    const rooms=[];
+    for(const room of source){
+      if(!followingIds.has(room.hostId))continue;
+      const host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);
+      cacheUser(host);
+      rooms.push({...room,viewerCount:await liveViewerCount(room.id),host:store.publicUser(host)});
+    }
+    return json(res,200,{rooms,followingCount:followingIds.size});
+  }
+  if(req.method==='GET'&&p==='/api/wallet'){
+    const user=await requireUser(req,res);if(!user)return;
+    const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id);
+    if(wallet&&wallet.earnings==null)wallet.earnings=0;
+    const entries=authSocial.enabled?await walletRepo.listLedger(user.id):store.data.ledger.filter(e=>e.fromUserId===user.id||e.toUserId===user.id).slice(0,100);
+    const giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{
+      giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),
+      creatorEarnings:wallet?.earnings||0
+    };
+    return json(res,200,{
+      wallet,
+      entries,
+      giftStats,
+      currency:'LUMEN',
+      mode:'test',
+      honesty:{state:'test_lumen',note:'LUMEN balances are TEST/DEMO economy — not a real payment processor.'}
+    });
+  }
   m=route('/api/live/:id/events',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const countsAsViewer=url.searchParams.get('control')!=='host';res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: presence\ndata: ${JSON.stringify({status:'connected'})}\n\n`);if(!liveStreams.has(live.id))liveStreams.set(live.id,new Set());const targets=liveStreams.get(live.id);targets.add(res);let viewerId=null,viewerHeartbeat=null,lastViewerCount=null;if(countsAsViewer){viewerId=store.id();if(!liveViewerLeases.has(live.id))liveViewerLeases.set(live.id,new Set());liveViewerLeases.get(live.id).add(viewerId);lastViewerCount=await touchLiveViewer(live.id,viewerId);emitLive(live.id,'viewers',{count:lastViewerCount});viewerHeartbeat=setInterval(async()=>{if(!targets.has(res))return;const count=await touchLiveViewer(live.id,viewerId);if(count!==lastViewerCount){lastViewerCount=count;emitLive(live.id,'viewers',{count})}},15_000)}const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25_000);req.on('close',()=>{clearInterval(heartbeat);if(viewerHeartbeat)clearInterval(viewerHeartbeat);targets.delete(res);if(!targets.size)liveStreams.delete(live.id);if(viewerId){const local=liveViewerLeases.get(live.id);local?.delete(viewerId);if(local&&!local.size)liveViewerLeases.delete(live.id);removeLiveViewer(live.id,viewerId).then(count=>emitLive(live.id,'viewers',{count})).catch(()=>{})}});return;}
   m=route('/api/live/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['host-ready','viewer-ready','viewer-rejected','offer','answer','ice','viewer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='viewer-ready'){if(user.id===live.hostId)return json(res,400,{error:'VIEWER_SIGNAL_REQUIRED'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else if(kind==='host-ready'||kind==='offer'||kind==='viewer-rejected'){if(user.id!==live.hostId)return json(res,403,{error:'HOST_ONLY_SIGNAL'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}else{if(await livePeerRegistry.owner(live.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitLive(live.id,'signal',signal);if(kind==='viewer-left')await livePeerRegistry.release(live.id,fromPeerId,user.id);return json(res,202,{accepted:true});}
   m=route('/api/live/:id/chat',p);if(req.method==='GET'&&m)return json(res,200,{messages:await listLiveMessages(m.id)});if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),text=safeText(input.text,500);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});const msg=await createLiveMessage({id:store.id(),liveId:live.id,userId:user.id,username:user.username,text,createdAt:store.now()});emitLive(live.id,'chat',msg);return json(res,201,{message:msg});}
@@ -622,6 +731,41 @@ async function api(req, res, url) {
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
+  if(req.method==='POST'&&p==='/api/ai/chat/stream'){
+    const user=await requireUser(req,res);if(!user)return;
+    if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED',ui:'setup_required',hardcodeForbidden:true});
+    if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
+    const input=await body(req),text=safeText(input.text,6000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
+    const view=safeText(input.view||'command_center',40)||'command_center';
+    res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});
+    const write=(event,data)=>res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    write('status',{state:'thinking',model:openaiModel,streaming:true});
+    try{
+      const response=await runSyloraAi(user,text,view);
+      const answer=safeText(response.output_text,12000);
+      if(!answer){write('error',{error:'AI_EMPTY_RESPONSE'});return res.end()}
+      // Emit progressive chunks (provider may return full text; client still gets stream UX)
+      const chunkSize=48;
+      for(let i=0;i<answer.length;i+=chunkSize){
+        write('delta',{text:answer.slice(i,i+chunkSize)});
+      }
+      const now=store.now();
+      await aiCreateMessages([
+        {id:store.id(),userId:user.id,role:'user',text,source:'chat',sourceEventId:null,createdAt:now},
+        {id:store.id(),userId:user.id,role:'assistant',text:answer,source:'chat',sourceEventId:null,createdAt:store.now()}
+      ]);
+      const pack=ecosystem.contextPack(user,view);
+      ecosystem.ensurePersonalAgent(user);
+      ecosystem.recordActivity(user,{kind:'chat_stream',summary:`Personal AI streamed as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated streaming chat',context:view});
+      ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat_stream'});
+      write('done',{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
+      return res.end();
+    }catch(error){
+      console.error('OpenAI stream failed',error?.status||error?.name||'error');
+      write('error',{error:'AI_PROVIDER_ERROR'});
+      return res.end();
+    }
+  }
   if(req.method==='POST'&&p==='/api/ai/chat'){
     const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     const input=await body(req),text=safeText(input.text,6000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
