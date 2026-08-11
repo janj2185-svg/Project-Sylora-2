@@ -122,3 +122,76 @@ One account · one identity · one social graph · one communication layer · on
 5. OAuth connected services vault  
 6. Public web pages + SEO rendering  
 7. LIVE commerce compliance layer (later)
+
+---
+
+# Continuation 181–237 (LIVE Entertainment · Calls · Business Finance · Learning/Science)
+
+Shared principle: one LIVE/realtime core, one Call Engine, country-aware business adapters, tutor honesty, no gambling, no fake compliance / cheating detector.
+
+| MODULE | STATUS | FRONTEND | BACKEND | DATABASE | AI | SECURITY | TESTS | PRODUCTION READY |
+|---|---|---|---|---|---|---|---|---|
+| 181 LIVE Entertainment Engine | PARTIAL | LIVE hub catalog | `/api/live/entertainment` + modules | store collections | — | shared SSE/WebRTC | live-business-learn | No |
+| 182 Resonance Battles 2.0 | PARTIAL | Battle CTA → `/api/live/battles` | multi-mode rounds + multi-factor score | liveBattles | — | host-gated | live-business-learn | No |
+| 183 Resonance World | PARTIAL | — | `/api/live/:id/world` + factor world | derived | visual language v1 | presentation | live-business-learn | No |
+| 184 Comeback System | PARTIAL | — | comebackEvents scoreImpact=0 | liveBattles | atmosphere only | no score manip | live-business-learn | No |
+| 185 LIVE Challenges | PARTIAL | — | `/api/live/challenges` FREE/COMMUNITY/CREATOR/BATTLE | liveChallenges | — | host | live-business-learn | No |
+| 186 LIVE Quizzes | PARTIAL | — | quizzes + answer + leaderboard | liveQuizzes | host/sylora create | — | live-business-learn | No |
+| 187 LIVE Mini-Games | PARTIAL | — | Mini-Game Engine session API | liveMiniGames | no gambling | prediction_nofiat | live-business-learn | No |
+| 188 Audience vs Sylora | PARTIAL | — | `/api/live/audience-vs-sylora` | liveMiniGames | factual policy | — | unit | No |
+| 189 Creator + Sylora Show | PARTIAL | Copilot + cohost API | `/api/live/:id/cohost` autonomy | — | one Sylora | host control | unit | No |
+| 190 LIVE Rooms | PARTIAL | room kinds in catalog | `/api/live/:id/room-kind` | liveRoomProfiles | shared engine | — | unit | No |
+| 191 LIVE Stage | PARTIAL | — | raise/invite/mute/remove | liveStages | — | host roles | unit | No |
+| 192 LIVE Timer System | PARTIAL | Focus/Study UI | `/api/timers` server_time | liveTimers | — | server clock | live-business-learn | No |
+| 193 Focus / Pomodoro | PARTIAL | Learning Focus 25/5 | `/api/focus` | focusSessions | no aggressive XP | — | live-business-learn | No |
+| 194 DM Voice Calls | PARTIAL | Inbox + DM Voice buttons | `/api/calls` accept/decline/end | callSessions/history | WebRTC shared | notifications | live-business-learn | No |
+| 195 DM Video Calls | PARTIAL | Inbox Video | call kind=video + media | callSessions | camera flags | — | live-business-learn | No |
+| 196 Group Calls | PARTIAL | API kinds group_* | shared Call Engine | callSessions | grid/host later | — | unit | No |
+| 197 Call Translation | PARTIAL | API translate action | bilateral consent + AI label | call.translation | synthetic disclosure | consent | live-business-learn | No |
+| 198 Call with Sylora | PARTIAL | Call Sylora button | `/api/calls/sylora` + permissions | syloraCalls | presence mode | camera/screen opt-in | live-business-learn | No |
+| 199 Business Operating Hub | PARTIAL | Business hub strip | `/api/business/hub` | — | — | — | live-business-learn | No |
+| 200 Business Finance | PARTIAL | Ask finance | `/api/business/finance/ask` | invoices/expenses | not a bank | confirm send | live-business-learn | No |
+| 201 Invoices / Faktury | PARTIAL | Draft invoice CTA | invoices CRUD statuses | invoices | PDF later | draft-first | live-business-learn | No |
+| 202 Country-aware invoicing | PARTIAL | Country form | adapters PL/UA/DE/US stub | businessCountryProfiles | no IP inference | architecture_stub | live-business-learn | No |
+| 203 Expense documents | PARTIAL | — | extract + confirm gate | expenseExtractions | extract assist | user confirm | live-business-learn | No |
+| 204 Accounting workspace | PARTIAL | export meta | accounting export | derived | adapters later | accountant handoff | unit | No |
+| 205 Accountant access | PARTIAL | — | invite ACCOUNTANT scopes | accountantInvites | — | no chat access | unit | No |
+| 206 Accounting export | PARTIAL | — | csv/xlsx/pdf meta | — | country_future | — | unit | No |
+| 207 Sylora Business Finance | PARTIAL | Ask finance | drafts only | — | no auto-send | confirmation | live-business-learn | No |
+| 208 Contracts | PARTIAL | — | `/api/business/contracts` | contracts | summarize later | not legal advice | unit | No |
+| 209 Legal workspace | PARTIAL | hub section | disclaimer helpers | — | informational | high-risk note | unit | No |
+| 210 Business CRM | PARTIAL | Add client | `/api/business/crm` | crmRecords | integrated | — | live-business-learn | No |
+| 211 Quotes / Estimates | PARTIAL | Quote CTA | quotes → invoice draft | quotes | — | — | live-business-learn | No |
+| 212 Business time tracking | PARTIAL | Start work timer | `/api/business/time` | timeEntries | visible to worker | no surveillance | live-business-learn | No |
+| 213 Team timesheets | PARTIAL | foundation entries | time entries list | timeEntries | approval later | visible tracking | unit | No |
+| 214 Project budget | PARTIAL | — | `/api/business/budget` | projectBudgets | — | — | unit | No |
+| 215 Inventory optional | PARTIAL | — | inventory API optional flag | inventoryItems | — | opt-in module | unit | No |
+| 216 Document vault | PARTIAL | via org docs + contracts | reuse orgDocuments | — | permissions later | — | — | No |
+| 217 Business country profile | PARTIAL | country select | explicit user choice | businessCountryProfiles | — | not from IP | live-business-learn | No |
+| 218 Learning Hub | PARTIAL | Learning strip | `/api/learning/hub` | — | — | — | live-business-learn | No |
+| 219 Sylora Tutor | PARTIAL | Tutor CTA | `/api/learning/tutor` | tutorSessions | scaffold modes | no silent graded work | live-business-learn | No |
+| 220 Student workspace | PARTIAL | courses + plan APIs | exam-plan/assignments | examPlans | proactive opt-in | — | unit | No |
+| 221 Smart Notes | PARTIAL | — | `/api/learning/notes` | smartNotes | syloraActions list | — | unit | No |
+| 222 Flashcards | PARTIAL | Flashcards CTA | deck + spaced review | flashcardDecks | AI-assisted review note | — | live-business-learn | No |
+| 223 Exam mode | PARTIAL | Exam plan CTA | `/api/learning/exam-plan` | examPlans | adaptive phases | — | live-business-learn | No |
+| 224 Teacher workspace | PARTIAL | courses + quiz builder | assignments/quiz-builder | assignments | — | teacher role later | unit | No |
+| 225 Assignments | PARTIAL | — | create assignment + policy | assignments | help≠complete | graded gate | unit | No |
+| 226 Quiz / Test builder | PARTIAL | — | `/api/learning/quiz-builder` | quizBuilders | question bank stub | — | live-business-learn | No |
+| 227 Exam integrity | PARTIAL | honesty note | fakeAiCheatingDetector:false | — | transparent rules | no fake detector | live-business-learn | No |
+| 228 Interactive learning | PARTIAL | whiteboard entry | whiteboard API | whiteboards | heavy assets later | lazy-load note | unit | No |
+| 229 Language learning | PARTIAL | — | `/api/learning/language-tutor` | — | target voice | — | unit | No |
+| 230 LIVE Classes | PARTIAL | conferences+live reuse | shared realtime | — | captions later | — | — | No |
+| 231 Virtual Whiteboard | PARTIAL | Learning CTA | `/api/whiteboard` | whiteboards | collab later | — | live-business-learn | No |
+| 232 Science Workspace | PARTIAL | Science hub | `/api/science/hub` | — | — | — | live-business-learn | No |
+| 233 Research Library | PARTIAL | Library item CTA | `/api/science/library` | researchLibrary | no invent metadata | — | live-business-learn | No |
+| 234 Paper Reader | PARTIAL | — | `/api/science/paper-reader` | — | fidelity note | — | unit | No |
+| 235 Citation Manager | PARTIAL | — | citations reject unverified DOI | — | no invent DOI | — | live-business-learn | No |
+| 236 Research Project | PARTIAL | — | `/api/science/projects` | researchProjects | team perms | — | unit | No |
+| 237 Dataset Workspace | PARTIAL | Dataset CTA | `/api/science/datasets` | datasets | basic analysis only | — | live-business-learn | No |
+
+## Dependency order next (181–237)
+1. Wire Battles 2.0 factor updates into like/gift/chat emitLive path (same fanout)
+2. WebRTC media path for DM/group calls (reuse conference/live ICE)
+3. Invoice PDF + Poland/EU e-invoicing adapters after legal review
+4. Collaborative whiteboard CRDT + LIVE class breakouts
+5. Dataset analysis workers + paper summary with source fidelity checks

@@ -125,12 +125,13 @@ async function renderLive(){
   cleanupLiveViewer();
   if(state.intent==='event'){state.intent=null;state.liveTab='create'}
   const tab=state.liveTab||'discover';
-  const {rooms}=await api('/api/live');
+  const [{rooms},ent]=await Promise.all([api('/api/live'),api('/api/live/entertainment').catch(()=>({battleModes:[],roomKinds:[]}))]);
   const viewers=rooms.reduce((sum,r)=>sum+(Number(r.viewerCount)||0),0);
   // Following tab: without a dedicated following-hosts API, show empty honest state when selected.
   const list=tab==='following'?[]:rooms;
   const battles=rooms.filter(r=>rooms.some(x=>x.id!==r.id&&x.host?.id!==r.host?.id));
-  app.innerHTML=`<div class="card hero"><span class="eyebrow"><i class="live-dot"></i>SYLORA LIVE</span><h1>LIVE</h1><p>Discover · Following · Create · Battles · Guests · Chat · Gifts · Studio</p><div class="scene-readout"><span><small>LIVE</small><b>${rooms.length}</b></span><span><small>VIEWERS</small><b>${viewers.toLocaleString()}</b></span></div>
+  app.innerHTML=`<div class="card hero"><span class="eyebrow"><i class="live-dot"></i>SYLORA LIVE · ENTERTAINMENT ENGINE</span><h1>LIVE</h1><p>Battles 2.0 · Resonance World · Challenges · Quizzes · Stage · Timers — shared realtime core</p><div class="scene-readout"><span><small>LIVE</small><b>${rooms.length}</b></span><span><small>VIEWERS</small><b>${viewers.toLocaleString()}</b></span><span><small>MODES</small><b>${(ent.battleModes||[]).length}</b></span></div>
+  <p class="muted" style="margin-top:8px">${(ent.battleModes||[]).slice(0,6).join(' · ')} · rooms: ${(ent.roomKinds||[]).slice(0,5).join(', ')}</p>
   <div class="live-hub-tabs">
     <button type="button" data-live-tab="discover" class="${tab==='discover'?'active':''}">${esc(t('discoverLive'))}</button>
     <button type="button" data-live-tab="following" class="${tab==='following'?'active':''}">${esc(t('following'))}</button>
@@ -151,7 +152,17 @@ async function renderLive(){
   document.querySelectorAll('.live-copilot').forEach(b=>b.onclick=async()=>{try{const out=await api(`/api/live/${b.dataset.id}/copilot`);toast((out.highlights||[]).slice(0,2).map(h=>h.text).join(' · ')||out.policy?.note||'Copilot ready')}catch(e){toast(humanError(e.message))}});
   document.querySelectorAll('.open-live').forEach(b=>b.onclick=()=>openLiveChat(b.dataset.id));
   document.querySelectorAll('.watch-live').forEach(b=>b.onclick=()=>watchLive(b.dataset.id));
-  document.querySelectorAll('.resonance-start').forEach(b=>b.onclick=async()=>{try{await api(`/api/live/${b.dataset.id}/resonance`,{method:'POST',body:JSON.stringify({opponentLiveId:b.dataset.opponent})});toast('Resonance Battle')}catch(e){toast(humanError(e.message))}});
+  document.querySelectorAll('.resonance-start').forEach(b=>b.onclick=async()=>{
+    try{
+      const {battle}=await api('/api/live/battles',{method:'POST',body:JSON.stringify({hostLiveId:b.dataset.id,opponentLiveId:b.dataset.opponent,mode:'1v1'})});
+      toast(`Battles 2.0 · ${battle.rounds.length} rounds · multi-factor`);
+    }catch(e){
+      try{
+        await api(`/api/live/${b.dataset.id}/resonance`,{method:'POST',body:JSON.stringify({opponentLiveId:b.dataset.opponent})});
+        toast('Legacy Resonance Battle');
+      }catch(err){toast(humanError(e.message||err.message))}
+    }
+  });
   if(state.intent&&rooms.some(r=>r.id===state.intent)){const id=state.intent;state.intent=null;watchLive(id)}
 }
 async function liveRtcConfig(){if(liveRtcConfigCache)return liveRtcConfigCache;try{liveRtcConfigCache=await api('/api/live/rtc-config')}catch{liveRtcConfigCache={iceServers:[],turnConfigured:false}}return liveRtcConfigCache}
@@ -233,6 +244,7 @@ async function renderMessages(){
   const invites=notesList.filter(n=>/invite|conference|room|connect/i.test(String(n.type||'')));
   const calls=notesList.filter(n=>/call|video|voice/i.test(String(n.type||'')));
   const social=notesList.filter(n=>!invites.includes(n)&&!calls.includes(n));
+  const callHistory=tab==='calls'?await api('/api/calls/history').catch(()=>({history:[]})):{history:[]};
   app.innerHTML=`<div class="card hero messages-hero"><span class="eyebrow">SYLORA · INBOX</span><h1>Inbox</h1><p>${esc(t('inboxMessages'))} · ${esc(t('inboxNotifications'))} · ${esc(t('inboxInvites'))} · ${esc(t('inboxCalls'))}</p></div>
   <div class="inbox-tabs">
     <button type="button" data-inbox-tab="messages" class="${tab==='messages'?'active':''}">${esc(t('inboxMessages'))}</button>
@@ -244,17 +256,48 @@ async function renderMessages(){
   <div class="inbox-panel" ${tab==='messages'?'':'hidden'}><div class="messages-shell"><aside class="card conversation-panel"><div class="new-message"><span class="eyebrow">${esc(t('inboxMessages'))}</span><div class="fields"><select id="newRecipient"><option value="">@</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)}</option>`).join('')}</select><button id="newChat" class="primary">＋</button></div></div><div class="conversation-list">${conversations.map(c=>{const other=c.members.find(x=>x.id!==state.me.id);const letter=(other?.displayName||other?.username||'?')[0].toUpperCase();return`<button class="convo" data-id="${c.id}"><span class="conversation-avatar">${esc(letter)}</span><span><b>@${esc(other?.username||'chat')}</b><small>${esc(c.lastMessage?.text||'…')}</small></span></button>`}).join('')||'<p class="muted conversation-empty">—</p>'}</div></aside><div id="chat" class="chat-space"><div class="card chat-placeholder"><span>◌</span><b>Inbox</b><p class="muted">${esc(t('inboxMessages'))}</p></div></div></div></div>
   <div class="inbox-panel card" ${tab==='notifications'?'':'hidden'}>${social.map(n=>`<div class="profile-event"><i>✦</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')||'<p class="muted">—</p>'}</div>
   <div class="inbox-panel card" ${tab==='invites'?'':'hidden'}>${invites.map(n=>`<div class="profile-event"><i>◇</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')||`<p class="muted">${esc(t('inboxInvites'))}</p>`}<div class="row" style="margin-top:12px"><button class="ghost" data-go="business">${esc(t('business'))}</button><button class="ghost" data-go="learning">${esc(t('science'))}</button></div></div>
-  <div class="inbox-panel card" ${tab==='calls'?'':'hidden'}>${calls.map(n=>`<div class="profile-event"><i>◉</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')||`<p class="muted">${esc(t('inboxCalls'))}</p>`}<div class="row" style="margin-top:12px"><button class="ghost" data-go="live">LIVE</button><button class="ghost" data-go="ai">Sylora</button></div></div>
+  <div class="inbox-panel card" ${tab==='calls'?'':'hidden'}>
+    <div class="fields" style="margin-bottom:12px">
+      <select id="callRecipient"><option value="">@</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)}</option>`).join('')}</select>
+      <div class="row"><button type="button" class="primary" id="startVoiceCall">Voice call</button><button type="button" class="ghost" id="startVideoCall">Video call</button><button type="button" class="ghost" id="startSyloraCall">Call Sylora</button></div>
+    </div>
+    <span class="eyebrow">HISTORY</span>
+    ${(callHistory.history||[]).map(h=>`<div class="profile-event"><i>◉</i><span><b>${esc(h.kind)}</b><small>${esc(h.status)} · ${h.durationSec||0}s${h.missed?' · missed':''}</small></span></div>`).join('')||`<p class="muted">${esc(t('inboxCalls'))}</p>`}
+    ${calls.map(n=>`<div class="profile-event"><i>✦</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')}
+  </div>
   <div class="inbox-panel card" ${tab==='priority'?'':'hidden'}><p><b>${esc(smartInbox?.inbox?.summary||'Priority view')}</b></p><p class="muted">AI priority is an extra filter — nothing is hidden.</p>${Object.entries(smartInbox?.inbox?.buckets||{}).map(([k,items])=>`<div class="item"><span class="eyebrow">${esc(k)}</span>${(items||[]).slice(0,8).map(i=>`<p>${esc(i.preview||i.type||i.kind||i.id)}</p>`).join('')||'<p class="muted">—</p>'}</div>`).join('')}</div>`;
   document.querySelectorAll('[data-inbox-tab]').forEach(b=>b.onclick=()=>{state.inboxTab=b.dataset.inboxTab;renderMessages()});
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go));
+  if(tab==='calls'){
+    const startCall=async kind=>{
+      if(kind==='sylora'){const {call}=await api('/api/calls/sylora',{method:'POST',body:JSON.stringify({mode:'voice'})});toast(`Sylora call · ${call.id.slice(0,8)}`);return}
+      const userId=document.querySelector('#callRecipient')?.value;if(!userId)return toast('Select recipient');
+      const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId})});
+      toast(`${kind} · ringing · ${call.id.slice(0,8)}`);
+      renderMessages();
+    };
+    document.querySelector('#startVoiceCall')?.addEventListener('click',()=>startCall('voice'));
+    document.querySelector('#startVideoCall')?.addEventListener('click',()=>startCall('video'));
+    document.querySelector('#startSyloraCall')?.addEventListener('click',()=>startCall('sylora'));
+  }
   if(tab==='messages'){
     document.querySelector('#newChat').onclick=async()=>{const userId=document.querySelector('#newRecipient').value;if(!userId)return;const {conversation}=await api('/api/conversations',{method:'POST',body:JSON.stringify({userId})});openConversation(conversation.id)};
     document.querySelectorAll('.convo').forEach(b=>b.onclick=()=>openConversation(b.dataset.id));
     if(conversations[0])openConversation(conversations[0].id);
   }
 }
-async function openConversation(id){const {messages}=await api(`/api/conversations/${id}/messages`);document.querySelectorAll('.convo').forEach(x=>x.classList.toggle('active',x.dataset.id===id));const box=document.querySelector('#chat');if(!box)return;box.innerHTML=`<div class="card chat-card"><div class="chat-head"><span><i></i> приватна розмова</span><b>Sylora Messages</b></div><div class="message-stream">${messages.map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'}</small><p>${esc(m.text)}</p></div>`).join('')||'<p class="muted chat-empty">Почни розмову.</p>'}</div><form id="messageForm" class="message-compose"><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button class="primary" aria-label="Надіслати">↑</button></form></div>`;document.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text})});openConversation(id)}}
+async function openConversation(id){
+  const [{messages},convoList]=await Promise.all([api(`/api/conversations/${id}/messages`),api('/api/conversations')]);
+  document.querySelectorAll('.convo').forEach(x=>x.classList.toggle('active',x.dataset.id===id));
+  const box=document.querySelector('#chat');if(!box)return;
+  const conversation=(convoList.conversations||[]).find(c=>c.id===id);
+  const other=(conversation?.members||[]).find(x=>x.id!==state.me.id);
+  box.innerHTML=`<div class="card chat-card"><div class="chat-head"><span><i></i> приватна розмова</span><b>Sylora Messages</b><div class="row"><button type="button" class="ghost" id="dmVoiceCall">Voice</button><button type="button" class="ghost" id="dmVideoCall">Video</button></div></div><div class="message-stream">${messages.map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'}</small><p>${esc(m.text)}</p></div>`).join('')||'<p class="muted chat-empty">Почни розмову.</p>'}</div><form id="messageForm" class="message-compose"><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button class="primary" aria-label="Надіслати">↑</button></form></div>`;
+  document.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text})});openConversation(id)};
+  const startDmCall=async kind=>{if(!other)return toast('Peer required');await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});toast(`${kind} call · Call Engine`);state.inboxTab='calls';renderMessages()};
+  document.querySelector('#dmVoiceCall')?.addEventListener('click',()=>startDmCall('voice'));
+  document.querySelector('#dmVideoCall')?.addEventListener('click',()=>startDmCall('video'));
+}
 
 function renderMore(){app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Спокійні налаштування профілю, приватності, Sylora AI та всієї екосистеми.</p></div><section class="settings-scene"><div class="settings-copy"><span class="eyebrow">НАЛАШТУВАННЯ</span><h2>Усе під твоїм контролем.</h2><p>SYLORA не ховає важливі рішення: профіль, пам’ять AI та комунікації відкриваються окремо.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><div class="module-grid settings-grid"><div class="card module" data-go="profile"><span class="icon">○</span><h3>Акаунт і профіль</h3><p>Ім’я, мова, профіль, гаманець і статистика.</p></div><div class="card module" data-go="identity"><span class="icon">◈</span><h3>SYLORA Identity</h3><p>Цифрова ідентичність, навички, портфоліо та рівні приватності.</p></div><div class="card module" data-go="ai"><span class="icon">✦</span><h3>Sylora AI</h3><p>Один Personal AI, пам’ять, дозволи та прозора історія дій.</p></div>
 <div class="card module" data-go="dashboard"><span class="icon">▣</span><h3>Personal Dashboard</h3><p>Today · Tasks · Goals · Brief · Continuity.</p></div>
@@ -586,13 +629,19 @@ async function openConferenceRoomRtc(roomId,kind,back){
 }
 
 async function renderLearning(){
-  const [{courses},conferenceData,users]=await Promise.all([
+  const [{courses},conferenceData,users,learnHub,sciHub]=await Promise.all([
     api('/api/courses'),
     state.me?api('/api/conferences?kind=science'):Promise.resolve({rooms:[]}),
-    api('/api/users').catch(()=>({users:[]}))
+    api('/api/users').catch(()=>({users:[]})),
+    api('/api/learning/hub').catch(()=>({sections:[]})),
+    api('/api/science/hub').catch(()=>({sections:[]}))
   ]);
   const researchers=(users.users||[]).slice(0,6);
   app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA SCIENCE · RESEARCH</span><h1>${esc(t('science'))}</h1><p>Researchers · Circles · courses · collaboration · AI research workspace</p><div class="scene-readout"><span><small>COURSES</small><b>${courses.length}</b></span><span><small>CIRCLES</small><b>${conferenceData.rooms.length}</b></span><span><small>PEOPLE</small><b>${researchers.length}</b></span></div></div>
+  ${state.me?`<section class="card"><span class="eyebrow">LEARNING HUB</span><p class="muted">${(learnHub.sections||[]).slice(0,8).join(' · ')}</p>
+  <div class="row"><button type="button" class="primary" id="startTutor">Sylora Tutor</button><button type="button" class="ghost" id="makeDeck">Flashcards</button><button type="button" class="ghost" id="examPlan">Exam plan</button><button type="button" class="ghost" id="focusStudy">Focus 25/5</button></div>
+  <p class="muted" style="margin-top:8px">Science: ${(sciHub.sections||[]).slice(0,6).join(' · ')}</p>
+  <div class="row"><button type="button" class="ghost" id="addPaper">Library item</button><button type="button" class="ghost" id="newDataset">Dataset</button><button type="button" class="ghost" id="newBoard">Whiteboard</button></div></section>`:''}
   <div class="science-research-grid">
     <section class="card"><span class="eyebrow">RESEARCHERS</span><div class="stack">${researchers.map(u=>`<div class="item"><b>${esc(u.displayName||u.username)}</b><p class="muted">@${esc(u.username)}</p></div>`).join('')||'<p class="muted">—</p>'}</div></section>
     <section class="card"><span class="eyebrow">RESOURCES</span><p class="muted">Papers / resources attach to courses & circles. Shared communications for private research rooms.</p><button class="ghost" data-go-ai>Sylora Research</button></section>
@@ -602,6 +651,13 @@ async function renderLearning(){
   ${courses.map(c=>`<div class="card item"><span class="badge">${c.price?`◈ ${c.price}`:'FREE'}</span><h3>${esc(c.title)}</h3><p class="muted">${esc(c.description)} · ${c.lessonCount} lessons</p><button class="ghost open-course" data-id="${c.id}">Open</button></div>`).join('')||'<div class="card empty">—</div>'}`;
   if(state.me)bindConferenceHub('science',renderLearning);
   document.querySelector('[data-go-ai]')?.addEventListener('click',()=>{state.intent=null;nav('ai')});
+  document.querySelector('#startTutor')?.addEventListener('click',async()=>{const out=await api('/api/learning/tutor',{method:'POST',body:JSON.stringify({subject:'General',mode:'teach_me'})});toast(`Tutor · ${out.session.mode} · no silent graded answers`)});
+  document.querySelector('#makeDeck')?.addEventListener('click',async()=>{await api('/api/learning/flashcards',{method:'POST',body:JSON.stringify({title:'Quick deck',cards:[{front:'Concept',back:'Definition'}],aiAssisted:false})});toast('Flashcard deck created')});
+  document.querySelector('#examPlan')?.addEventListener('click',async()=>{const d=new Date(Date.now()+7*864e5).toISOString().slice(0,10);await api('/api/learning/exam-plan',{method:'POST',body:JSON.stringify({subject:'Exam',examDate:d,availableMinutesPerDay:45})});toast('Exam plan ready')});
+  document.querySelector('#focusStudy')?.addEventListener('click',async()=>{await api('/api/focus',{method:'POST',body:JSON.stringify({preset:'25_5'})});toast('Focus 25/5 · server timer')});
+  document.querySelector('#addPaper')?.addEventListener('click',async()=>{await api('/api/science/library',{method:'POST',body:JSON.stringify({type:'paper',title:'Untitled paper'})});toast('Library item added')});
+  document.querySelector('#newDataset')?.addEventListener('click',async()=>{await api('/api/science/datasets',{method:'POST',body:JSON.stringify({name:'Dataset',columns:[{name:'x',type:'number'}],previewRows:[]})});toast('Dataset workspace')});
+  document.querySelector('#newBoard')?.addEventListener('click',async()=>{await api('/api/whiteboard',{method:'POST',body:JSON.stringify({space:'learning',title:'Study board'})});toast('Whiteboard created')});
   document.querySelector('#courseForm')?.addEventListener('submit',async e=>{e.preventDefault();const {course}=await api('/api/courses',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});await api(`/api/courses/${course.id}/lessons`,{method:'POST',body:JSON.stringify({title:'Intro',content:'Lesson 1'})});await api(`/api/courses/${course.id}/publish`,{method:'POST'});renderLearning()});
   document.querySelectorAll('.open-course').forEach(b=>b.onclick=()=>openCourse(b.dataset.id));
   if(state.intent==='course'){state.intent=null;document.querySelector('#courseForm input[name="title"]')?.focus()}
@@ -629,13 +685,21 @@ async function openCourse(id){
 }
 
 async function renderBusiness(){
-  const [{businesses},conferenceData,orgData]=await Promise.all([
+  const [{businesses},conferenceData,orgData,hub,country,invoices]=await Promise.all([
     api('/api/businesses'),
     state.me?api('/api/conferences?kind=business'):Promise.resolve({rooms:[]}),
-    state.me?api('/api/orgs'):Promise.resolve({organizations:[]})
+    state.me?api('/api/orgs'):Promise.resolve({organizations:[]}),
+    api('/api/business/hub').catch(()=>({sections:[]})),
+    state.me?api('/api/business/country').catch(()=>({profile:{}})):Promise.resolve({profile:{}}),
+    state.me?api('/api/business/invoices').catch(()=>({invoices:[]})):Promise.resolve({invoices:[]})
   ]);
   const orgs=orgData.organizations||[];
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA BUSINESS · WORKSPACE</span><h1>${esc(t('workspace'))}</h1><p>Companies · teams · projects · deal rooms · documents · tasks · Sylora</p><div class="scene-readout"><span><small>ORGS</small><b>${orgs.length}</b></span><span><small>COMPANIES</small><b>${businesses.length}</b></span><span><small>ROOMS</small><b>${conferenceData.rooms.length}</b></span></div></div>
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA BUSINESS · WORKSPACE</span><h1>${esc(t('workspace'))}</h1><p>Companies · finance · CRM · contracts · teams · Sylora Business</p><div class="scene-readout"><span><small>ORGS</small><b>${orgs.length}</b></span><span><small>COMPANIES</small><b>${businesses.length}</b></span><span><small>INVOICES</small><b>${(invoices.invoices||[]).length}</b></span></div></div>
+  ${state.me?`<section class="card"><span class="eyebrow">BUSINESS HUB · ${(country.profile?.countryCode||'DEFAULT')} · not a bank</span>
+  <p class="muted">${(hub.sections||[]).slice(0,10).join(' · ')}</p>
+  <div class="row"><button type="button" class="primary" id="bizInvoice">Draft invoice</button><button type="button" class="ghost" id="bizCrm">Add client</button><button type="button" class="ghost" id="bizQuote">Quote</button><button type="button" class="ghost" id="bizTime">Start work timer</button><button type="button" class="ghost" id="bizFinanceAsk">Ask finance</button></div>
+  <form id="countryForm" class="fields" style="margin-top:10px"><select name="countryCode"><option value="PL">PL</option><option value="UA">UA</option><option value="DE">DE</option><option value="US">US</option><option value="DEFAULT">DEFAULT</option></select><button class="ghost">Set country profile</button></form>
+  </section>`:''}
   ${state.me?`<section class="card org-workspace"><span class="eyebrow">BUSINESS OS</span><h3>${esc(t('workspace'))}</h3>
   <form id="orgForm" class="fields"><input name="name" required placeholder="Organization"><button class="primary">${esc(t('createHub'))}</button></form>
   <div class="stack">${orgs.map(o=>`<div class="item"><b>${esc(o.name)}</b><div class="row"><button type="button" class="primary open-org-workspace" data-id="${o.id}">${esc(t('workspace'))}</button><button type="button" class="ghost add-org-team" data-id="${o.id}">+ ${esc(t('teams'))}</button><button type="button" class="ghost add-org-doc" data-id="${o.id}">+ ${esc(t('documents'))}</button><button type="button" class="ghost add-org-task" data-id="${o.id}">+ ${esc(t('tasks'))}</button></div></div>`).join('')||'<p class="muted">—</p>'}</div>
@@ -644,6 +708,12 @@ async function renderBusiness(){
   ${state.me?'<form id="businessForm" class="card auth fields"><input name="name" placeholder="Company" required><textarea name="description"></textarea><input name="website" placeholder="https://"><button class="primary">Company profile</button></form>':''}
   ${businesses.map(b=>`<div class="card item business-company"><span class="business-emblem">◈</span><div><span class="eyebrow">COMPANY</span><h3>${esc(b.name)}</h3><p class="muted">${esc(b.description)}</p>${b.website?`<span class="badge">${esc(b.website)}</span>`:''}</div></div>`).join('')||'<div class="card empty">—</div>'}`;
   if(state.me)bindConferenceHub('business',renderBusiness);
+  document.querySelector('#bizInvoice')?.addEventListener('click',async()=>{await api('/api/business/invoices',{method:'POST',body:JSON.stringify({items:[{description:'Service',quantity:1,unitNetPrice:100,taxRate:23}],seller:{name:'Me'},buyer:{name:'Client'}})});toast('Invoice draft');renderBusiness()});
+  document.querySelector('#bizCrm')?.addEventListener('click',async()=>{const name=prompt('Client name');if(!name)return;await api('/api/business/crm',{method:'POST',body:JSON.stringify({type:'client',name})});toast('CRM record')});
+  document.querySelector('#bizQuote')?.addEventListener('click',async()=>{await api('/api/business/quotes',{method:'POST',body:JSON.stringify({items:[{description:'Estimate',quantity:1,unitNetPrice:50,taxRate:0}]})});toast('Quote draft')});
+  document.querySelector('#bizTime')?.addEventListener('click',async()=>{await api('/api/business/time',{method:'POST',body:JSON.stringify({action:'start',note:'Work'})});toast('Time tracking visible to worker')});
+  document.querySelector('#bizFinanceAsk')?.addEventListener('click',async()=>{const out=await api('/api/business/finance/ask',{method:'POST',body:JSON.stringify({query:'неоплачені фактури'})});toast(`Unpaid: ${out.answer?.unpaidCount??0} · confirm before send`)});
+  document.querySelector('#countryForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/api/business/country',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});toast('Country set by user (not IP)');renderBusiness()});
   document.querySelector('#orgForm')&&(document.querySelector('#orgForm').onsubmit=async e=>{e.preventDefault();const name=new FormData(e.currentTarget).get('name');await api('/api/orgs',{method:'POST',body:JSON.stringify({name})});toast('OK');renderBusiness()});
   const showWorkspace=async id=>{
     const out=await api(`/api/orgs/${id}/workspace`);

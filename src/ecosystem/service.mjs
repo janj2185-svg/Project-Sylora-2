@@ -71,6 +71,33 @@ import {
   SPECIALIST_AGENTS
 } from './sylora-os.mjs';
 
+import {
+  BATTLE_MODES, LIVE_ROOM_KINDS, MINI_GAMES, CHALLENGE_KINDS, TIMER_KINDS,
+  createBattlePlan, applyBattleFactor, advanceBattleRound, resonanceWorldState,
+  createLiveChallenge, createLiveQuiz, quizLeaderboard, createMiniGameSession,
+  createAudienceVsSylora, createCoHostControl, createLiveRoomProfile,
+  createStageState, stageRaiseHand, stageInvite, stageRemove,
+  createServerTimer, timerSnapshot, createFocusSession, FOCUS_PRESETS
+} from './live-entertainment.mjs';
+import {
+  CALL_KINDS, createCallSession, acceptCall, declineCall, endCall, setCallMedia,
+  enableCallTranslation, createSyloraCall, callHistoryEntry
+} from './call-engine.mjs';
+import {
+  BUSINESS_HUB_SECTIONS, INVOICE_STATUSES, resolveCountryAdapter, createBusinessCountryProfile,
+  createInvoiceDraft, createExpenseExtraction, confirmExpenseExtraction, createCrmRecord,
+  createQuote, createTimeEntry, createProjectBudget, createInventoryItem,
+  createAccountantInvite, financeAssistantGuard, legalAssistantDisclaimer, createContractRecord,
+  buildAccountingExportMeta, ACCOUNTING_EXPORT_FORMATS
+} from './business-finance.mjs';
+import {
+  LEARNING_HUB_SECTIONS, SCIENCE_HUB_SECTIONS, TUTOR_MODES, createTutorSession,
+  tutorResponsePolicy, createFlashcardDeck, scheduleFlashcardReview, createExamPlan,
+  createAssignment, createQuizBuilder, createSmartNote, createWhiteboardSession,
+  createResearchLibraryItem, createPaperReaderView, createCitation, createResearchProject,
+  createDatasetWorkspace, languageTutorMode
+} from './learning-science.mjs';
+
 function ensureCollections(store) {
   const d = store.data;
   d.identities ||= [];
@@ -130,8 +157,39 @@ function ensureCollections(store) {
   d.learningGraphs ||= [];
   d.businessWorkflows ||= [];
   d.dailyBriefPrefs ||= [];
+  d.liveChallenges ||= [];
+  d.liveQuizzes ||= [];
+  d.liveMiniGames ||= [];
+  d.liveStages ||= [];
+  d.liveRoomProfiles ||= [];
+  d.liveTimers ||= [];
+  d.focusSessions ||= [];
+  d.callSessions ||= [];
+  d.callHistory ||= [];
+  d.syloraCalls ||= [];
+  d.businessCountryProfiles ||= [];
+  d.invoices ||= [];
+  d.expenseExtractions ||= [];
+  d.crmRecords ||= [];
+  d.quotes ||= [];
+  d.timeEntries ||= [];
+  d.projectBudgets ||= [];
+  d.inventoryItems ||= [];
+  d.accountantInvites ||= [];
+  d.contracts ||= [];
+  d.flashcardDecks ||= [];
+  d.examPlans ||= [];
+  d.assignments ||= [];
+  d.quizBuilders ||= [];
+  d.smartNotes ||= [];
+  d.whiteboards ||= [];
+  d.researchLibrary ||= [];
+  d.researchProjects ||= [];
+  d.datasets ||= [];
+  d.tutorSessions ||= [];
   d.audit ||= d.audit || [];
 }
+
 
 function audit(store, actorId, action, targetType, targetId, metadata = {}) {
   store.data.audit.unshift({
@@ -2568,6 +2626,611 @@ export class EcosystemService {
       structuredData: publicProfile ? { '@type': 'Person', name: user.displayName } : null,
       note: 'Private profiles are not indexed.'
     };
+  }
+
+
+  // —— LIVE Entertainment Engine (181–193) ——
+  entertainmentCatalog() {
+    return {
+      battleModes: BATTLE_MODES,
+      roomKinds: LIVE_ROOM_KINDS,
+      miniGames: MINI_GAMES,
+      challengeKinds: CHALLENGE_KINDS,
+      timerKinds: TIMER_KINDS,
+      focusPresets: FOCUS_PRESETS,
+      engine: 'shared_live_realtime',
+      note: 'Uses shared LIVE/realtime core — not a TikTok LIVE clone stack.'
+    };
+  }
+
+  startResonanceBattle(user, input = {}) {
+    const hostLiveId = String(input.hostLiveId || input.liveId || '');
+    const host = (this.store.data.liveRooms || []).find(r => r.id === hostLiveId);
+    if (!host || host.hostId !== user.id) throw new Error('HOST_ONLY');
+    const active = (this.store.data.liveBattles || []).find(b =>
+      b.status === 'live' && (b.hostLiveId === hostLiveId || b.opponentLiveId === hostLiveId));
+    if (active) throw new Error('RESONANCE_ALREADY_ACTIVE');
+    const battle = createBattlePlan({
+      id: this.store.id(),
+      hostLiveId,
+      opponentLiveId: input.opponentLiveId || null,
+      mode: input.mode || '1v1',
+      teamA: input.teamA || [user.id],
+      teamB: input.teamB || [],
+      rounds: input.rounds || null,
+      durationSec: Number(input.durationSec) || 180
+    });
+    this.store.data.liveBattles.push(battle);
+    this.store.save();
+    return battle;
+  }
+
+  battleFactor(user, battleId, { side = 'A', factor = 'likes', amount = 1 } = {}) {
+    const battle = (this.store.data.liveBattles || []).find(b => b.id === battleId);
+    if (!battle || battle.status !== 'live') throw new Error('BATTLE_NOT_FOUND');
+    if (!battle.factors) throw new Error('LEGACY_BATTLE');
+    applyBattleFactor(battle, side, factor, amount);
+    this.store.save();
+    return {
+      battle,
+      world: resonanceWorldState({
+        likes: battle.factors.likes,
+        comments: battle.factors.comments,
+        gifts: battle.factors.gifts,
+        battleLead: battle.hostScore - battle.opponentScore,
+        comeback: (battle.comebackEvents || []).length > 0
+      }),
+      lastComeback: (battle.comebackEvents || []).slice(-1)[0] || null
+    };
+  }
+
+  advanceBattle(user, battleId) {
+    const battle = (this.store.data.liveBattles || []).find(b => b.id === battleId);
+    if (!battle) throw new Error('BATTLE_NOT_FOUND');
+    const host = (this.store.data.liveRooms || []).find(r => r.id === battle.hostLiveId);
+    if (!host || host.hostId !== user.id) throw new Error('HOST_ONLY');
+    advanceBattleRound(battle);
+    this.store.save();
+    return battle;
+  }
+
+  resonanceWorld(liveId) {
+    const eng = (this.store.data.liveEngagement || []).find(e => e.liveId === liveId) || { likes: 0, resonance: 0 };
+    const battle = (this.store.data.liveBattles || []).find(b =>
+      b.status === 'live' && (b.hostLiveId === liveId || b.opponentLiveId === liveId));
+    const comments = (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).length;
+    return resonanceWorldState({
+      likes: eng.likes || 0,
+      comments,
+      gifts: eng.resonance || 0,
+      battleLead: battle ? (battle.hostScore - battle.opponentScore) : 0,
+      comeback: !!(battle?.comebackEvents || []).length,
+      victory: battle?.status === 'ended'
+    });
+  }
+
+  startLiveChallenge(user, input = {}) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    const challenge = createLiveChallenge({
+      id: this.store.id(),
+      liveId: live.id,
+      hostId: user.id,
+      title: input.title,
+      kind: input.kind || 'FREE',
+      goalType: input.goalType || 'likes',
+      goalValue: input.goalValue,
+      durationSec: input.durationSec
+    });
+    this.store.data.liveChallenges.push(challenge);
+    this.store.save();
+    return challenge;
+  }
+
+  startLiveQuiz(user, input = {}) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    const quiz = createLiveQuiz({
+      id: this.store.id(),
+      liveId: live.id,
+      hostId: user.id,
+      question: input.question,
+      options: input.options,
+      correctIndex: input.correctIndex,
+      durationSec: input.durationSec,
+      teamMode: !!input.teamMode,
+      createdBy: input.createdBy || 'host'
+    });
+    this.store.data.liveQuizzes.push(quiz);
+    this.store.save();
+    return quiz;
+  }
+
+  answerLiveQuiz(user, quizId, optionIndex) {
+    const quiz = this.store.data.liveQuizzes.find(q => q.id === quizId);
+    if (!quiz || quiz.status !== 'open') throw new Error('QUIZ_NOT_OPEN');
+    const correct = Number(optionIndex) === quiz.correctIndex;
+    const prev = quiz.answers.filter(a => a.userId === user.id && a.correct).length;
+    quiz.answers.push({
+      userId: user.id,
+      optionIndex: Number(optionIndex),
+      correct,
+      streakBonus: correct ? prev : 0,
+      at: this.store.now()
+    });
+    this.store.save();
+    return { correct, leaderboard: quizLeaderboard(quiz) };
+  }
+
+  startMiniGame(user, input = {}) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    const session = createMiniGameSession({
+      id: this.store.id(),
+      liveId: live.id,
+      hostId: user.id,
+      game: input.game || 'trivia',
+      config: input.config || {}
+    });
+    this.store.data.liveMiniGames.push(session);
+    this.store.save();
+    return session;
+  }
+
+  startAudienceVsSylora(user, input = {}) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    const session = createAudienceVsSylora({
+      id: this.store.id(),
+      liveId: live.id,
+      hostId: user.id,
+      format: input.format || 'knowledge_quiz',
+      questions: input.questions || []
+    });
+    this.store.data.liveMiniGames.push({ ...session, game: 'audience_vs_sylora' });
+    this.store.save();
+    return session;
+  }
+
+  setCoHostAutonomy(user, liveId, autonomy) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    return createCoHostControl({ liveId, hostId: user.id, autonomy });
+  }
+
+  setLiveRoomKind(user, liveId, kind, title = '') {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+    if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
+    const profile = createLiveRoomProfile({ id: this.store.id(), liveId, kind, title, hostId: user.id });
+    this.store.data.liveRoomProfiles = this.store.data.liveRoomProfiles.filter(p => p.liveId !== liveId);
+    this.store.data.liveRoomProfiles.push(profile);
+    this.store.save();
+    return profile;
+  }
+
+  ensureStage(liveId, hostId) {
+    let stage = this.store.data.liveStages.find(s => s.liveId === liveId);
+    if (!stage) {
+      stage = createStageState({ liveId, hostId });
+      this.store.data.liveStages.push(stage);
+      this.store.save();
+    }
+    return stage;
+  }
+
+  stageAction(user, liveId, action, targetUserId) {
+    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+    if (!live) throw new Error('LIVE_NOT_FOUND');
+    const stage = this.ensureStage(liveId, live.hostId);
+    if (action === 'raise_hand') stageRaiseHand(stage, user.id);
+    else if (action === 'invite') {
+      if (user.id !== live.hostId) throw new Error('HOST_ONLY');
+      stageInvite(stage, targetUserId);
+    } else if (action === 'accept') {
+      if (!stage.speakers.some(s => s.userId === user.id) && stage.raisedHands.includes(user.id)) {
+        stageInvite(stage, user.id);
+      }
+    } else if (action === 'mute') {
+      if (user.id !== live.hostId) throw new Error('HOST_ONLY');
+      const sp = stage.speakers.find(s => s.userId === targetUserId);
+      if (sp) sp.muted = true;
+    } else if (action === 'remove') {
+      if (user.id !== live.hostId) throw new Error('HOST_ONLY');
+      stageRemove(stage, targetUserId, live.hostId);
+    } else throw new Error('INVALID_STAGE_ACTION');
+    this.store.save();
+    return stage;
+  }
+
+  createTimer(user, input = {}) {
+    const timer = createServerTimer({
+      id: this.store.id(),
+      scopeType: input.scopeType || 'live',
+      scopeId: input.scopeId || user.id,
+      kind: input.kind || 'countdown',
+      durationSec: input.durationSec,
+      label: input.label
+    });
+    this.store.data.liveTimers.push(timer);
+    this.store.save();
+    return timerSnapshot(timer);
+  }
+
+  getTimer(timerId) {
+    const timer = this.store.data.liveTimers.find(t => t.id === timerId);
+    if (!timer) return null;
+    return timerSnapshot(timer);
+  }
+
+  startFocus(user, input = {}) {
+    const session = createFocusSession({
+      id: this.store.id(),
+      userId: user.id,
+      roomId: input.roomId || null,
+      preset: input.preset || '25_5',
+      focusMin: input.focusMin,
+      breakMin: input.breakMin
+    });
+    this.store.data.focusSessions.push(session);
+    this.store.save();
+    return session;
+  }
+
+  // —— Call Engine (194–198) ——
+  startCall(user, input = {}) {
+    const kind = input.kind || 'voice';
+    const call = createCallSession({
+      id: this.store.id(),
+      kind,
+      initiatorId: user.id,
+      participantIds: input.participantIds || (input.userId ? [input.userId] : []),
+      conversationId: input.conversationId || null,
+      groupId: input.groupId || null
+    });
+    this.store.data.callSessions.push(call);
+    for (const p of call.participants) {
+      if (p.userId !== user.id) {
+        this.store.notify(p.userId, kind.includes('video') ? 'video_call' : 'voice_call', user.id, { callId: call.id, kind });
+      }
+    }
+    this.store.save();
+    return call;
+  }
+
+  callAction(user, callId, action, patch = {}) {
+    const call = this.store.data.callSessions.find(c => c.id === callId);
+    if (!call) throw new Error('CALL_NOT_FOUND');
+    let out;
+    if (action === 'accept') out = acceptCall(call, user.id);
+    else if (action === 'decline') out = declineCall(call, user.id);
+    else if (action === 'end') out = endCall(call, user.id);
+    else if (action === 'media') out = setCallMedia(call, user.id, patch);
+    else if (action === 'translate') out = enableCallTranslation(call, { userId: user.id, ...patch });
+    else throw new Error('INVALID_CALL_ACTION');
+    if (!out.ok) throw new Error(out.error);
+    if (['ended', 'missed'].includes(call.status)) {
+      this.store.data.callHistory.unshift(callHistoryEntry(call));
+    }
+    this.store.save();
+    return call;
+  }
+
+  listCallHistory(user) {
+    return (this.store.data.callHistory || []).filter(h =>
+      h.initiatorId === user.id || (h.participantIds || []).includes(user.id)
+    ).slice(0, 100);
+  }
+
+  startSyloraCall(user, mode = 'voice') {
+    const call = createSyloraCall({ id: this.store.id(), userId: user.id, mode });
+    this.store.data.syloraCalls.push(call);
+    this.store.data.callHistory.unshift(callHistoryEntry({ ...call, initiatorId: user.id, participants: [{ userId: user.id }] }));
+    this.store.save();
+    return call;
+  }
+
+  setSyloraCallPermission(user, callId, { camera, screenShare } = {}) {
+    const call = this.store.data.syloraCalls.find(c => c.id === callId && c.userId === user.id);
+    if (!call) throw new Error('CALL_NOT_FOUND');
+    if (typeof camera === 'boolean') call.cameraPermission = camera;
+    if (typeof screenShare === 'boolean') call.screenSharePermission = screenShare;
+    this.store.save();
+    return call;
+  }
+
+  // —— Business Hub (199–217) ——
+  businessHub() {
+    return {
+      sections: BUSINESS_HUB_SECTIONS,
+      invoiceStatuses: INVOICE_STATUSES,
+      exportFormats: ACCOUNTING_EXPORT_FORMATS,
+      notABank: true,
+      legal: legalAssistantDisclaimer(),
+      financeGuard: financeAssistantGuard()
+    };
+  }
+
+  setBusinessCountry(user, input = {}) {
+    const profile = createBusinessCountryProfile(input);
+    profile.userId = user.id;
+    this.store.data.businessCountryProfiles = this.store.data.businessCountryProfiles.filter(p => p.userId !== user.id);
+    this.store.data.businessCountryProfiles.push(profile);
+    this.store.save();
+    return profile;
+  }
+
+  getBusinessCountry(user) {
+    return this.store.data.businessCountryProfiles.find(p => p.userId === user.id)
+      || createBusinessCountryProfile({ countryCode: 'DEFAULT' });
+  }
+
+  createInvoice(user, input = {}) {
+    const country = input.countryCode || this.getBusinessCountry(user).countryCode;
+    const invoice = createInvoiceDraft({ ...input, countryCode: country });
+    invoice.ownerId = user.id;
+    this.store.data.invoices.unshift(invoice);
+    this.store.save();
+    return invoice;
+  }
+
+  listInvoices(user) {
+    return this.store.data.invoices.filter(i => i.ownerId === user.id);
+  }
+
+  updateInvoiceStatus(user, id, status) {
+    const inv = this.store.data.invoices.find(i => i.id === id && i.ownerId === user.id);
+    if (!inv) throw new Error('INVOICE_NOT_FOUND');
+    if (!INVOICE_STATUSES.includes(status)) throw new Error('INVALID_STATUS');
+    inv.status = status;
+    inv.updatedAt = this.store.now();
+    this.store.save();
+    return inv;
+  }
+
+  extractExpense(user, input = {}) {
+    const row = createExpenseExtraction(input);
+    row.ownerId = user.id;
+    this.store.data.expenseExtractions.unshift(row);
+    this.store.save();
+    return row;
+  }
+
+  confirmExpense(user, id, overrides = {}) {
+    const row = this.store.data.expenseExtractions.find(e => e.id === id && e.ownerId === user.id);
+    if (!row) throw new Error('EXPENSE_NOT_FOUND');
+    const confirmed = confirmExpenseExtraction(row, overrides);
+    Object.assign(row, confirmed);
+    this.store.save();
+    return row;
+  }
+
+  upsertCrm(user, input = {}) {
+    const row = createCrmRecord({ ...input, ownerId: user.id });
+    this.store.data.crmRecords.unshift(row);
+    this.store.save();
+    return row;
+  }
+
+  listCrm(user) {
+    return this.store.data.crmRecords.filter(r => r.ownerId === user.id);
+  }
+
+  createBusinessQuote(user, input = {}) {
+    const q = createQuote({ ...input, countryCode: input.countryCode || this.getBusinessCountry(user).countryCode });
+    q.ownerId = user.id;
+    this.store.data.quotes.unshift(q);
+    this.store.save();
+    return q;
+  }
+
+  acceptQuote(user, id, convertTo = 'invoice_draft') {
+    const q = this.store.data.quotes.find(x => x.id === id && x.ownerId === user.id);
+    if (!q) throw new Error('QUOTE_NOT_FOUND');
+    q.status = 'accepted';
+    let result = null;
+    if (convertTo === 'invoice_draft') {
+      result = this.createInvoice(user, {
+        items: q.items,
+        currency: q.currency,
+        countryCode: q.countryCode,
+        notes: `From quote ${q.id}`
+      });
+    }
+    this.store.save();
+    return { quote: q, converted: result };
+  }
+
+  timeTrack(user, action, input = {}) {
+    if (action === 'start') {
+      const entry = createTimeEntry({ userId: user.id, ...input });
+      this.store.data.timeEntries.unshift(entry);
+      this.store.save();
+      return entry;
+    }
+    const entry = this.store.data.timeEntries.find(e => e.id === input.id && e.userId === user.id);
+    if (!entry) throw new Error('TIME_ENTRY_NOT_FOUND');
+    if (action === 'pause') { entry.status = 'paused'; entry.pausedAt = this.store.now(); }
+    else if (action === 'resume') { entry.status = 'running'; entry.pausedAt = null; }
+    else if (action === 'stop') { entry.status = 'stopped'; entry.endedAt = this.store.now(); }
+    else throw new Error('INVALID_TIME_ACTION');
+    this.store.save();
+    return entry;
+  }
+
+  listTimeEntries(user) {
+    return this.store.data.timeEntries.filter(e => e.userId === user.id).slice(0, 200);
+  }
+
+  setProjectBudget(user, input = {}) {
+    const budget = createProjectBudget(input);
+    budget.ownerId = user.id;
+    this.store.data.projectBudgets = this.store.data.projectBudgets.filter(b => !(b.projectId === budget.projectId && b.ownerId === user.id));
+    this.store.data.projectBudgets.push(budget);
+    this.store.save();
+    return budget;
+  }
+
+  inventoryItem(user, input = {}) {
+    const item = createInventoryItem(input);
+    item.ownerId = user.id;
+    item.optionalModule = true;
+    this.store.data.inventoryItems.push(item);
+    this.store.save();
+    return item;
+  }
+
+  inviteAccountant(user, accountantUserId) {
+    const invite = createAccountantInvite({ ownerId: user.id, accountantUserId });
+    this.store.data.accountantInvites.push(invite);
+    this.store.notify(accountantUserId, 'accountant_invite', user.id, { inviteId: invite.id });
+    this.store.save();
+    return invite;
+  }
+
+  createContract(user, input = {}) {
+    const c = createContractRecord(input);
+    c.ownerId = user.id;
+    this.store.data.contracts.unshift(c);
+    this.store.save();
+    return c;
+  }
+
+  accountingExport(user, format = 'csv') {
+    return {
+      meta: buildAccountingExportMeta({ format, countryCode: this.getBusinessCountry(user).countryCode }),
+      invoices: this.listInvoices(user),
+      expenses: this.store.data.expenseExtractions.filter(e => e.ownerId === user.id && e.confirmed),
+      guard: financeAssistantGuard('export')
+    };
+  }
+
+  financeAssist(user, query = '') {
+    const q = String(query || '').toLowerCase();
+    const invoices = this.listInvoices(user);
+    const unpaid = invoices.filter(i => ['issued', 'sent', 'overdue', 'partially_paid'].includes(i.status));
+    const paid = invoices.filter(i => i.status === 'paid');
+    const income = paid.reduce((s, i) => s + (i.gross || 0), 0);
+    return {
+      query,
+      answer: q.includes('неоплат') || q.includes('unpaid')
+        ? { unpaidCount: unpaid.length, unpaid }
+        : q.includes('дохід') || q.includes('income')
+          ? { incomeThisMonthApprox: income, note: 'Aggregated from paid invoices in store — not a bank balance.' }
+          : { hint: 'Ask about unpaid invoices, income, or draft invoice for a client.' },
+      guard: financeAssistantGuard('query'),
+      canSendWithoutConfirmation: false
+    };
+  }
+
+  // —— Learning + Science (218–237) ——
+  learningHub() {
+    return { sections: LEARNING_HUB_SECTIONS, tutorModes: TUTOR_MODES, examIntegrity: { fakeAiCheatingDetector: false } };
+  }
+
+  scienceHub() {
+    return { sections: SCIENCE_HUB_SECTIONS, citationHonesty: 'Do not invent DOI/authors/publication data.' };
+  }
+
+  startTutor(user, input = {}) {
+    const session = createTutorSession({ userId: user.id, ...input });
+    this.store.data.tutorSessions.unshift(session);
+    this.store.save();
+    return { session, policy: tutorResponsePolicy({ gradedAssignment: !!input.gradedAssignment }) };
+  }
+
+  createDeck(user, input = {}) {
+    const deck = createFlashcardDeck(input);
+    deck.ownerId = user.id;
+    this.store.data.flashcardDecks.unshift(deck);
+    this.store.save();
+    return deck;
+  }
+
+  reviewCard(user, deckId, cardId, quality) {
+    const deck = this.store.data.flashcardDecks.find(d => d.id === deckId && d.ownerId === user.id);
+    if (!deck) throw new Error('DECK_NOT_FOUND');
+    const idx = deck.cards.findIndex(c => c.id === cardId);
+    if (idx < 0) throw new Error('CARD_NOT_FOUND');
+    deck.cards[idx] = scheduleFlashcardReview(deck.cards[idx], { quality });
+    this.store.save();
+    return deck.cards[idx];
+  }
+
+  createExamStudyPlan(user, input = {}) {
+    const plan = createExamPlan(input);
+    plan.userId = user.id;
+    this.store.data.examPlans.unshift(plan);
+    this.store.save();
+    return plan;
+  }
+
+  createLearningAssignment(user, input = {}) {
+    const a = createAssignment({ ...input, teacherId: user.id });
+    this.store.data.assignments.unshift(a);
+    this.store.save();
+    return a;
+  }
+
+  buildQuiz(user, input = {}) {
+    const q = createQuizBuilder(input);
+    q.ownerId = user.id;
+    this.store.data.quizBuilders.unshift(q);
+    this.store.save();
+    return q;
+  }
+
+  createUserSmartNote(user, input = {}) {
+    const n = createSmartNote(input);
+    n.ownerId = user.id;
+    this.store.data.smartNotes.unshift(n);
+    this.store.save();
+    return n;
+  }
+
+  createBoard(user, input = {}) {
+    const b = createWhiteboardSession(input);
+    b.ownerId = user.id;
+    this.store.data.whiteboards.unshift(b);
+    this.store.save();
+    return b;
+  }
+
+  addLibraryItem(user, input = {}) {
+    const item = createResearchLibraryItem(input);
+    item.ownerId = user.id;
+    this.store.data.researchLibrary.unshift(item);
+    this.store.save();
+    return item;
+  }
+
+  paperReader(user, input = {}) {
+    return createPaperReaderView(input);
+  }
+
+  addCitation(user, input = {}) {
+    const cite = createCitation(input);
+    if (cite.error) return cite;
+    cite.ownerId = user.id;
+    return cite;
+  }
+
+  createResearch(user, input = {}) {
+    const project = createResearchProject({ ...input, ownerId: user.id, team: input.team || [user.id] });
+    this.store.data.researchProjects.unshift(project);
+    this.store.save();
+    return project;
+  }
+
+  createDataset(user, input = {}) {
+    const ds = createDatasetWorkspace(input);
+    ds.ownerId = user.id;
+    this.store.data.datasets.unshift(ds);
+    this.store.save();
+    return ds;
+  }
+
+  languageTutor(user, input = {}) {
+    return languageTutorMode(input);
   }
 
   capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {

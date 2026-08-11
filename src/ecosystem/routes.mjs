@@ -731,5 +731,286 @@ export async function handleEcosystemRoutes(ctx) {
     }), true;
   }
 
+
+  // —— LIVE Entertainment / Calls / Business Finance / Learning-Science (181–237) ——
+  if (req.method === 'GET' && p === '/api/live/entertainment') {
+    return json(res, 200, ecosystem.entertainmentCatalog()), true;
+  }
+  if (req.method === 'POST' && p === '/api/live/battles') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { battle: ecosystem.startResonanceBattle(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/battles/:id/factor', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, ecosystem.battleFactor(user, m.id, await body(req))), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/battles/:id/advance', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { battle: ecosystem.advanceBattle(user, m.id) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/:id/world', p);
+  if (req.method === 'GET' && m) {
+    return json(res, 200, { world: ecosystem.resonanceWorld(m.id) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/live/challenges') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { challenge: ecosystem.startLiveChallenge(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/live/quizzes') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { quiz: ecosystem.startLiveQuiz(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/quizzes/:id/answer', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, ecosystem.answerLiveQuiz(user, m.id, input.optionIndex)), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/live/minigames') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { session: ecosystem.startMiniGame(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/live/audience-vs-sylora') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { session: ecosystem.startAudienceVsSylora(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/:id/cohost', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { cohost: ecosystem.setCoHostAutonomy(user, m.id, input.autonomy) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/:id/room-kind', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { profile: ecosystem.setLiveRoomKind(user, m.id, input.kind, input.title) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/live/:id/stage', p);
+  if (req.method === 'GET' && m) {
+    const live = store.data.liveRooms.find(r => r.id === m.id);
+    if (!live) return json(res, 404, { error: 'LIVE_NOT_FOUND' }), true;
+    return json(res, 200, { stage: ecosystem.ensureStage(m.id, live.hostId) }), true;
+  }
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { stage: ecosystem.stageAction(user, m.id, input.action, input.userId) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/timers') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { timer: ecosystem.createTimer(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/timers/:id', p);
+  if (req.method === 'GET' && m) {
+    const timer = ecosystem.getTimer(m.id);
+    if (!timer) return json(res, 404, { error: 'TIMER_NOT_FOUND' }), true;
+    return json(res, 200, { timer }), true;
+  }
+  if (req.method === 'POST' && p === '/api/focus') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { session: ecosystem.startFocus(user, await body(req)) }), true;
+  }
+
+  if (req.method === 'POST' && p === '/api/calls') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { call: ecosystem.startCall(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/calls/history') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { history: ecosystem.listCallHistory(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/calls/sylora') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 201, { call: ecosystem.startSyloraCall(user, input.mode) }), true;
+  }
+  m = route('/api/calls/sylora/:id/permissions', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { call: ecosystem.setSyloraCallPermission(user, m.id, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/calls/:id/:action', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { call: ecosystem.callAction(user, m.id, m.action, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+
+  if (req.method === 'GET' && p === '/api/business/hub') {
+    return json(res, 200, ecosystem.businessHub()), true;
+  }
+  if (req.method === 'GET' && p === '/api/business/country') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { profile: ecosystem.getBusinessCountry(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/country') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { profile: ecosystem.setBusinessCountry(user, await body(req)) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/business/invoices') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { invoices: ecosystem.listInvoices(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/invoices') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { invoice: ecosystem.createInvoice(user, await body(req)) }), true;
+  }
+  m = route('/api/business/invoices/:id/status', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { invoice: ecosystem.updateInvoiceStatus(user, m.id, input.status) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/business/expenses/extract') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { extraction: ecosystem.extractExpense(user, await body(req)) }), true;
+  }
+  m = route('/api/business/expenses/:id/confirm', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { extraction: ecosystem.confirmExpense(user, m.id, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/business/crm') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { records: ecosystem.listCrm(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/crm') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { record: ecosystem.upsertCrm(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/quotes') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { quote: ecosystem.createBusinessQuote(user, await body(req)) }), true;
+  }
+  m = route('/api/business/quotes/:id/accept', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, ecosystem.acceptQuote(user, m.id, input.convertTo || 'invoice_draft')), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/business/time') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { entry: ecosystem.timeTrack(user, input.action || 'start', input) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/business/time') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { entries: ecosystem.listTimeEntries(user) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/budget') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { budget: ecosystem.setProjectBudget(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/inventory') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { item: ecosystem.inventoryItem(user, await body(req)), optional: true }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/accountant/invite') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    if (!input.accountantUserId) return json(res, 400, { error: 'ACCOUNTANT_REQUIRED' }), true;
+    return json(res, 201, { invite: ecosystem.inviteAccountant(user, input.accountantUserId) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/contracts') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { contract: ecosystem.createContract(user, await body(req)) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/business/accounting/export') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.accountingExport(user, url.searchParams.get('format') || 'csv')), true;
+  }
+  if (req.method === 'POST' && p === '/api/business/finance/ask') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.financeAssist(user, input.query || input.text || '')), true;
+  }
+
+  if (req.method === 'GET' && p === '/api/learning/hub') {
+    return json(res, 200, ecosystem.learningHub()), true;
+  }
+  if (req.method === 'GET' && p === '/api/science/hub') {
+    return json(res, 200, ecosystem.scienceHub()), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/tutor') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, ecosystem.startTutor(user, await body(req))), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/flashcards') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { deck: ecosystem.createDeck(user, await body(req)) }), true;
+  }
+  m = route('/api/learning/flashcards/:deckId/review', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, { card: ecosystem.reviewCard(user, m.deckId, input.cardId, input.quality) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/learning/exam-plan') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { plan: ecosystem.createExamStudyPlan(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/assignments') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { assignment: ecosystem.createLearningAssignment(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/quiz-builder') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { quiz: ecosystem.buildQuiz(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/notes') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { note: ecosystem.createUserSmartNote(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/whiteboard') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { board: ecosystem.createBoard(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/library') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { item: ecosystem.addLibraryItem(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/paper-reader') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { view: ecosystem.paperReader(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/citations') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { citation: ecosystem.addCitation(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/projects') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { project: ecosystem.createResearch(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/datasets') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { dataset: ecosystem.createDataset(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/learning/language-tutor') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { mode: ecosystem.languageTutor(user, await body(req)) }), true;
+  }
+
   return false;
 }
