@@ -7,7 +7,12 @@ test('assembled avatar mounts whole-character images and final CSS loads last', 
   assert.match(html, /design-avatar-assembled\.css\?v=/);
   assert.ok(html.indexOf('design-scenes-v6.css') < html.indexOf('design-avatar-assembled.css'));
   assert.match(html, /data-view="more"/);
-  assert.doesNotMatch(html.split('mobile-dock')[1].split('</nav>')[0], /data-view="profile"/);
+  const dock = html.split('mobile-dock')[1].split('</nav>')[0];
+  assert.match(dock, /data-view="profile"/);
+  assert.match(dock, /data-view="messages"/);
+  assert.match(dock, /data-i18n="inbox"/);
+  assert.doesNotMatch(dock, /data-view="more"/);
+  assert.doesNotMatch(dock, /data-view="gifts"/);
 
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /createElement\('img'\)/);

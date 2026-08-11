@@ -1,0 +1,108 @@
+/* Product consolidation — light premium IA, mobile safe-area, Create Hub, workspaces */
+
+.create-hub{
+  position:fixed;inset:0;z-index:120;display:grid;place-items:end center;
+  background:rgba(48,38,45,.28);backdrop-filter:blur(10px);
+  padding:max(12px,env(safe-area-inset-top)) 12px calc(88px + env(safe-area-inset-bottom));
+}
+.create-hub-sheet{
+  width:min(520px,100%);max-height:min(78vh,640px);overflow:auto;
+  border-radius:26px 26px 22px 22px;padding:18px 18px 22px;
+  background:linear-gradient(160deg,rgba(255,253,250,.97),rgba(249,245,255,.94));
+  border:1px solid rgba(255,255,255,.95);box-shadow:0 28px 80px rgba(84,65,75,.22);
+}
+.create-hub-sheet header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.create-hub-sheet header h2{flex:1;margin:0;font-size:20px;letter-spacing:-.03em}
+.create-hub-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.create-hub-item{
+  min-height:84px;padding:14px;border-radius:18px;text-align:left;cursor:pointer;
+  border:1px solid rgba(255,255,255,.9);
+  background:linear-gradient(145deg,rgba(255,254,251,.92),rgba(246,241,255,.78));
+  color:var(--s-graphite,#292630);display:grid;gap:4px;align-content:center;
+}
+.create-hub-item b{font-size:13px}.create-hub-item small{font-size:10px;color:#8f858b}
+.create-hub-item:hover:not(.is-disabled){transform:translateY(-2px);box-shadow:0 12px 28px rgba(112,82,103,.1)}
+.create-hub-item.is-disabled{opacity:.55;cursor:not-allowed}
+
+.ecosystem-feed{display:grid;gap:14px;margin:14px 0 18px}
+.eco-strip{padding:16px 14px;border-radius:22px;background:rgba(255,253,250,.86);border:1px solid rgba(255,255,255,.92);box-shadow:0 14px 40px rgba(102,76,91,.06)}
+.eco-strip-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.eco-strip-head b{font-size:14px}.eco-strip-head button{font-size:11px}
+.eco-carousel{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.eco-carousel::-webkit-scrollbar{display:none}
+.eco-card{
+  flex:0 0 min(220px,72vw);scroll-snap-align:start;min-height:96px;padding:14px;
+  border-radius:18px;border:1px solid rgba(151,115,98,.08);text-align:left;cursor:pointer;
+  background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(250,246,255,.78));color:inherit
+}
+.eco-card small{display:block;margin-top:4px;color:#8f858b;font-size:11px}
+.eco-card.live{background:linear-gradient(145deg,rgba(255,244,246,.95),rgba(255,253,250,.88))}
+.inbox-tabs,.live-hub-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.inbox-tabs button,.live-hub-tabs button{
+  border:0;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;
+  color:#746d71;background:rgba(255,255,255,.55)
+}
+.inbox-tabs button.active,.live-hub-tabs button.active{
+  color:#8b672d;background:linear-gradient(120deg,rgba(244,218,168,.55),rgba(241,232,255,.6))
+}
+.inbox-panel[hidden],.live-panel[hidden]{display:none!important}
+.org-workspace{display:grid;gap:12px;margin-top:12px}
+.org-workspace .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.science-research-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
+.command-palette{
+  position:fixed;inset:0;z-index:130;display:grid;place-items:start center;padding-top:12vh;
+  background:rgba(48,38,45,.32);backdrop-filter:blur(8px)
+}
+.command-palette-sheet{
+  width:min(640px,94vw);border-radius:22px;padding:14px;
+  background:linear-gradient(160deg,rgba(255,253,250,.98),rgba(249,245,255,.96));
+  border:1px solid rgba(255,255,255,.95);box-shadow:0 28px 80px rgba(84,65,75,.22)
+}
+.command-palette-sheet input{
+  width:100%;border:1px solid rgba(143,105,88,.12);border-radius:14px;padding:12px 14px;
+  background:rgba(255,255,255,.86);font:inherit;outline:0
+}
+.command-palette-results{margin-top:10px;max-height:48vh;overflow:auto;display:grid;gap:6px}
+.command-palette-results button{
+  text-align:left;border:0;border-radius:14px;padding:10px 12px;cursor:pointer;
+  background:rgba(255,255,255,.55);color:inherit
+}
+.command-palette-results button:hover{background:linear-gradient(110deg,rgba(245,224,183,.4),rgba(244,239,255,.5))}
+
+/* Compact mobile dock + safe content clearance */
+@media(max-width:720px){
+  body{padding-bottom:calc(76px + env(safe-area-inset-bottom))!important}
+  #app{padding-bottom:12px}
+  .mobile-dock{
+    height:58px!important;padding:4px 4px!important;border-radius:20px!important;
+    bottom:max(6px,env(safe-area-inset-bottom))!important
+  }
+  .mobile-dock .nav{height:48px!important;gap:1px!important;font-size:7.5px!important}
+  .mobile-dock .nav>span:first-child{font-size:16px!important}
+  .mobile-dock .nav>span:last-child{font-size:7.5px!important;letter-spacing:0}
+  .living-horizon{min-height:auto!important;padding-bottom:12px}
+  .horizon-copy{padding-top:max(22px,env(safe-area-inset-top))!important}
+  .horizon-flow{
+    position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;
+    margin:210px 14px 8px;padding-inline:4px!important;scroll-padding-inline:4px
+  }
+  .horizon-flow button:first-child{margin-left:0}.horizon-flow button:last-child{margin-right:0}
+  .sylora-presence{top:auto!important;position:relative!important;left:18px!important;right:18px!important;width:auto!important;margin-top:8px}
+  .messages-shell{grid-template-columns:1fr!important;min-height:auto}
+  .chat-placeholder,.chat-card{min-height:360px}
+  .message-compose{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .ai-compose,.composer{margin-bottom:8px}
+  .science-research-grid,.org-workspace .grid3{grid-template-columns:1fr}
+  .create-hub{padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+  #toast{bottom:calc(72px + env(safe-area-inset-bottom))!important}
+}
+
+@media(min-width:721px) and (max-width:1100px){
+  .eco-card{flex-basis:200px}
+  .science-research-grid{grid-template-columns:1fr 1fr}
+}
+
+@media(min-width:1261px){
+  .ecosystem-feed{grid-template-columns:1fr}
+  .eco-carousel{padding-bottom:4px}
+}

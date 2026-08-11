@@ -17,6 +17,8 @@ export function createPersonalAgent({ id, userId, name = 'Sylora', locale = 'uk'
       studio: 'creator_assistant'
     },
     memory: { shortTermCap: 40, longTermCap: 200 },
+    proactiveLevel: 'IMPORTANT_ONLY',
+    voicePersonality: 'warm',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

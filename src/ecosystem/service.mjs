@@ -15,6 +15,15 @@ import { createMetricsRegistry, aiUsageEvent } from './observability.mjs';
 import { defaultUserBudget, consume } from './cost-control.mjs';
 import { defaultRevenueShares } from './economy.mjs';
 import { createNegotiation, draftBusinessReply, confirmNegotiation } from './ai-to-ai.mjs';
+import {
+  buildPersonalityInstructions,
+  modeFromView,
+  voiceCatalog,
+  languageSupportMatrix,
+  PROACTIVE_LEVELS,
+  SYLORA_MODES,
+  sanitizeMemoryValue
+} from './sylora-intelligence.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -818,13 +827,85 @@ export class EcosystemService {
 
   contextInstruction(role, view) {
     const map = {
-      personal: 'You are the user\'s Personal AI in the Command Center. Stay helpful, permission-aware and never claim writes completed without confirmation.',
-      creator_assistant: 'You are the same Personal AI acting as Creator Assistant in LIVE/Studio context. Propose scenes, overlays and moderation help; never publish or go live without confirmation.',
-      business_assistant: 'You are the same Personal AI acting as Business Assistant. You may prepare proposals and AI-to-AI negotiations, but financial/legal actions require confirmation.',
-      tutor: 'You are the same Personal AI acting as Tutor in learning context. Prefer explanations and quizzes; do not invent enrollments.',
-      communication_assistant: 'You are the same Personal AI acting as Communication Assistant in Messages. Draft replies; never send without confirmation.'
+      personal: 'Command Center / Personal mode. Stay helpful, permission-aware and never claim writes completed without confirmation.',
+      creator_assistant: 'Creator Assistant / LIVE / Studio mode. Propose scenes, overlays and moderation help; never publish or go live without confirmation.',
+      business_assistant: 'Business mode. Prepare proposals and AI-to-AI negotiations; financial/legal actions require confirmation.',
+      tutor: 'Learning / Science mode. Prefer explanations and research help; do not invent enrollments or papers.',
+      communication_assistant: 'Inbox / Messages mode. Draft replies; never send without confirmation.'
     };
     return `${map[role] || map.personal} Active view: ${view}.`;
+  }
+
+  intelligenceMeta(user) {
+    const agent = this.ensurePersonalAgent(user);
+    const proactive = agent.proactiveLevel || 'IMPORTANT_ONLY';
+    return {
+      personality: true,
+      modes: Object.keys(SYLORA_MODES),
+      proactiveLevels: PROACTIVE_LEVELS,
+      proactive,
+      voices: voiceCatalog(),
+      languages: languageSupportMatrix(),
+      instructionsPreview: buildPersonalityInstructions({
+        mode: modeFromView('command_center'),
+        locale: agent.locale || 'uk',
+        proactive
+      })
+    };
+  }
+
+  intelligenceProfile(user) {
+    const agent = this.ensurePersonalAgent(user);
+    const memories = (this.store.data.aiMemories || [])
+      .filter(m => m.userId === user.id)
+      .map(m => ({
+        id: m.id,
+        label: m.label,
+        value: m.value,
+        source: m.source || 'user',
+        importance: m.importance ?? 0.5,
+        confidence: m.confidence ?? 0.8,
+        createdAt: m.createdAt,
+        updatedAt: m.updatedAt || m.createdAt
+      }));
+    return {
+      ...this.intelligenceMeta(user),
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        locale: agent.locale,
+        proactiveLevel: agent.proactiveLevel || 'IMPORTANT_ONLY',
+        voicePersonality: agent.voicePersonality || 'warm',
+        permissions: agent.permissions
+      },
+      memories,
+      graph: this.graphFor(user, { asAi: false })
+    };
+  }
+
+  setProactiveLevel(user, level) {
+    const next = String(level || '').toUpperCase();
+    if (!PROACTIVE_LEVELS.includes(next)) throw new Error('INVALID_PROACTIVE_LEVEL');
+    const agent = this.ensurePersonalAgent(user);
+    agent.proactiveLevel = next;
+    agent.updatedAt = this.store.now();
+    this.store.save();
+    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
+    audit(this.store, user.id, 'personal_ai.proactive_updated', 'personal_agent', agent.id, { proactiveLevel: next });
+    return this.intelligenceProfile(user);
+  }
+
+  sanitizeMemory(value) {
+    return sanitizeMemoryValue(value);
+  }
+
+  personalityFor(view, user) {
+    const agent = this.ensurePersonalAgent(user);
+    return buildPersonalityInstructions({
+      mode: modeFromView(view),
+      locale: agent.locale || user.locale || 'uk',
+      proactive: agent.proactiveLevel || 'IMPORTANT_ONLY'
+    });
   }
 }
 

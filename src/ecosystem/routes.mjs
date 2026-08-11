@@ -44,6 +44,16 @@ export async function handleEcosystemRoutes(ctx) {
       pack: ecosystem.contextPack(user, view)
     }), true;
   }
+  if (req.method === 'GET' && p === '/api/ai/intelligence') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.intelligenceProfile(user)), true;
+  }
+  if (req.method === 'PATCH' && p === '/api/ai/proactive') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 200, ecosystem.setProactiveLevel(user, input.level)), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
 
   // —— Identity ——
   if (req.method === 'GET' && p === '/api/identity') {
