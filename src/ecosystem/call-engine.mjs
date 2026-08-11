@@ -131,3 +131,58 @@ export function callHistoryEntry(call) {
     missed: call.status === 'missed'
   };
 }
+
+/** Caller cancels while still ringing. */
+export function cancelOutgoingCall(call, userId) {
+  if (!call) return { ok: false, error: 'CALL_NOT_FOUND' };
+  if (call.initiatorId !== userId) return { ok: false, error: 'ONLY_INITIATOR' };
+  if (call.status !== 'ringing') return { ok: false, error: 'NOT_RINGING' };
+  call.status = 'cancelled';
+  call.endedAt = new Date().toISOString();
+  for (const p of call.participants || []) {
+    if (p.status === 'ringing') p.status = 'cancelled';
+  }
+  return { ok: true, call };
+}
+
+/** Ring timeout → missed (no answer). */
+export function applyRingTimeout(call, { now = Date.now(), timeoutMs = 45_000 } = {}) {
+  if (!call || call.status !== 'ringing') return { ok: false, timedOut: false, call };
+  const started = Date.parse(call.startedAt || 0);
+  if (!Number.isFinite(started) || now - started < timeoutMs) {
+    return { ok: true, timedOut: false, call };
+  }
+  call.status = 'missed';
+  call.endedAt = new Date(now).toISOString();
+  call.timeoutReason = 'ring_timeout';
+  for (const p of call.participants || []) {
+    if (p.status === 'ringing') p.status = 'missed';
+  }
+  return { ok: true, timedOut: true, call };
+}
+
+/** Valid signaling kinds for the shared Call Engine WebRTC path. */
+export const CALL_SIGNAL_KINDS = Object.freeze(['peer-join', 'offer', 'answer', 'ice', 'peer-left']);
+
+export function validateCallSignal(payload = {}) {
+  const kind = String(payload.kind || '');
+  if (!CALL_SIGNAL_KINDS.includes(kind)) return { ok: false, error: 'INVALID_SIGNAL_KIND' };
+  if (!payload.fromPeerId) return { ok: false, error: 'FROM_PEER_REQUIRED' };
+  if ((kind === 'offer' || kind === 'answer' || kind === 'ice') && !payload.toPeerId) {
+    return { ok: false, error: 'TO_PEER_REQUIRED' };
+  }
+  return { ok: true, kind };
+}
+
+/** Minimal state machine helper for tests / route guards. */
+export function nextCallStatus(current, action) {
+  const table = {
+    ringing: { accept: 'active', decline: 'missed', end: 'missed', cancel: 'cancelled', timeout: 'missed' },
+    active: { end: 'ended', media: 'active' },
+    missed: {},
+    ended: {},
+    cancelled: {}
+  };
+  const next = table[current]?.[action];
+  return next || current;
+}

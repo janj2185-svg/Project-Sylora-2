@@ -63,7 +63,25 @@ function handleUserEvent(event,data){
     }
     if(type!=='message')toast(`${data.actor?.username||'SYLORA'} · ${type}`);
   }
-  if(event==='message'){toast(`@${data.actor?.username||'user'} · new message`);if(state.view==='messages')renderMessages()}
+  if(event==='message'){
+    toast(`@${data.actor?.username||'user'} · new message`);
+    if(state.view==='messages'){
+      const stream=document.querySelector('#messageStream');
+      if(stream&&data.message){
+        stream.querySelector('.chat-empty')?.remove();
+        stream.insertAdjacentHTML('beforeend',`<div class="message-bubble theirs" data-mid="${data.message.id}"><small>Співрозмовник</small><p>${esc(data.message.text)}</p></div>`);
+        const active=document.querySelector('.convo.active');
+        if(active)api(`/api/conversations/${active.dataset.id}/read`,{method:'POST',body:'{}'}).catch(()=>{});
+      }else renderMessages();
+    }
+  }
+  if(event==='typing'){
+    const hint=document.querySelector('#typingHint');
+    if(hint&&state.view==='messages'){hint.hidden=!data.typing;hint.textContent=`@${data.username||'user'} друкує…`}
+  }
+  if(event==='read'&&state.view==='messages'){
+    document.querySelectorAll('.message-bubble.mine .msg-status').forEach(el=>{el.textContent='✓✓'});
+  }
 }
 function showIncomingCallBanner(){
   const call=state.incomingCall;if(!call?.callId)return;
@@ -293,7 +311,7 @@ async function renderMessages(){
     <button type="button" data-inbox-tab="calls" class="${tab==='calls'?'active':''}">${esc(t('inboxCalls'))}</button>
     <button type="button" data-inbox-tab="priority" class="${tab==='priority'?'active':''}">Priority</button>
   </div>
-  <div class="inbox-panel" ${tab==='messages'?'':'hidden'}><div class="messages-shell"><aside class="card conversation-panel"><div class="new-message"><span class="eyebrow">${esc(t('inboxMessages'))}</span><div class="fields"><select id="newRecipient"><option value="">@</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)}</option>`).join('')}</select><button id="newChat" class="primary">＋</button></div></div><div class="conversation-list">${conversations.map(c=>{const other=c.members.find(x=>x.id!==state.me.id);const letter=(other?.displayName||other?.username||'?')[0].toUpperCase();return`<button class="convo" data-id="${c.id}"><span class="conversation-avatar">${esc(letter)}</span><span><b>@${esc(other?.username||'chat')}</b><small>${esc(c.lastMessage?.text||'…')}</small></span></button>`}).join('')||'<p class="muted conversation-empty">—</p>'}</div></aside><div id="chat" class="chat-space"><div class="card chat-placeholder"><span>◌</span><b>Inbox</b><p class="muted">${esc(t('inboxMessages'))}</p></div></div></div></div>
+  <div class="inbox-panel" ${tab==='messages'?'':'hidden'}><div class="messages-shell"><aside class="card conversation-panel"><div class="new-message"><span class="eyebrow">${esc(t('inboxMessages'))}</span><div class="fields"><select id="newRecipient"><option value="">@</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)}</option>`).join('')}</select><button id="newChat" class="primary">＋</button></div></div><div class="conversation-list">${conversations.map(c=>{const other=c.members.find(x=>x.id!==state.me.id);const letter=(other?.displayName||other?.username||'?')[0].toUpperCase();const unread=Number(c.unread)||0;return`<button class="convo" data-id="${c.id}"><span class="conversation-avatar">${esc(letter)}</span><span><b>@${esc(other?.username||'chat')}${unread?` <em class="unread-pill">${unread}</em>`:''}</b><small>${esc(c.lastMessage?.text||'…')}</small></span></button>`}).join('')||'<p class="muted conversation-empty">—</p>'}</div></aside><div id="chat" class="chat-space"><div class="card chat-placeholder"><span>◌</span><b>Inbox</b><p class="muted">${esc(t('inboxMessages'))}</p></div></div></div></div>
   <div class="inbox-panel card" ${tab==='notifications'?'':'hidden'}>${social.map(n=>`<div class="profile-event"><i>✦</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')||'<p class="muted">—</p>'}</div>
   <div class="inbox-panel card" ${tab==='invites'?'':'hidden'}>${invites.map(n=>`<div class="profile-event"><i>◇</i><span><b>${esc(n.actor?.username||'SYLORA')}</b><small>${esc(n.type)}</small></span></div>`).join('')||`<p class="muted">${esc(t('inboxInvites'))}</p>`}<div class="row" style="margin-top:12px"><button class="ghost" data-go="business">${esc(t('business'))}</button><button class="ghost" data-go="learning">${esc(t('science'))}</button></div></div>
   <div class="inbox-panel card" ${tab==='calls'?'':'hidden'}>
@@ -326,13 +344,47 @@ async function renderMessages(){
   }
 }
 async function openConversation(id){
-  const [{messages},convoList]=await Promise.all([api(`/api/conversations/${id}/messages`),api('/api/conversations')]);
+  const [{messages,hasMore,nextBefore},convoList]=await Promise.all([api(`/api/conversations/${id}/messages?limit=50`),api('/api/conversations')]);
   document.querySelectorAll('.convo').forEach(x=>x.classList.toggle('active',x.dataset.id===id));
   const box=document.querySelector('#chat');if(!box)return;
   const conversation=(convoList.conversations||[]).find(c=>c.id===id);
   const other=(conversation?.members||[]).find(x=>x.id!==state.me.id);
-  box.innerHTML=`<div class="card chat-card"><div class="chat-head"><span><i></i> приватна розмова</span><b>Sylora Messages</b><div class="row"><button type="button" class="ghost" id="dmVoiceCall">Voice</button><button type="button" class="ghost" id="dmVideoCall">Video</button></div></div><div class="message-stream">${messages.map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'}</small><p>${esc(m.text)}</p></div>`).join('')||'<p class="muted chat-empty">Почни розмову.</p>'}</div><form id="messageForm" class="message-compose"><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button class="primary" aria-label="Надіслати">↑</button></form></div>`;
-  document.querySelector('#messageForm').onsubmit=async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text})});openConversation(id)};
+  const statusLabel=m=>{if(m.userId!==state.me.id)return'';const s=m.status||'sent';return s==='read'?'✓✓':s==='delivered'?'✓✓':s==='failed'?'!':'✓'};
+  box.innerHTML=`<div class="card chat-card"><div class="chat-head"><span><i></i> приватна розмова</span><b>@${esc(other?.username||'chat')}</b><div class="row"><button type="button" class="ghost" id="dmVoiceCall">Voice</button><button type="button" class="ghost" id="dmVideoCall">Video</button></div></div><p id="typingHint" class="muted" hidden>друкує…</p><div class="message-stream" id="messageStream">${(messages||[]).map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}" data-mid="${m.id}" data-client="${esc(m.clientId||'')}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'} <em class="msg-status">${statusLabel(m)}</em></small><p>${esc(m.text)}</p></div>`).join('')||'<p class="muted chat-empty">Почни розмову.</p>'}</div>${hasMore?`<button type="button" class="ghost" id="loadOlderMsgs" data-before="${esc(nextBefore||'')}">Earlier</button>`:''}<form id="messageForm" class="message-compose"><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button class="primary" aria-label="Надіслати">↑</button></form></div>`;
+  api(`/api/conversations/${id}/read`,{method:'POST',body:'{}'}).catch(()=>{});
+  document.querySelector('#loadOlderMsgs')?.addEventListener('click',async e=>{
+    const before=e.currentTarget.dataset.before;if(!before)return;
+    const page=await api(`/api/conversations/${id}/messages?limit=50&before=${encodeURIComponent(before)}`);
+    const stream=document.querySelector('#messageStream');
+    const html=(page.messages||[]).map(m=>`<div class="message-bubble ${m.userId===state.me.id?'mine':'theirs'}" data-mid="${m.id}"><small>${m.userId===state.me.id?'Я':'Співрозмовник'} <em class="msg-status">${statusLabel(m)}</em></small><p>${esc(m.text)}</p></div>`).join('');
+    stream.insertAdjacentHTML('afterbegin',html);
+    if(page.hasMore){e.currentTarget.dataset.before=page.nextBefore||''}else e.currentTarget.remove();
+  });
+  let typingTimer=0;
+  document.querySelector('#messageForm input[name=text]')?.addEventListener('input',()=>{
+    clearTimeout(typingTimer);
+    api(`/api/conversations/${id}/typing`,{method:'POST',body:JSON.stringify({typing:true})}).catch(()=>{});
+    typingTimer=setTimeout(()=>api(`/api/conversations/${id}/typing`,{method:'POST',body:JSON.stringify({typing:false})}).catch(()=>{}),1200);
+  });
+  document.querySelector('#messageForm').onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,text=new FormData(form).get('text');
+    if(!String(text||'').trim())return;
+    const clientId=(crypto.randomUUID?.()||String(Date.now()));
+    form.reset();
+    document.querySelector('.chat-empty')?.remove();
+    const stream=document.querySelector('#messageStream');
+    stream?.insertAdjacentHTML('beforeend',`<div class="message-bubble mine pending" data-client="${clientId}"><small>Я <em class="msg-status">…</em></small><p>${esc(text)}</p></div>`);
+    try{
+      const out=await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text,clientId})});
+      const bubble=document.querySelector(`[data-client="${clientId}"]`);
+      if(bubble){bubble.classList.remove('pending');bubble.dataset.mid=out.message.id;bubble.querySelector('.msg-status').textContent='✓'}
+    }catch(err){
+      const bubble=document.querySelector(`[data-client="${clientId}"]`);
+      if(bubble){bubble.querySelector('.msg-status').textContent='!';bubble.classList.add('failed')}
+      toast(humanError(err.message));
+    }
+  };
   const startDmCall=async kind=>{
     if(!other)return toast('Peer required');
     const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});
@@ -357,7 +409,7 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
   const startedAt=Date.now();
   app.innerHTML=`<section class="card call-stage" id="callStage"><span class="eyebrow">SYLORA · CALL ENGINE</span><h1>${wantVideo?'Video':'Voice'} call</h1><p class="muted">${esc(call.status)} · shared WebRTC · ${rtc.turnConfigured?'TURN ready':'P2P / configure TURN for NAT'}</p>
   <div class="call-media"><video id="callRemote" autoplay playsinline ${wantVideo?'':'hidden'}></video><video id="callLocal" autoplay muted playsinline ${wantVideo?'':'hidden'}></video><audio id="callRemoteAudio" autoplay></audio></div>
-  <div class="row call-controls"><button type="button" class="ghost" id="callMute">Mute</button>${wantVideo?'<button type="button" class="ghost" id="callCam">Camera</button>':''}<button type="button" class="primary" id="callEnd">End</button><span class="badge" id="callNet">CONNECTING</span><span class="badge" id="callTimer">00:00</span></div></section>`;
+  <div class="row call-controls"><button type="button" class="ghost" id="callMute">Mute</button>${wantVideo?'<button type="button" class="ghost" id="callCam">Camera</button>':''}<button type="button" class="ghost" id="callCancel" ${call.status==='ringing'&&!asCallee?'':'hidden'}>Cancel</button><button type="button" class="primary" id="callEnd">End</button><span class="badge" id="callNet">CONNECTING</span><span class="badge" id="callTimer">00:00</span></div></section>`;
   state.view='messages';state.inboxTab='calls';
   const tick=()=>{const el=document.querySelector('#callTimer');if(!el)return;const s=Math.floor((Date.now()-startedAt)/1000);el.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
   const timerIv=setInterval(tick,1000);tick();
@@ -384,6 +436,7 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
   document.querySelector('#callMute').onclick=()=>{const t=localStream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;document.querySelector('#callMute').textContent=t.enabled?'Mute':'Unmute'};
   document.querySelector('#callCam')?.addEventListener('click',()=>{const t=localStream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled});
   document.querySelector('#callEnd').onclick=async()=>{try{await api(`/api/calls/${callId}/end`,{method:'POST',body:'{}'})}catch{}cleanup();renderMessages()};
+  document.querySelector('#callCancel')?.addEventListener('click',async()=>{try{await api(`/api/calls/${callId}/cancel`,{method:'POST',body:'{}'})}catch{try{await api(`/api/calls/${callId}/end`,{method:'POST',body:'{}'})}catch{}}cleanup();renderMessages()});
   const onSignal=async s=>{
     if(closed||s.fromPeerId===peerId)return;
     if(s.kind==='peer-left'){setNet('PEER LEFT');return}
@@ -492,18 +545,22 @@ async function renderDeveloper(){
   document.querySelectorAll('.create-key').forEach(b=>b.onclick=async()=>{const out=await api(`/api/developer/apps/${b.dataset.id}/keys`,{method:'POST',body:JSON.stringify({label:'default'})});const box=document.querySelector('#devKeyOut');box.hidden=false;box.textContent=`Збережи ключ зараз (показується один раз):\n${out.raw}`;});
 }
 async function renderSecurityCenter(){
-  const [security,reputation,activity,intel,memoryCenter,caps]=await Promise.all([
+  const [security,reputation,activity,intel,memoryCenter,caps,sessions]=await Promise.all([
     api('/api/security-center'),
     api('/api/reputation'),
     api('/api/ai/activity').catch(()=>({activity:[]})),
     api('/api/ai/intelligence').catch(()=>({})),
     api('/api/ai/memory/center').catch(()=>({memories:[],categories:[],byCategory:{}})),
-    api('/api/ai/capabilities').catch(()=>({}))
+    api('/api/ai/capabilities').catch(()=>({})),
+    api('/api/sessions').catch(()=>({sessions:[]}))
   ]);
   const ai=security.aiControl||{};
   const controls=ai.privacyControls||{};
   const controlKeys=['memory','microphone','camera','location','contacts','files','notifications','personalization','aiActions','voice','translation'];
   app.innerHTML=`<div class="card hero"><span class="eyebrow">PRIVACY & AI CONTROL</span><h1>Trust Center</h1><p>Одна Sylora · прозорі дозволи · твій контроль.</p></div>
+  <section class="card"><span class="eyebrow">SESSIONS</span>
+  <div class="stack">${(sessions.sessions||[]).map(s=>`<div class="item row"><div><b>${s.current?'Current session':'Session'}</b><p class="muted">${esc(s.createdAt||'—')} · expires ${esc(s.expiresAt||'—')}</p></div>${s.current?'':'<button type="button" class="ghost revoke-session" data-id="'+esc(s.id)+'">Revoke</button>'}</div>`).join('')||'<p class="muted">—</p>'}</div>
+  <button type="button" class="ghost" id="revokeAllSessions">Revoke all sessions</button></section>
   <section class="card"><span class="eyebrow">CONTROLS</span><div class="privacy-grid">${controlKeys.map(k=>`<label class="privacy-toggle"><input type="checkbox" data-privacy="${k}" ${controls[k]!==false?'checked':''}> ${esc(k)}</label>`).join('')}</div>
   <div class="row" style="margin-top:12px"><label>Proactive <select id="privacyProactive"><option value="OFF">OFF</option><option value="IMPORTANT_ONLY">IMPORTANT ONLY</option><option value="NORMAL">NORMAL</option><option value="PROACTIVE">PROACTIVE</option></select></label><button class="primary" id="savePrivacyControls">Save controls</button></div></section>
   <section class="card"><span class="eyebrow">WHAT SYLORA CAN SEE</span><p>${(ai.canSee||[]).map(esc).join(' · ')||'—'}</p>
@@ -524,6 +581,8 @@ async function renderSecurityCenter(){
   <div class="stack">${(memoryCenter.categories||[]).map(cat=>{const items=(memoryCenter.byCategory&&memoryCenter.byCategory[cat])||[];return `<div class="item"><b>${esc(cat)}</b><p class="muted">${items.length?items.map(m=>esc(m.label)).join(' · '):'—'}</p></div>`;}).join('')}</div>
   <div class="stack">${(memoryCenter.memories||[]).slice(0,20).map(m=>`<div class="item row"><div><b>${esc(m.label)}</b><p class="muted">${esc(m.value)} · ${esc(m.category||'preferences')}</p></div><button class="ghost edit-mem" data-id="${m.id}">Edit</button><button class="ghost del-mem" data-id="${m.id}">Delete</button></div>`).join('')||'<p class="muted">Порожньо</p>'}</div></section>`;
   document.querySelector('#privacyProactive').value=ai.proactiveLevel||intel.proactive||'IMPORTANT_ONLY';
+  document.querySelectorAll('.revoke-session').forEach(b=>b.onclick=async()=>{await api('/api/sessions/revoke',{method:'POST',body:JSON.stringify({sessionId:b.dataset.id})});toast('Session revoked');renderSecurityCenter()});
+  document.querySelector('#revokeAllSessions')?.addEventListener('click',async()=>{if(!confirm('Revoke all sessions? You will need to sign in again.'))return;await api('/api/sessions/revoke',{method:'POST',body:JSON.stringify({all:true})});localStorage.removeItem('sylora_token');location.reload()});
   document.querySelector('#savePrivacyControls').onclick=async()=>{
     const patch={};document.querySelectorAll('[data-privacy]').forEach(el=>{patch[el.dataset.privacy]=el.checked});
     patch.proactiveLevel=document.querySelector('#privacyProactive').value;
@@ -775,20 +834,33 @@ async function openConferenceRoomRtc(roomId,kind,back){
 }
 
 async function renderLearning(){
-  const [{courses},conferenceData,users,learnHub,sciHub]=await Promise.all([
+  const [{courses},conferenceData,users,learnHub,sciHub,library,datasets]=await Promise.all([
     api('/api/courses'),
     state.me?api('/api/conferences?kind=science'):Promise.resolve({rooms:[]}),
     api('/api/users').catch(()=>({users:[]})),
     api('/api/learning/hub').catch(()=>({sections:[]})),
-    api('/api/science/hub').catch(()=>({sections:[]}))
+    api('/api/science/hub').catch(()=>({sections:[]})),
+    state.me?api('/api/science/library').catch(()=>({items:[]})):Promise.resolve({items:[]}),
+    state.me?api('/api/science/datasets').catch(()=>({datasets:[]})):Promise.resolve({datasets:[]})
   ]);
   const researchers=(users.users||[]).slice(0,6);
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA SCIENCE · RESEARCH</span><h1>${esc(t('science'))}</h1><p>Researchers · Circles · courses · collaboration · AI research workspace</p><div class="scene-readout"><span><small>COURSES</small><b>${courses.length}</b></span><span><small>CIRCLES</small><b>${conferenceData.rooms.length}</b></span><span><small>PEOPLE</small><b>${researchers.length}</b></span></div></div>
-  ${state.me?`<section class="card"><span class="eyebrow">LEARNING HUB</span><p class="muted">${(learnHub.sections||[]).slice(0,8).join(' · ')}</p>
-  <div class="row"><button type="button" class="primary" id="startTutor">Sylora Tutor</button><button type="button" class="ghost" id="makeDeck">Flashcards</button><button type="button" class="ghost" id="examPlan">Exam plan</button><button type="button" class="ghost" id="focusStudy">Focus 25/5</button></div>
-  <p class="muted" style="margin-top:8px">Science: ${(sciHub.sections||[]).slice(0,6).join(' · ')}</p>
-  <div class="row"><button type="button" class="ghost" id="addPaper">Library item</button><button type="button" class="ghost" id="newDataset">Dataset</button><button type="button" class="ghost" id="newBoard">Whiteboard</button></div>
-  <div class="row" style="margin-top:8px"><button type="button" class="ghost" id="newExperiment">Experiment log</button><button type="button" class="ghost" id="runCalc">Physics KE calc</button><button type="button" class="ghost" id="runStats">Stats assist</button><button type="button" class="ghost" id="newCircle">Science Circle</button><button type="button" class="ghost" id="newFormula">Formula</button></div></section>`:''}
+  const papers=library.items||[];
+  const dsList=datasets.datasets||[];
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA SCIENCE · RESEARCH</span><h1>${esc(t('science'))}</h1><p>Researchers · Circles · courses · collaboration · AI research workspace</p><div class="scene-readout"><span><small>COURSES</small><b>${courses.length}</b></span><span><small>LIBRARY</small><b>${papers.length}</b></span><span><small>DATASETS</small><b>${dsList.length}</b></span></div></div>
+  ${state.me?`<section class="card"><span class="eyebrow">LEARNING · TEACHER / STUDENT</span>
+  <p class="muted">Create a course with a lesson, publish, enroll, complete, quiz. Tutor opens with lesson context.</p>
+  <p class="muted">${(learnHub.sections||[]).slice(0,6).join(' · ')}</p>
+  <div class="row"><button type="button" class="ghost" id="makeDeck">Flashcards</button><button type="button" class="ghost" id="examPlan">Exam plan</button><button type="button" class="ghost" id="focusStudy">Focus 25/5</button></div>
+  </section>
+  <section class="card"><span class="eyebrow">RESEARCH LIBRARY</span>
+  <form id="paperForm" class="fields"><input name="title" required maxlength="500" placeholder="Paper title"><textarea name="abstract" maxlength="8000" placeholder="Abstract / notes (no invented DOI)"></textarea><input name="authors" maxlength="200" placeholder="Authors (optional, verified only)"><button class="primary" type="submit">Add paper</button></form>
+  <div class="stack" style="margin-top:10px">${papers.map(p=>`<div class="item"><b>${esc(p.title)}</b><div class="row"><button type="button" class="ghost open-paper" data-id="${p.id}">Open reader</button></div></div>`).join('')||'<p class="muted">No papers yet</p>'}</div>
+  <div id="paperReaderPanel"></div>
+  <form id="datasetForm" class="fields" style="margin-top:12px"><input name="name" required placeholder="Dataset name"><button class="ghost" type="submit">Create sample dataset</button></form>
+  <div class="stack">${dsList.map(d=>`<div class="item"><b>${esc(d.name)}</b><small class="muted"> · ${d.rowCount||0} rows · ${(d.analysis?.basics||[]).map(b=>`${b.column} mean ${b.mean??'—'}`).join(', ')}</small></div>`).join('')}</div>
+  <p class="muted" style="margin-top:8px">Science tools: ${(sciHub.sections||[]).slice(0,6).join(' · ')}</p>
+  <div class="row"><button type="button" class="ghost" id="newBoard">Whiteboard</button><button type="button" class="ghost" id="newExperiment">Experiment log</button><button type="button" class="ghost" id="runCalc">Physics KE calc</button><button type="button" class="ghost" id="runStats">Stats assist</button><button type="button" class="ghost" id="newCircle">Science Circle</button><button type="button" class="ghost" id="newFormula">Formula</button></div>
+  </section>`:''}
   <div class="science-research-grid">
     <section class="card"><span class="eyebrow">RESEARCHERS</span><div class="stack">${researchers.map(u=>`<div class="item"><b>${esc(u.displayName||u.username)}</b><p class="muted">@${esc(u.username)}</p></div>`).join('')||'<p class="muted">—</p>'}</div></section>
     <section class="card"><span class="eyebrow">RESOURCES</span><p class="muted">Papers / resources attach to courses & circles. Shared communications for private research rooms.</p><button class="ghost" data-go-ai>Sylora Research</button></section>
@@ -798,12 +870,23 @@ async function renderLearning(){
   ${courses.map(c=>`<div class="card item"><span class="badge">${c.price?`◈ ${c.price}`:'FREE'}</span><h3>${esc(c.title)}</h3><p class="muted">${esc(c.description)} · ${c.lessonCount} lessons</p><button class="ghost open-course" data-id="${c.id}">Open</button></div>`).join('')||'<div class="card empty">—</div>'}`;
   if(state.me)bindConferenceHub('science',renderLearning);
   document.querySelector('[data-go-ai]')?.addEventListener('click',()=>{state.intent=null;nav('ai')});
-  document.querySelector('#startTutor')?.addEventListener('click',async()=>{const out=await api('/api/learning/tutor',{method:'POST',body:JSON.stringify({subject:'General',mode:'teach_me'})});toast(`Tutor · ${out.session.mode} · no silent graded answers`)});
   document.querySelector('#makeDeck')?.addEventListener('click',async()=>{await api('/api/learning/flashcards',{method:'POST',body:JSON.stringify({title:'Quick deck',cards:[{front:'Concept',back:'Definition'}],aiAssisted:false})});toast('Flashcard deck created')});
   document.querySelector('#examPlan')?.addEventListener('click',async()=>{const d=new Date(Date.now()+7*864e5).toISOString().slice(0,10);await api('/api/learning/exam-plan',{method:'POST',body:JSON.stringify({subject:'Exam',examDate:d,availableMinutesPerDay:45})});toast('Exam plan ready')});
   document.querySelector('#focusStudy')?.addEventListener('click',async()=>{await api('/api/focus',{method:'POST',body:JSON.stringify({preset:'25_5'})});toast('Focus 25/5 · server timer')});
-  document.querySelector('#addPaper')?.addEventListener('click',async()=>{await api('/api/science/library',{method:'POST',body:JSON.stringify({type:'paper',title:'Untitled paper'})});toast('Library item added')});
-  document.querySelector('#newDataset')?.addEventListener('click',async()=>{await api('/api/science/datasets',{method:'POST',body:JSON.stringify({name:'Dataset',columns:[{name:'x',type:'number'}],previewRows:[]})});toast('Dataset workspace')});
+  document.querySelector('#paperForm')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(e.currentTarget);
+    const authors=String(fd.get('authors')||'').split(',').map(s=>s.trim()).filter(Boolean);
+    await api('/api/science/library',{method:'POST',body:JSON.stringify({type:'paper',title:fd.get('title'),abstract:fd.get('abstract')||'',authors})});
+    toast('Paper added');renderLearning();
+  });
+  document.querySelectorAll('.open-paper').forEach(b=>b.onclick=()=>openPaperReader(b.dataset.id));
+  document.querySelector('#datasetForm')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const name=new FormData(e.currentTarget).get('name');
+    await api('/api/science/datasets',{method:'POST',body:JSON.stringify({name,columns:[{name:'x',type:'number'},{name:'y',type:'number'}],previewRows:[{x:1,y:2},{x:2,y:4},{x:3,y:5}],rowCount:3})});
+    toast('Dataset created');renderLearning();
+  });
   document.querySelector('#newBoard')?.addEventListener('click',async()=>{await api('/api/whiteboard',{method:'POST',body:JSON.stringify({space:'learning',title:'Study board'})});toast('Whiteboard created')});
   document.querySelector('#newExperiment')?.addEventListener('click',async()=>{const {experiment}=await api('/api/science/experiments',{method:'POST',body:JSON.stringify({title:'Trial',procedure:'Step 1',parameters:{T:25},observations:'',results:''})});toast(`Experiment v${experiment.currentVersion} · append-only history`)});
   document.querySelector('#runCalc')?.addEventListener('click',async()=>{const {result}=await api('/api/science/calculators/run',{method:'POST',body:JSON.stringify({moduleId:'physics',op:'kinetic_energy',inputs:{mass:2,velocity:3}})});toast(`KE=${result.value} ${result.unit} · ${result.assumptions[0]}`)});
@@ -814,14 +897,38 @@ async function renderLearning(){
   document.querySelectorAll('.open-course').forEach(b=>b.onclick=()=>openCourse(b.dataset.id));
   if(state.intent==='course'){state.intent=null;document.querySelector('#courseForm input[name="title"]')?.focus()}
 }
+async function openPaperReader(paperId){
+  const panel=document.querySelector('#paperReaderPanel');if(!panel)return;
+  const {view}=await api('/api/science/paper-reader',{method:'POST',body:JSON.stringify({paperId})});
+  panel.innerHTML=`<div class="card"><span class="eyebrow">PAPER READER</span><h3>${esc(view.title||'Paper')}</h3>
+  <p>${esc(view.abstract||'')}</p>
+  <p class="muted">Authors: ${esc((view.metadata?.authors||[]).join(', ')||'—')} · DOI: ${esc(view.metadata?.doi||'not provided')} · ${esc(view.fidelityNote||'')}</p>
+  <div class="stack">${(view.notes||[]).map(n=>`<p><b>Note</b> ${esc(n.text)}</p>`).join('')||'<p class="muted">No notes</p>'}</div>
+  <form id="paperNoteForm" class="fields"><textarea name="text" required maxlength="4000" placeholder="Add note"></textarea><button class="ghost" type="submit">Save note</button></form>
+  <button type="button" class="primary" id="askPaperSylora">Ask Sylora about this document</button>
+  <pre id="paperAskOut" hidden style="white-space:pre-wrap;font-size:12px"></pre></div>`;
+  document.querySelector('#paperNoteForm').onsubmit=async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/science/library/${paperId}/notes`,{method:'POST',body:JSON.stringify({text})});toast('Note saved');openPaperReader(paperId)};
+  document.querySelector('#askPaperSylora').onclick=async()=>{
+    try{
+      const out=await api('/api/ai/ask',{method:'POST',body:JSON.stringify({contentType:'paper',contentId:paperId,question:'Summarize the provided abstract without inventing citations',view:'science'})});
+      const pre=document.querySelector('#paperAskOut');pre.hidden=false;pre.textContent=out.answer||out.message||JSON.stringify(out);
+    }catch(err){toast(humanError(err.message))}
+  };
+}
 async function openCourse(id){
   try{
     const {course,enrollment,lessons,locked}=await api(`/api/courses/${id}`);
     const progress=Math.round((enrollment?.progress||0)*100);
-    app.innerHTML=`<button id="backLearning" class="ghost">← Курси</button><div class="card hero"><span class="eyebrow">SYLORA LEARNING</span><h1>${esc(course.title)}</h1><p>${esc(course.description)}</p>${enrollment?`<p class="muted">Прогрес: ${progress}%</p><div class="progress"><span style="width:${progress}%"></span></div>`:''}${locked&&state.me&&course.price===0?'<button id="enrollCourse" class="primary">Записатися безкоштовно</button>':''}${locked&&!state.me?'<p class="muted">Увійди, щоб записатися і відкрити уроки.</p>':''}${locked&&course.price>0?'<p class="muted">Платні курси будуть доступні після підключення платежів.</p>':''}</div><div class="stack">${lessons.map(l=>`<article class="card item"><span class="badge">Урок ${l.position}${l.completed?' · ✓ виконано':''}</span><h3>${esc(l.title)}</h3>${locked?'<p class="muted">🔒 Запишись на курс, щоб відкрити матеріал.</p>':`<p>${esc(l.content||'')}</p>${!l.completed?`<button class="ghost complete-lesson" data-id="${l.id}">Позначити виконаним</button>`:''}<button class="ghost lesson-quiz" data-id="${l.id}">Quiz</button>`}</article>`).join('')}</div><div id="lessonQuiz"></div>`;
+    app.innerHTML=`<button id="backLearning" class="ghost">← Курси</button><div class="card hero"><span class="eyebrow">SYLORA LEARNING</span><h1>${esc(course.title)}</h1><p>${esc(course.description)}</p>${enrollment?`<p class="muted">Прогрес: ${progress}%</p><div class="progress"><span style="width:${progress}%"></span></div>`:''}${locked&&state.me&&course.price===0?'<button id="enrollCourse" class="primary">Записатися безкоштовно</button>':''}${locked&&!state.me?'<p class="muted">Увійди, щоб записатися і відкрити уроки.</p>':''}${locked&&course.price>0?'<p class="muted">Платні курси будуть доступні після підключення платежів.</p>':''}</div><div class="stack">${lessons.map(l=>`<article class="card item"><span class="badge">Урок ${l.position}${l.completed?' · ✓ виконано':''}</span><h3>${esc(l.title)}</h3>${locked?'<p class="muted">🔒 Запишись на курс, щоб відкрити матеріал.</p>':`<p>${esc(l.content||'')}</p>${!l.completed?`<button class="ghost complete-lesson" data-id="${l.id}">Позначити виконаним</button>`:''}<button class="ghost lesson-quiz" data-id="${l.id}">Quiz</button><button class="ghost lesson-tutor" data-id="${l.id}" data-course="${course.id}">Sylora Tutor</button>`}</article>`).join('')}</div><div id="lessonQuiz"></div><div id="lessonTutor"></div>`;
     document.querySelector('#backLearning').onclick=renderLearning;
     document.querySelector('#enrollCourse')?.addEventListener('click',async()=>{await api(`/api/courses/${id}/enroll`,{method:'POST',body:'{}'});toast('Записано на курс');await openCourse(id)});
     document.querySelectorAll('.complete-lesson').forEach(b=>b.onclick=async()=>{await api(`/api/lessons/${b.dataset.id}/progress`,{method:'POST',body:'{}'});await openCourse(id)});
+    document.querySelectorAll('.lesson-tutor').forEach(b=>b.onclick=async()=>{
+      const out=await api('/api/learning/tutor',{method:'POST',body:JSON.stringify({mode:'teach_me',courseId:b.dataset.course,lessonId:b.dataset.id})});
+      const box=document.querySelector('#lessonTutor');
+      box.innerHTML=`<div class="card"><span class="eyebrow">SYLORA TUTOR · LESSON CONTEXT</span><p>Mode: ${esc(out.session.mode)} · ${esc(out.session.lessonContext?.title||'')}</p><p class="muted">${esc((out.session.lessonContext?.excerpt||'').slice(0,280))}</p><p class="muted">${esc(out.policy?.note||'')}</p></div>`;
+      toast('Tutor bound to lesson');
+    });
     document.querySelectorAll('.lesson-quiz').forEach(b=>b.onclick=async()=>{
       const quizBox=document.querySelector('#lessonQuiz');
       const out=await api(`/api/lessons/${b.dataset.id}/quiz`);
@@ -837,20 +944,41 @@ async function openCourse(id){
 }
 
 async function renderBusiness(){
-  const [{businesses},conferenceData,orgData,hub,country,invoices]=await Promise.all([
+  const [{businesses},conferenceData,orgData,hub,country,invoices,crm,quotes]=await Promise.all([
     api('/api/businesses'),
     state.me?api('/api/conferences?kind=business'):Promise.resolve({rooms:[]}),
     state.me?api('/api/orgs'):Promise.resolve({organizations:[]}),
     api('/api/business/hub').catch(()=>({sections:[]})),
     state.me?api('/api/business/country').catch(()=>({profile:{}})):Promise.resolve({profile:{}}),
-    state.me?api('/api/business/invoices').catch(()=>({invoices:[]})):Promise.resolve({invoices:[]})
+    state.me?api('/api/business/invoices').catch(()=>({invoices:[]})):Promise.resolve({invoices:[]}),
+    state.me?api('/api/business/crm').catch(()=>({records:[]})):Promise.resolve({records:[]}),
+    state.me?api('/api/business/quotes').catch(()=>({quotes:[]})):Promise.resolve({quotes:[]})
   ]);
   const orgs=orgData.organizations||[];
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA BUSINESS · WORKSPACE</span><h1>${esc(t('workspace'))}</h1><p>Companies · finance · CRM · contracts · teams · Sylora Business</p><div class="scene-readout"><span><small>ORGS</small><b>${orgs.length}</b></span><span><small>COMPANIES</small><b>${businesses.length}</b></span><span><small>INVOICES</small><b>${(invoices.invoices||[]).length}</b></span></div></div>
-  ${state.me?`<section class="card"><span class="eyebrow">BUSINESS HUB · ${(country.profile?.countryCode||'DEFAULT')} · not a bank</span>
-  <p class="muted">${(hub.sections||[]).slice(0,10).join(' · ')}</p>
-  <div class="row"><button type="button" class="primary" id="bizInvoice">Draft invoice</button><button type="button" class="ghost" id="bizCrm">Add client</button><button type="button" class="ghost" id="bizQuote">Quote</button><button type="button" class="ghost" id="bizTime">Start work timer</button><button type="button" class="ghost" id="bizFinanceAsk">Ask finance</button></div>
+  const clients=(crm.records||[]).filter(r=>r.type==='client'||r.type==='lead');
+  const invList=invoices.invoices||[];
+  const quoteList=quotes.quotes||[];
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA BUSINESS · WORKSPACE</span><h1>${esc(t('workspace'))}</h1><p>Companies · finance · CRM · contracts · teams · Sylora Business</p><div class="scene-readout"><span><small>CLIENTS</small><b>${clients.length}</b></span><span><small>QUOTES</small><b>${quoteList.length}</b></span><span><small>INVOICES</small><b>${invList.length}</b></span></div></div>
+  ${state.me?`<section class="card"><span class="eyebrow">BUSINESS CORE · ${(country.profile?.countryCode||'DEFAULT')} · not a bank</span>
+  <p class="muted">Client → Quote → Accept → Invoice → Issue → PDF → Payment status</p>
+  <form id="crmForm" class="fields"><input name="name" required maxlength="200" placeholder="Client name"><button class="primary" type="submit">Add client</button></form>
+  <form id="quoteForm" class="fields" style="margin-top:10px">
+    <select name="clientId"><option value="">Client (optional)</option>${clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+    <input name="description" required placeholder="Line item" maxlength="200">
+    <input name="quantity" type="number" min="1" step="1" value="1">
+    <input name="unitNetPrice" type="number" min="0" step="0.01" value="100">
+    <input name="taxRate" type="number" min="0" step="0.01" value="23">
+    <button class="primary" type="submit">Create quote</button>
+  </form>
   <form id="countryForm" class="fields" style="margin-top:10px"><select name="countryCode"><option value="PL">PL</option><option value="UA">UA</option><option value="DE">DE</option><option value="US">US</option><option value="DEFAULT">DEFAULT</option></select><button class="ghost">Set country profile</button></form>
+  <div class="stack" style="margin-top:12px"><span class="eyebrow">CLIENTS</span>${clients.map(c=>`<div class="item"><b>${esc(c.name)}</b><small class="muted"> ${esc(c.status||'new')}</small></div>`).join('')||'<p class="muted">No clients yet</p>'}</div>
+  <div class="stack" style="margin-top:12px"><span class="eyebrow">QUOTES</span>${quoteList.map(q=>`<div class="item"><b>${esc(q.currency)} ${q.gross}</b> · ${esc(q.status)}${q.status==='draft'?` <button type="button" class="ghost accept-quote" data-id="${q.id}">Accept → invoice</button>`:''}</div>`).join('')||'<p class="muted">No quotes yet</p>'}</div>
+  <div class="stack" style="margin-top:12px"><span class="eyebrow">INVOICES</span>${invList.map(i=>`<div class="item"><b>${esc(i.invoiceNumber)}</b> · ${esc(i.status)} · ${i.gross} ${esc(i.currency)}
+    ${i.status==='draft'?`<button type="button" class="ghost issue-inv" data-id="${i.id}">Issue</button>`:''}
+    <button type="button" class="ghost pdf-inv" data-id="${i.id}">PDF</button>
+    ${i.status==='issued'||i.status==='sent'?`<button type="button" class="ghost pay-inv" data-id="${i.id}">Mark paid</button>`:''}
+  </div>`).join('')||'<p class="muted">No invoices yet</p>'}</div>
+  <pre id="bizPdfOut" hidden style="white-space:pre-wrap;font-size:12px;margin-top:8px"></pre>
   </section>`:''}
   ${state.me?`<section class="card org-workspace"><span class="eyebrow">BUSINESS OS</span><h3>${esc(t('workspace'))}</h3>
   <form id="orgForm" class="fields"><input name="name" required placeholder="Organization"><button class="primary">${esc(t('createHub'))}</button></form>
@@ -860,11 +988,20 @@ async function renderBusiness(){
   ${state.me?'<form id="businessForm" class="card auth fields"><input name="name" placeholder="Company" required><textarea name="description"></textarea><input name="website" placeholder="https://"><button class="primary">Company profile</button></form>':''}
   ${businesses.map(b=>`<div class="card item business-company"><span class="business-emblem">◈</span><div><span class="eyebrow">COMPANY</span><h3>${esc(b.name)}</h3><p class="muted">${esc(b.description)}</p>${b.website?`<span class="badge">${esc(b.website)}</span>`:''}</div></div>`).join('')||'<div class="card empty">—</div>'}`;
   if(state.me)bindConferenceHub('business',renderBusiness);
-  document.querySelector('#bizInvoice')?.addEventListener('click',async()=>{await api('/api/business/invoices',{method:'POST',body:JSON.stringify({items:[{description:'Service',quantity:1,unitNetPrice:100,taxRate:23}],seller:{name:'Me'},buyer:{name:'Client'}})});toast('Invoice draft');renderBusiness()});
-  document.querySelector('#bizCrm')?.addEventListener('click',async()=>{const name=prompt('Client name');if(!name)return;await api('/api/business/crm',{method:'POST',body:JSON.stringify({type:'client',name})});toast('CRM record')});
-  document.querySelector('#bizQuote')?.addEventListener('click',async()=>{await api('/api/business/quotes',{method:'POST',body:JSON.stringify({items:[{description:'Estimate',quantity:1,unitNetPrice:50,taxRate:0}]})});toast('Quote draft')});
-  document.querySelector('#bizTime')?.addEventListener('click',async()=>{await api('/api/business/time',{method:'POST',body:JSON.stringify({action:'start',note:'Work'})});toast('Time tracking visible to worker')});
-  document.querySelector('#bizFinanceAsk')?.addEventListener('click',async()=>{const out=await api('/api/business/finance/ask',{method:'POST',body:JSON.stringify({query:'неоплачені фактури'})});toast(`Unpaid: ${out.answer?.unpaidCount??0} · confirm before send`)});
+  document.querySelector('#crmForm')?.addEventListener('submit',async e=>{e.preventDefault();const name=new FormData(e.currentTarget).get('name');await api('/api/business/crm',{method:'POST',body:JSON.stringify({type:'client',name})});toast('Client saved');renderBusiness()});
+  document.querySelector('#quoteForm')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const fd=new FormData(e.currentTarget);
+    await api('/api/business/quotes',{method:'POST',body:JSON.stringify({
+      clientId:fd.get('clientId')||null,
+      items:[{description:fd.get('description'),quantity:Number(fd.get('quantity')||1),unitNetPrice:Number(fd.get('unitNetPrice')||0),taxRate:Number(fd.get('taxRate')||0)}]
+    })});
+    toast('Quote created');renderBusiness();
+  });
+  document.querySelectorAll('.accept-quote').forEach(b=>b.onclick=async()=>{await api(`/api/business/quotes/${b.dataset.id}/accept`,{method:'POST',body:JSON.stringify({convertTo:'invoice_draft'})});toast('Quote accepted → invoice draft');renderBusiness()});
+  document.querySelectorAll('.issue-inv').forEach(b=>b.onclick=async()=>{await api(`/api/business/invoices/${b.dataset.id}/issue`,{method:'POST',body:'{}'});toast('Invoice issued');renderBusiness()});
+  document.querySelectorAll('.pdf-inv').forEach(b=>b.onclick=async()=>{const out=await api(`/api/business/invoices/${b.dataset.id}/pdf`);const pre=document.querySelector('#bizPdfOut');pre.hidden=false;pre.textContent=out.pdf?.text||'';});
+  document.querySelectorAll('.pay-inv').forEach(b=>b.onclick=async()=>{await api(`/api/business/invoices/${b.dataset.id}/status`,{method:'POST',body:JSON.stringify({status:'paid'})});toast('Payment status: paid');renderBusiness()});
   document.querySelector('#countryForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/api/business/country',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});toast('Country set by user (not IP)');renderBusiness()});
   document.querySelector('#orgForm')&&(document.querySelector('#orgForm').onsubmit=async e=>{e.preventDefault();const name=new FormData(e.currentTarget).get('name');await api('/api/orgs',{method:'POST',body:JSON.stringify({name})});toast('OK');renderBusiness()});
   const showWorkspace=async id=>{

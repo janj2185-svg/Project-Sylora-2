@@ -963,6 +963,18 @@ export async function handleEcosystemRoutes(ctx) {
     try { return json(res, 200, { invoice: ecosystem.updateInvoiceStatus(user, m.id, input.status) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
+  m = route('/api/business/invoices/:id/issue', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { invoice: ecosystem.issueInvoice(user, m.id) }), true; }
+    catch (e) { return json(res, e.message === 'INVOICE_NOT_FOUND' ? 404 : 400, { error: e.message }), true; }
+  }
+  m = route('/api/business/invoices/:id/pdf', p);
+  if (req.method === 'GET' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { pdf: ecosystem.invoicePdf(user, m.id) }), true; }
+    catch (e) { return json(res, e.message === 'INVOICE_NOT_FOUND' ? 404 : 400, { error: e.message }), true; }
+  }
   if (req.method === 'POST' && p === '/api/business/expenses/extract') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 201, { extraction: ecosystem.extractExpense(user, await body(req)) }), true;
@@ -980,6 +992,10 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/business/crm') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 201, { record: ecosystem.upsertCrm(user, await body(req)) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/business/quotes') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { quotes: ecosystem.listQuotes(user) }), true;
   }
   if (req.method === 'POST' && p === '/api/business/quotes') {
     const user = await requireUser(req, res); if (!user) return true;
@@ -1071,6 +1087,10 @@ export async function handleEcosystemRoutes(ctx) {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 201, { board: ecosystem.createBoard(user, await body(req)) }), true;
   }
+  if (req.method === 'GET' && p === '/api/science/library') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { items: ecosystem.listLibrary(user) }), true;
+  }
   if (req.method === 'POST' && p === '/api/science/library') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 201, { item: ecosystem.addLibraryItem(user, await body(req)) }), true;
@@ -1079,6 +1099,13 @@ export async function handleEcosystemRoutes(ctx) {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 200, { view: ecosystem.paperReader(user, await body(req)) }), true;
   }
+  m = route('/api/science/library/:id/notes', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 201, { note: ecosystem.addPaperNote(user, m.id, input.text || input.note) }), true; }
+    catch (e) { return json(res, e.message === 'PAPER_NOT_FOUND' ? 404 : 400, { error: e.message }), true; }
+  }
   if (req.method === 'POST' && p === '/api/science/citations') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 200, { citation: ecosystem.addCitation(user, await body(req)) }), true;
@@ -1086,6 +1113,10 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/science/projects') {
     const user = await requireUser(req, res); if (!user) return true;
     return json(res, 201, { project: ecosystem.createResearch(user, await body(req)) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/science/datasets') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { datasets: ecosystem.listDatasets(user) }), true;
   }
   if (req.method === 'POST' && p === '/api/science/datasets') {
     const user = await requireUser(req, res); if (!user) return true;

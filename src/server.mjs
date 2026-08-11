@@ -42,7 +42,8 @@ const userStreams = new Map();
 const browserSourceTokens = new Map();
 const rateBuckets = new Map();
 const port = Number(process.env.PORT || 8787);
-const ttlDays = Number(process.env.SESSION_TTL_DAYS || 30);
+const ttlMs = Number(process.env.SESSION_TTL_MS)
+  || (Number(process.env.SESSION_TTL_DAYS || 30) * 86400000);
 const creatorGiftShareBps = Math.max(0, Math.min(10000, Number(process.env.CREATOR_GIFT_SHARE_BPS || 7000)));
 const adminEmails=new Set(String(process.env.SYLORA_ADMIN_EMAILS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));
 const openaiModel=String(process.env.OPENAI_MODEL||'gpt-5.6');
@@ -140,16 +141,28 @@ function token(req) {
 function tokenHash(value){return createHash('sha256').update(String(value||'')).digest('hex')}
 function cacheUser(user){if(!user)return null;const idx=store.data.users.findIndex(x=>x.id===user.id);if(idx>=0)store.data.users[idx]=user;else store.data.users.push(user);return user}
 function cachePost(post){if(!post)return null;const idx=store.data.posts.findIndex(x=>x.id===post.id);if(idx>=0)store.data.posts[idx]=post;else store.data.posts.push(post);return post}
+async function resolveSession(req) {
+  const now = Date.now(), raw = token(req), hashed = tokenHash(raw);
+  if (!raw) return { user: null, error: 'AUTH_REQUIRED' };
+  let user = null;
+  if (authSocial.enabled) {
+    user = cacheUser(await authSocial.userForSession(hashed));
+  } else {
+    const session = store.data.sessions.find(s => (s.tokenHash === hashed || s.token === raw) && new Date(s.expiresAt).getTime() > now);
+    if (!session) return { user: null, error: 'AUTH_REQUIRED' };
+    user = store.data.users.find(u => u.id === session.userId) || null;
+  }
+  if (!user) return { user: null, error: 'AUTH_REQUIRED' };
+  if (user.disabled) return { user: null, error: 'ACCOUNT_DISABLED' };
+  return { user, error: null };
+}
 async function sessionUser(req) {
-  const now = Date.now(),raw=token(req),hashed=tokenHash(raw);
-  if(!raw)return null;
-  if(authSocial.enabled)return cacheUser(await authSocial.userForSession(hashed));
-  const session = store.data.sessions.find(s => (s.tokenHash === hashed || s.token === raw) && new Date(s.expiresAt).getTime() > now);
-  return session ? store.data.users.find(u => u.id === session.userId) : null;
+  const { user } = await resolveSession(req);
+  return user;
 }
 async function requireUser(req, res) {
-  const user = await sessionUser(req);
-  if (!user) json(res, 401, { error: 'AUTH_REQUIRED' });
+  const { user, error } = await resolveSession(req);
+  if (!user) json(res, error === 'ACCOUNT_DISABLED' ? 403 : 401, { error: error || 'AUTH_REQUIRED' });
   return user;
 }
 async function requireAdmin(req,res){const user=await requireUser(req,res);if(!user)return null;if(user.role!=='admin'){json(res,403,{error:'ADMIN_REQUIRED'});return null}return user}
@@ -307,7 +320,7 @@ async function api(req, res, url) {
     if (!/^[\p{L}\p{N}_.-]+$/u.test(username)) return json(res, 400, { error: 'INVALID_USERNAME' });
     if (authSocial.enabled ? await authSocial.accountExists(email,username) : store.data.users.some(u => u.email === email || u.username.toLowerCase() === username.toLowerCase())) return json(res, 409, { error: 'ACCOUNT_EXISTS' });
     const user = { id: store.id(), email, username, displayName: username, bio: '', locale: 'uk', avatar: '', role:adminEmails.has(email)?'admin':'user', passwordHash: hashPassword(String(input.password)), createdAt: store.now() };
-    const t = makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlDays*86400000).toISOString()};
+    const t = makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlMs).toISOString()};
     if(authSocial.enabled){try{await authSocial.register(user,session)}catch(error){if(error?.code==='23505')return json(res,409,{error:'ACCOUNT_EXISTS'});throw error}}else store.data.sessions.push(session);
     cacheUser(user); if(authSocial.enabled)await walletRepo.ensureWallet(user.id);if(!store.data.wallets.some(w=>w.userId===user.id))store.data.wallets.push({ userId: user.id, balance: 10000, earnings: 0, currency: 'LUMEN' }); store.save();
     return json(res, 201, { token: t, user: {...store.publicUser(user),email:user.email,role:user.role} });
@@ -316,12 +329,59 @@ async function api(req, res, url) {
     const input = await body(req); const identity = safeText(input.identity, 254).toLowerCase();
     const user = authSocial.enabled ? await authSocial.findUserByIdentity(identity) : store.data.users.find(u => u.email === identity || u.username.toLowerCase() === identity);
     if (!user || !verifyPassword(String(input.password || ''), user.passwordHash)) return json(res, 401, { error: 'INVALID_CREDENTIALS' });
-    cacheUser(user);const t=makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlDays*86400000).toISOString()};if(authSocial.enabled)await authSocial.createSession(session);else store.data.sessions.push(session);store.save();
+    if (user.disabled) return json(res, 403, { error: 'ACCOUNT_DISABLED' });
+    cacheUser(user);const t=makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlMs).toISOString()};if(authSocial.enabled)await authSocial.createSession(session);else store.data.sessions.push(session);store.save();
     return json(res, 200, { token: t, user: {...store.publicUser(user),email:user.email,role:user.role} });
   }
   if (req.method === 'POST' && p === '/api/auth/logout') {
     const t=token(req),hashed=tokenHash(t);if(authSocial.enabled)await authSocial.deleteSession(hashed);else{store.data.sessions=store.data.sessions.filter(s=>s.tokenHash!==hashed&&s.token!==t);store.save()}return json(res,200,{ok:true});
   }
+  if (req.method === 'GET' && p === '/api/sessions') {
+    const user=await requireUser(req,res); if(!user)return;
+    const raw=token(req), hashed=tokenHash(raw);
+    const sessions=(authSocial.enabled?[]:store.data.sessions.filter(s=>s.userId===user.id)).map(s=>({
+      id:s.id||s.tokenHash||hashed,
+      createdAt:s.createdAt,
+      expiresAt:s.expiresAt,
+      current:(s.tokenHash===hashed||s.token===raw)
+    }));
+    // JSON-store sessions may lack id — synthesize from hash
+    const list=authSocial.enabled
+      ? [{id:hashed,createdAt:null,expiresAt:null,current:true,note:'postgres session list limited to current until dedicated table API'}]
+      : store.data.sessions.filter(s=>s.userId===user.id).map(s=>({
+          id:s.tokenHash||s.token,
+          createdAt:s.createdAt||null,
+          expiresAt:s.expiresAt||null,
+          current:(s.tokenHash===hashed||s.token===raw)
+        }));
+    return json(res,200,{sessions:list});
+  }
+  if (req.method === 'POST' && p === '/api/sessions/revoke') {
+    const user=await requireUser(req,res); if(!user)return;
+    const input=await body(req);
+    const target=safeText(input.sessionId,200);
+    const raw=token(req), hashed=tokenHash(raw);
+    if(authSocial.enabled){
+      if(target===hashed||input.all){await authSocial.deleteSession(hashed);return json(res,200,{ok:true,revoked:'current'})}
+      return json(res,400,{error:'SESSION_REVOKE_SCOPE'});
+    }
+    if(input.all){
+      store.data.sessions=store.data.sessions.filter(s=>s.userId!==user.id);
+      store.save();
+      return json(res,200,{ok:true,revoked:'all'});
+    }
+    if(!target)return json(res,400,{error:'SESSION_ID_REQUIRED'});
+    const before=store.data.sessions.length;
+    store.data.sessions=store.data.sessions.filter(s=>!(s.userId===user.id&&(s.tokenHash===target||s.token===target)));
+    store.save();
+    return json(res,200,{ok:true,revoked:before-store.data.sessions.length});
+  }
+  if (req.method === 'GET' && p === '/api/auth/status') {
+    const { user, error } = await resolveSession(req);
+    if (!user) return json(res, error === 'ACCOUNT_DISABLED' ? 403 : 401, { ok: false, error: error || 'AUTH_REQUIRED', authenticated: false });
+    return json(res, 200, { ok: true, authenticated: true, userId: user.id, role: user.role || 'user' });
+  }
+
   if (req.method === 'GET' && p === '/api/me') {
     const user = await requireUser(req, res); if (!user) return; const wallet = authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w => w.userId === user.id); if(wallet&&wallet.earnings==null)wallet.earnings=0;
     return json(res, 200, { user: {...store.publicUser(user),email:user.email,role:user.role}, wallet });
@@ -417,11 +477,77 @@ async function api(req, res, url) {
     const user=await requireUser(req,res); if(!user)return; const input=await body(req); const other=authSocial.enabled?await authSocial.findUserById(input.userId):store.data.users.find(u=>u.id===input.userId); if(!other||other.id===user.id||await isBlockedBetween(user.id,other.id))return json(res,400,{error:'INVALID_RECIPIENT'});if(authSocial.enabled){const c=await authSocial.getOrCreateConversation(user.id,other.id,store.id(),store.now());return json(res,201,{conversation:c})}let c=store.data.conversations.find(x=>x.memberIds.length===2&&x.memberIds.includes(user.id)&&x.memberIds.includes(other.id)); if(!c){c={id:store.id(),memberIds:[user.id,other.id],createdAt:store.now()};store.data.conversations.push(c);store.save()} return json(res,201,{conversation:c});
   }
   if (req.method === 'GET' && p === '/api/conversations') {
-    const user=await requireUser(req,res); if(!user)return;if(authSocial.enabled){const blocked=new Set(await authSocial.blockedUserIds(user.id)),source=await authSocial.listConversations(user.id),conversations=source.filter(c=>!c.memberIds.some(id=>id!==user.id&&blocked.has(id))).map(c=>({...c,members:c.members.map(member=>{cacheUser(member);return store.publicUser(member)})}));return json(res,200,{conversations})}const conversations=store.data.conversations.filter(c=>c.memberIds.includes(user.id)&&!c.memberIds.some(id=>id!==user.id&&blockedBetween(user.id,id))).map(c=>({...c,members:c.memberIds.map(id=>store.publicUser(store.data.users.find(u=>u.id===id))),lastMessage:[...store.data.messages].reverse().find(m=>m.conversationId===c.id)||null})); return json(res,200,{conversations});
+    const user=await requireUser(req,res); if(!user)return;
+    const { enrichConversation } = await import('./ecosystem/messaging.mjs');
+    if(authSocial.enabled){
+      const blocked=new Set(await authSocial.blockedUserIds(user.id)),source=await authSocial.listConversations(user.id);
+      const conversations=[];
+      for(const c of source.filter(c=>!c.memberIds.some(id=>id!==user.id&&blocked.has(id)))){
+        const msgs=await authSocial.listMessages(c.id);
+        conversations.push(enrichConversation({...c,members:c.members.map(member=>{cacheUser(member);return store.publicUser(member)})},msgs,user.id));
+      }
+      return json(res,200,{conversations});
+    }
+    const conversations=store.data.conversations.filter(c=>c.memberIds.includes(user.id)&&!c.memberIds.some(id=>id!==user.id&&blockedBetween(user.id,id))).map(c=>enrichConversation({...c,members:c.memberIds.map(id=>store.publicUser(store.data.users.find(u=>u.id===id)))},store.data.messages,user.id));
+    return json(res,200,{conversations});
   }
   m=route('/api/conversations/:id/messages',p);
-  if(req.method==='GET'&&m){const user=await requireUser(req,res);if(!user)return;const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));if(!c)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});const messages=authSocial.enabled?await authSocial.listMessages(c.id):store.data.messages.filter(x=>x.conversationId===c.id).slice(-200);return json(res,200,{messages});}
-  if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));const blocked=c?(await Promise.all(c.memberIds.filter(id=>id!==user.id).map(id=>isBlockedBetween(user.id,id)))).some(Boolean):false;if(!c||blocked)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});const input=await body(req),text=safeText(input.text,2000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});const msg={id:store.id(),conversationId:c.id,userId:user.id,text,createdAt:store.now(),editedAt:null};if(authSocial.enabled)await authSocial.createMessage(msg);else store.data.messages.push(msg);for(const id of c.memberIds){await notifyUser(id,'message',user.id,{conversationId:c.id});if(id!==user.id)emitUser(id,'message',{message:msg,actor:store.publicUser(user)})}store.save();return json(res,201,{message:msg});}
+  if(req.method==='GET'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const { paginateMessages, markDelivered } = await import('./ecosystem/messaging.mjs');
+    const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));
+    if(!c)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});
+    const before=url.searchParams.get('before')||null;
+    const limit=Number(url.searchParams.get('limit')||50);
+    let all=authSocial.enabled?await authSocial.listMessages(c.id):store.data.messages.filter(x=>x.conversationId===c.id);
+    for(const msg of all){if(msg.userId!==user.id)markDelivered(msg,user.id)}
+    if(!authSocial.enabled)store.save();
+    const page=paginateMessages(all,c.id,{before,limit});
+    return json(res,200,page);
+  }
+  if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const { createMessageRecord } = await import('./ecosystem/messaging.mjs');
+    const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));
+    const blocked=c?(await Promise.all(c.memberIds.filter(id=>id!==user.id).map(id=>isBlockedBetween(user.id,id)))).some(Boolean):false;
+    if(!c||blocked)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});
+    const input=await body(req),text=safeText(input.text,2000),clientId=safeText(input.clientId,80)||null;
+    if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
+    if(clientId){
+      const existing=(authSocial.enabled?await authSocial.listMessages(c.id):store.data.messages).find(x=>x.conversationId===c.id&&x.clientId===clientId&&x.userId===user.id);
+      if(existing)return json(res,200,{message:existing,deduped:true});
+    }
+    const msg=createMessageRecord({id:store.id(),conversationId:c.id,userId:user.id,text,createdAt:store.now(),clientId});
+    if(authSocial.enabled)await authSocial.createMessage(msg);else store.data.messages.push(msg);
+    for(const id of c.memberIds){
+      if(id!==user.id){await notifyUser(id,'message',user.id,{conversationId:c.id,messageId:msg.id});emitUser(id,'message',{message:msg,actor:store.publicUser(user)})}
+      else emitUser(id,'message_ack',{message:msg});
+    }
+    store.save();return json(res,201,{message:msg});
+  }
+  m=route('/api/conversations/:id/read',p);
+  if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const { markConversationRead } = await import('./ecosystem/messaging.mjs');
+    const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));
+    if(!c)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});
+    const msgs=authSocial.enabled?await authSocial.listMessages(c.id):store.data.messages;
+    const marked=markConversationRead(msgs,c.id,user.id,store.now());
+    if(!authSocial.enabled)store.save();
+    for(const id of c.memberIds){if(id!==user.id)emitUser(id,'read',{conversationId:c.id,userId:user.id,marked})}
+    return json(res,200,{ok:true,marked});
+  }
+  m=route('/api/conversations/:id/typing',p);
+  if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const { typingEvent } = await import('./ecosystem/messaging.mjs');
+    const c=authSocial.enabled?await authSocial.conversationForUser(m.id,user.id):store.data.conversations.find(x=>x.id===m.id&&x.memberIds.includes(user.id));
+    if(!c)return json(res,404,{error:'CONVERSATION_NOT_FOUND'});
+    const input=await body(req);
+    const event=typingEvent({conversationId:c.id,userId:user.id,username:user.username,typing:input.typing!==false});
+    for(const id of c.memberIds){if(id!==user.id)emitUser(id,'typing',event)}
+    return json(res,200,{ok:true,event});
+  }
   if(req.method==='POST'&&p==='/api/communities'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),name=safeText(input.name,80);if(name.length<3)return json(res,400,{error:'NAME_REQUIRED'});const community={id:store.id(),ownerId:user.id,name,description:safeText(input.description,500),visibility:input.visibility==='private'?'private':'public',createdAt:store.now()};store.data.communities.push(community);store.data.communityMembers.push({communityId:community.id,userId:user.id,role:'owner',joinedAt:store.now()});store.data.communityChannels.push({id:store.id(),communityId:community.id,name:'general',position:1,createdAt:store.now()});store.save();return json(res,201,{community});}
   if(req.method==='GET'&&p==='/api/communities')return json(res,200,{communities:store.data.communities.map(c=>({...c,members:store.data.communityMembers.filter(x=>x.communityId===c.id).length}))});
   m=route('/api/communities/:id/join',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const c=store.data.communities.find(x=>x.id===m.id);if(!c||c.visibility==='private')return json(res,404,{error:'COMMUNITY_NOT_JOINABLE'});if(!store.data.communityMembers.some(x=>x.communityId===c.id&&x.userId===user.id))store.data.communityMembers.push({communityId:c.id,userId:user.id,role:'member',joinedAt:store.now()});store.save();return json(res,200,{joined:true});}

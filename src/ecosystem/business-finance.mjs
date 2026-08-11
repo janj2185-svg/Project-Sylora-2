@@ -121,7 +121,15 @@ export function createBusinessCountryProfile({ countryCode, currency, timezone }
   };
 }
 
-export function computeInvoiceTotals(items = [], { taxInclusive = false } = {}) {
+function roundMoney(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+export function computeInvoiceTotals(items = [], {
+  taxInclusive = false,
+  discountPercent = 0,
+  discountAmount = 0
+} = {}) {
   let net = 0;
   let tax = 0;
   for (const item of items) {
@@ -133,11 +141,20 @@ export function computeInvoiceTotals(items = [], { taxInclusive = false } = {}) 
     net += lineNet;
     tax += lineTax;
   }
-  const gross = net + tax;
+  const pct = Math.max(0, Math.min(100, Number(discountPercent) || 0));
+  const flat = Math.max(0, Number(discountAmount) || 0);
+  const discount = roundMoney(net * (pct / 100) + flat);
+  const netAfterDiscount = roundMoney(Math.max(0, net - discount));
+  const taxRatio = net > 0 ? netAfterDiscount / net : 0;
+  const taxAfter = roundMoney(tax * taxRatio);
+  const gross = roundMoney(netAfterDiscount + taxAfter);
   return {
-    net: Math.round(net * 100) / 100,
-    tax: Math.round(tax * 100) / 100,
-    gross: Math.round(gross * 100) / 100
+    net: netAfterDiscount,
+    tax: taxAfter,
+    gross,
+    discount,
+    discountPercent: pct,
+    currencyRounding: 'half_up_2dp'
   };
 }
 
@@ -153,16 +170,20 @@ export function createInvoiceDraft({
   notes = "",
   issueDate = null,
   saleDate = null,
-  invoiceNumber = null
+  invoiceNumber = null,
+  discountPercent = 0,
+  discountAmount = 0,
+  clientId = null
 } = {}) {
   const adapter = resolveCountryAdapter(countryCode);
-  const totals = computeInvoiceTotals(items);
+  const totals = computeInvoiceTotals(items, { discountPercent, discountAmount });
   return {
     id: createId("invoice"),
     invoiceNumber: invoiceNumber || `DRAFT-${Date.now().toString(36).toUpperCase()}`,
     status: "draft",
     countryCode: adapter.country,
     currency: currency || adapter.currency,
+    clientId: clientId || null,
     issueDate: issueDate || new Date().toISOString().slice(0, 10),
     saleDate: saleDate || null,
     seller: {
@@ -192,9 +213,48 @@ export function createInvoiceDraft({
     eInvoicingNote: adapter.eInvoicingNote,
     notABank: true,
     pdfReady: false,
+    pdfText: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
+}
+
+/** Deterministic text PDF payload (printable / downloadable as .txt until binary PDF provider). */
+export function renderInvoicePdfText(invoice) {
+  if (!invoice) return '';
+  const lines = [
+    `INVOICE ${invoice.invoiceNumber}`,
+    `Status: ${invoice.status}`,
+    `Country: ${invoice.countryCode} · Currency: ${invoice.currency}`,
+    `Issue date: ${invoice.issueDate || ''}`,
+    `Seller: ${invoice.seller?.name || ''} ${invoice.seller?.taxId || ''}`.trim(),
+    `Buyer: ${invoice.buyer?.name || ''} ${invoice.buyer?.taxId || ''}`.trim(),
+    '--- Items ---',
+    ...(invoice.items || []).map((it, i) =>
+      `${i + 1}. ${it.description} · qty ${it.quantity} × ${it.unitNetPrice} + ${it.taxRate}% tax`
+    ),
+    `Discount: ${invoice.discount || 0}`,
+    `Net: ${invoice.net}`,
+    `Tax (${invoice.taxLabel || 'TAX'}): ${invoice.tax}`,
+    `Gross: ${invoice.gross} ${invoice.currency}`,
+    invoice.notes ? `Notes: ${invoice.notes}` : '',
+    'Not a bank. Payment status is manual until a payment provider is configured.'
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
+export function issueInvoiceDocument(invoice, { invoiceNumber = null } = {}) {
+  if (!invoice) throw new Error('INVOICE_REQUIRED');
+  if (!['draft', 'issued'].includes(invoice.status)) throw new Error('INVALID_STATUS_TRANSITION');
+  invoice.status = 'issued';
+  if (invoiceNumber) invoice.invoiceNumber = String(invoiceNumber).slice(0, 64);
+  else if (String(invoice.invoiceNumber || '').startsWith('DRAFT-')) {
+    invoice.invoiceNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+  }
+  invoice.pdfText = renderInvoicePdfText(invoice);
+  invoice.pdfReady = true;
+  invoice.updatedAt = new Date().toISOString();
+  return invoice;
 }
 
 export function createExpenseExtraction({ rawText = "", extracted = {} } = {}) {
@@ -262,20 +322,21 @@ export function createQuote({
   discount = 0,
   validUntil = null,
   notes = "",
-  countryCode = "DEFAULT"
+  countryCode = "DEFAULT",
+  buyer = null
 } = {}) {
-  const totals = computeInvoiceTotals(items);
-  const discounted = Math.max(0, totals.gross * (1 - (Number(discount) || 0) / 100));
+  const totals = computeInvoiceTotals(items, { discountPercent: discount });
   return {
     id: createId("quote"),
     status: "draft",
     clientId,
+    buyer: buyer || null,
     countryCode,
     currency,
     items,
     discount: Number(discount) || 0,
     ...totals,
-    totalAfterDiscount: Math.round(discounted * 100) / 100,
+    totalAfterDiscount: totals.gross,
     validUntil,
     notes,
     acceptanceConvertsTo: ["project", "invoice_draft"],

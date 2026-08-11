@@ -95,7 +95,7 @@ import {
   FUN_ROOM_KINDS, ACHIEVEMENT_CATALOG
 } from './social-ecosystem.mjs';
 import {
-  CALL_KINDS, createCallSession, acceptCall, declineCall, endCall, setCallMedia,
+  CALL_KINDS, createCallSession, acceptCall, declineCall, endCall, setCallMedia, cancelOutgoingCall, applyRingTimeout,
   enableCallTranslation, createSyloraCall, callHistoryEntry
 } from './call-engine.mjs';
 import {
@@ -103,7 +103,7 @@ import {
   createInvoiceDraft, createExpenseExtraction, confirmExpenseExtraction, createCrmRecord,
   createQuote, createTimeEntry, createProjectBudget, createInventoryItem,
   createAccountantInvite, financeAssistantGuard, legalAssistantDisclaimer, createContractRecord,
-  buildAccountingExportMeta, ACCOUNTING_EXPORT_FORMATS
+  buildAccountingExportMeta, ACCOUNTING_EXPORT_FORMATS, issueInvoiceDocument, renderInvoicePdfText
 } from './business-finance.mjs';
 import {
   LEARNING_HUB_SECTIONS, SCIENCE_HUB_SECTIONS, TUTOR_MODES, createTutorSession,
@@ -199,6 +199,7 @@ function ensureCollections(store) {
   d.smartNotes ||= [];
   d.whiteboards ||= [];
   d.researchLibrary ||= [];
+  d.paperNotes ||= [];
   d.researchProjects ||= [];
   d.datasets ||= [];
   d.tutorSessions ||= [];
@@ -3246,6 +3247,10 @@ export class EcosystemService {
       conversationId: input.conversationId || null,
       groupId: input.groupId || null
     });
+    const rawTimeout = Number(input.ringTimeoutMs) || Number(process.env.SYLORA_CALL_RING_TIMEOUT_MS) || 45_000;
+    const minTimeout = process.env.NODE_ENV === 'test' ? 20 : 10_000;
+    const timeoutMs = Math.max(minTimeout, Math.min(120_000, rawTimeout));
+    call.ringTimeoutMs = timeoutMs;
     this.store.data.callSessions.push(call);
     this.store.save();
     const type = kind.includes('video') ? 'video_call' : 'voice_call';
@@ -3264,6 +3269,26 @@ export class EcosystemService {
         toUserId: p.userId
       });
     }
+    // Auto-missed if nobody answers (server-side; cleared when answered/cancelled).
+    if (!this._callTimeouts) this._callTimeouts = new Map();
+    const timer = setTimeout(() => {
+      this._callTimeouts?.delete(call.id);
+      const current = this.store.data.callSessions.find(c => c.id === call.id);
+      if (!current) return;
+      // Timer already waited ringTimeoutMs — force miss regardless of ms skew.
+      const out = applyRingTimeout(current, { now: Date.now(), timeoutMs: 0 });
+      if (out.timedOut) {
+        this.store.data.callHistory.unshift(callHistoryEntry(current));
+        this.store.save();
+        this.hooks.emitCall?.(current.id, 'call', { call: current, action: 'timeout', byUserId: null });
+        for (const p of current.participants || []) {
+          if (typeof this.hooks.notifyUser === 'function') {
+            this.hooks.notifyUser(p.userId, 'call_timeout', user.id, { callId: current.id, status: current.status, kind: current.kind });
+          }
+        }
+      }
+    }, timeoutMs);
+    this._callTimeouts.set(call.id, timer);
     return call;
   }
 
@@ -3275,12 +3300,18 @@ export class EcosystemService {
     if (action === 'accept') out = acceptCall(call, user.id);
     else if (action === 'decline') out = declineCall(call, user.id);
     else if (action === 'end') out = endCall(call, user.id);
+    else if (action === 'cancel') out = cancelOutgoingCall(call, user.id);
     else if (action === 'media') out = setCallMedia(call, user.id, patch);
     else if (action === 'translate') out = enableCallTranslation(call, { userId: user.id, ...patch });
     else throw new Error('INVALID_CALL_ACTION');
     if (!out.ok) throw new Error(out.error);
-    if (['ended', 'missed'].includes(call.status)) {
+    if (['ended', 'missed', 'cancelled'].includes(call.status)) {
+      const t = this._callTimeouts?.get(call.id);
+      if (t) { clearTimeout(t); this._callTimeouts.delete(call.id); }
       this.store.data.callHistory.unshift(callHistoryEntry(call));
+    } else if (call.status === 'active') {
+      const t = this._callTimeouts?.get(call.id);
+      if (t) { clearTimeout(t); this._callTimeouts.delete(call.id); }
     }
     this.store.save();
     this.hooks.emitCall?.(call.id, 'call', { call, action, byUserId: user.id });
@@ -3359,10 +3390,29 @@ export class EcosystemService {
     const inv = this.store.data.invoices.find(i => i.id === id && i.ownerId === user.id);
     if (!inv) throw new Error('INVOICE_NOT_FOUND');
     if (!INVOICE_STATUSES.includes(status)) throw new Error('INVALID_STATUS');
-    inv.status = status;
-    inv.updatedAt = this.store.now();
+    if (status === 'issued') {
+      issueInvoiceDocument(inv);
+    } else {
+      inv.status = status;
+      inv.updatedAt = this.store.now();
+    }
     this.store.save();
     return inv;
+  }
+
+  issueInvoice(user, id) {
+    const inv = this.store.data.invoices.find(i => i.id === id && i.ownerId === user.id);
+    if (!inv) throw new Error('INVOICE_NOT_FOUND');
+    issueInvoiceDocument(inv);
+    this.store.save();
+    return inv;
+  }
+
+  invoicePdf(user, id) {
+    const inv = this.store.data.invoices.find(i => i.id === id && i.ownerId === user.id);
+    if (!inv) throw new Error('INVOICE_NOT_FOUND');
+    const text = inv.pdfText || renderInvoicePdfText(inv);
+    return { invoiceId: inv.id, invoiceNumber: inv.invoiceNumber, pdfReady: !!inv.pdfReady || inv.status !== 'draft', text, contentType: 'text/plain' };
   }
 
   extractExpense(user, input = {}) {
@@ -3394,11 +3444,24 @@ export class EcosystemService {
   }
 
   createBusinessQuote(user, input = {}) {
-    const q = createQuote({ ...input, countryCode: input.countryCode || this.getBusinessCountry(user).countryCode });
+    let buyer = input.buyer || null;
+    if (input.clientId && !buyer) {
+      const client = this.store.data.crmRecords.find(r => r.id === input.clientId && r.ownerId === user.id);
+      if (client) buyer = { name: client.name };
+    }
+    const q = createQuote({
+      ...input,
+      buyer,
+      countryCode: input.countryCode || this.getBusinessCountry(user).countryCode
+    });
     q.ownerId = user.id;
     this.store.data.quotes.unshift(q);
     this.store.save();
     return q;
+  }
+
+  listQuotes(user) {
+    return this.store.data.quotes.filter(q => q.ownerId === user.id);
   }
 
   acceptQuote(user, id, convertTo = 'invoice_draft') {
@@ -3411,6 +3474,9 @@ export class EcosystemService {
         items: q.items,
         currency: q.currency,
         countryCode: q.countryCode,
+        clientId: q.clientId,
+        buyer: q.buyer || { name: 'Client' },
+        discountPercent: q.discount,
         notes: `From quote ${q.id}`
       });
     }
@@ -3511,6 +3577,20 @@ export class EcosystemService {
 
   startTutor(user, input = {}) {
     const session = createTutorSession({ userId: user.id, ...input });
+    session.courseId = input.courseId || null;
+    session.lessonId = input.lessonId || null;
+    if (input.lessonId) {
+      const lesson = this.store.data.lessons.find(l => l.id === input.lessonId);
+      if (lesson) {
+        session.subject = session.subject || lesson.title;
+        session.lessonContext = {
+          lessonId: lesson.id,
+          courseId: lesson.courseId,
+          title: lesson.title,
+          excerpt: String(lesson.content || '').slice(0, 2000)
+        };
+      }
+    }
     this.store.data.tutorSessions.unshift(session);
     this.store.save();
     return { session, policy: tutorResponsePolicy({ gradedAssignment: !!input.gradedAssignment }) };
@@ -3576,13 +3656,63 @@ export class EcosystemService {
   addLibraryItem(user, input = {}) {
     const item = createResearchLibraryItem(input);
     item.ownerId = user.id;
+    item.abstract = String(input.abstract || '').slice(0, 8000);
     this.store.data.researchLibrary.unshift(item);
     this.store.save();
     return item;
   }
 
+  listLibrary(user) {
+    return this.store.data.researchLibrary.filter(i => i.ownerId === user.id);
+  }
+
   paperReader(user, input = {}) {
-    return createPaperReaderView(input);
+    const paperId = input.paperId || input.id;
+    const item = paperId
+      ? this.store.data.researchLibrary.find(i => i.id === paperId && i.ownerId === user.id)
+      : null;
+    const view = createPaperReaderView({
+      paperId: item?.id || paperId || null,
+      title: item?.title || input.title || '',
+      abstract: item?.abstract || input.abstract || ''
+    });
+    view.metadata = item
+      ? {
+          authors: item.authors || [],
+          doi: item.doi || null,
+          url: item.url || null,
+          tags: item.tags || [],
+          doNotInventMetadata: true
+        }
+      : { doNotInventMetadata: true };
+    view.notes = this.store.data.paperNotes.filter(n => n.ownerId === user.id && n.paperId === view.paperId);
+    view.askSylora = {
+      enabled: true,
+      endpoint: '/api/ai/ask',
+      context: { contentType: 'paper', contentId: view.paperId },
+      note: 'Answers are grounded only in provided abstract/notes — citations are not invented.'
+    };
+    return view;
+  }
+
+  addPaperNote(user, paperId, text) {
+    const item = this.store.data.researchLibrary.find(i => i.id === paperId && i.ownerId === user.id);
+    if (!item) throw new Error('PAPER_NOT_FOUND');
+    const note = {
+      id: this.store.id(),
+      paperId,
+      ownerId: user.id,
+      text: String(text || '').slice(0, 4000),
+      createdAt: this.store.now()
+    };
+    if (!note.text) throw new Error('NOTE_REQUIRED');
+    this.store.data.paperNotes.unshift(note);
+    this.store.save();
+    return note;
+  }
+
+  listDatasets(user) {
+    return this.store.data.datasets.filter(d => d.ownerId === user.id);
   }
 
   addCitation(user, input = {}) {
@@ -3602,6 +3732,26 @@ export class EcosystemService {
   createDataset(user, input = {}) {
     const ds = createDatasetWorkspace(input);
     ds.ownerId = user.id;
+    const rows = ds.previewRows || [];
+    if (rows.length && ds.columns?.length) {
+      const numeric = ds.columns.filter(c => c.type === 'number' || c.type === 'numeric');
+      ds.analysis = {
+        charts: [],
+        notes: [`Preview rows: ${rows.length}`, `Columns: ${ds.columns.length}`],
+        basics: numeric.map(col => {
+          const vals = rows.map(r => Number(r[col.name])).filter(Number.isFinite);
+          if (!vals.length) return { column: col.name, count: 0 };
+          const sum = vals.reduce((a, b) => a + b, 0);
+          return {
+            column: col.name,
+            count: vals.length,
+            mean: Math.round((sum / vals.length) * 1000) / 1000,
+            min: Math.min(...vals),
+            max: Math.max(...vals)
+          };
+        })
+      };
+    }
     this.store.data.datasets.unshift(ds);
     this.store.save();
     return ds;
