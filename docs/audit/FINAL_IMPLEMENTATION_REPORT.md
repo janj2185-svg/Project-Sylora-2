@@ -15,9 +15,9 @@ Not as a random mash-up of TikTok + Twitch + Discord + ChatGPT.
 
 | Item | Status | Notes |
 |---|---|---|
-| Fragmented / disconnected Sylora avatar | **DONE** | Right upper-arm sprite was truncated (~74% height); normalized to full canvas. V7 CSS recalibrates shoulder/elbow/wrist sockets, mounts gesture layers, enables `rig-live` kinematic chain, softens joint ranges. |
+| Fragmented / disconnected Sylora avatar | **DONE** | Detached limb sprites produced floating white boxes; V7 now renders the assembled `sylora-avatar-v2-base` portrait with face/gesture atlases and hides incomplete kinematic limbs. Visual QA: assembled/neutral/wave/explain look whole. |
 | Motion rig tests | **DONE** | `tests/motion.test.mjs`, `tests/design-v7.test.mjs` |
-| Visual QA sign-off across all devices | **PARTIAL** | Preview page at `/sylora-preview.html`; browser visual QA still recommended on target devices |
+| Per-limb skeletal Digital Human | **PARTIAL** | Spring motion code remains; seamless alpha joint assets still required before re-enabling limb sprites |
 
 ## Capability matrix
 
