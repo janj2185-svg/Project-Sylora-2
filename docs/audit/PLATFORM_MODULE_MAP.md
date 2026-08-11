@@ -195,3 +195,42 @@ Shared principle: one LIVE/realtime core, one Call Engine, country-aware busines
 3. Invoice PDF + Poland/EU e-invoicing adapters after legal review
 4. Collaborative whiteboard CRDT + LIVE class breakouts
 5. Dataset analysis workers + paper summary with source fidelity checks
+
+
+---
+
+# Continuation 238–255 (Shared Engines · Science Tools · Social · Architecture)
+
+Architecture rule (253): reuse Call / LIVE / Realtime / Space / Timer / Quiz / Event / Document / Finance / Notification / Search / Sylora Intelligence. Learning Quiz · LIVE Quiz · Science Quiz = **one Quiz Engine**.
+
+Priority (254): P0 calls/LIVE stability/intelligence/nav/auth/security → P1 entertainment/timer/learning/invoices/science library → P2 accounting/legal/teacher/scientific tools/conference/mini-games → P3 advanced ecosystem. No decorative placeholder pages.
+
+| MODULE | STATUS | FRONTEND | BACKEND | DATABASE | AI | SECURITY | TESTS | PRODUCTION READY |
+|---|---|---|---|---|---|---|---|---|
+| 238 Experiment Log | PARTIAL | Science CTA | experiments append-only versions | experimentLogs | — | immutable history | engines-science-social | No |
+| 239 Scientific Calculators | PARTIAL | Physics KE CTA | modular calculator framework | — | units+assumptions | — | engines-science-social | No |
+| 240 Formula Workspace | PARTIAL | Formula CTA | formulas API | formulaWorkspaces | symbolic setup_required | — | engines-science-social | No |
+| 241 Statistics Workspace | PARTIAL | Stats assist CTA | explain + descriptive/CI | — | explanation required | assumptions listed | engines-science-social | No |
+| 242 Science Visualization | PARTIAL | manifest | lazy-load heavy engines list | — | — | no eager heavy load | engines-science-social | No |
+| 243 Science Collaboration | PARTIAL | — | `/api/science/match` | derived | interest matching | no invasive profile | unit | No |
+| 244 Peer Discussion | PARTIAL | Circle CTA | science circles + comments | scienceCircles | source linking | moderation flags | engines-science-social | No |
+| 245 Conference Mode | PARTIAL | reuse conference UI | program agenda/speakers/QA | conferencePrograms | shared engine | education/business/science | engines-science-social | No |
+| 246 Universal Timer Engine | PARTIAL | Focus + assistant | `timer-engine.mjs` all scopes | liveTimers | server_time sync | personal/shared | engines-science-social | No |
+| 247 Sylora Time Assistant | PARTIAL | AI command | `/api/timers/assistant` + command tool | timers | NL parse | — | engines-science-social | No |
+| 248 Fun Social Rooms | PARTIAL | Communities CTAs | fun-rooms API | funSocialRooms | — | no gifts required | engines-science-social | No |
+| 249 Community Events | PARTIAL | Workshop CTA | community-events + primitives | communityEvents | — | — | engines-science-social | No |
+| 250 Safe Discovery | PARTIAL | Opt-in CTA | interest match; no anon video | discoveryProfiles | — | block/report required flags | engines-science-social | No |
+| 251 Achievements | PARTIAL | Communities strip | domain-scoped catalog | userAchievements | — | no global human ranking | engines-science-social | No |
+| 252 Seasonal LIVE Events | PARTIAL | API | modular asset packs | seasonalLiveEvents | — | lazy packs | engines-science-social | No |
+| 253 Final Architecture Rule | PARTIAL | — | `/api/engines` registry | — | — | reuse mandate | engines-science-social | N/A |
+| 254 Priority Order | DONE | — | PRIORITY_ORDER in social-ecosystem | — | — | — | engines-science-social | N/A |
+| 255 Final QA | PARTIAL | — | QA_CHECKLIST contract | — | — | module readiness gates | engines-science-social | No |
+
+## QA gates (255) — not claiming production-ready
+- Voice/video: two real browser sessions still required before Call Engine = ready
+- Timer: server sync covered in unit/HTTP tests; background depends on device
+- Invoice PDF: calculation covered earlier; PDF generation still pending
+- Learning student+teacher roles: foundations only
+- Science citations integrity: reject unverified DOI (prior) + experiment immutability (238)
+- Business owner/employee/accountant: accountant invite scopes exist; full RBAC matrix pending
+- Production VPS deployment deferred to final phase

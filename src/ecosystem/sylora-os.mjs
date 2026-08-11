@@ -217,6 +217,9 @@ export function routeOperatingIntent(text = '') {
   if (/goal|ціль|milestone/i.test(lower)) {
     return { intent: 'goals', specialist: 'planning', skill: 'daily-planning', tool: 'list_goals', confidence: 0.75, view: 'dashboard' };
   }
+  if (/постав\s*\d+|таймер|timer|pomodoro|засіч|stopwatch|попередь\s*за|хвилин\s*на\s*навчан|25\s*хвилин/i.test(lower)) {
+    return { intent: 'time_assistant', specialist: 'planning', skill: 'daily-planning', tool: 'timer_assistant', confidence: 0.9, view: 'dashboard' };
+  }
 
   return { intent: 'ask_sylora', specialist: 'search', skill: 'universal-search', tool: 'search_platform', confidence: 0.4, view: 'ai' };
 }

@@ -1,7 +1,16 @@
 /**
  * SYLORA LIVE Entertainment Engine — shared LIVE/realtime core extensions.
  * Does not fork a second WebSocket/SSE stack.
+ * Timers come from Universal Timer Engine (246) — re-exported for compatibility.
  */
+
+export {
+  TIMER_KINDS,
+  FOCUS_PRESETS,
+  createServerTimer,
+  timerSnapshot,
+  createFocusSession
+} from './timer-engine.mjs';
 
 export const BATTLE_MODES = Object.freeze([
   '1v1', '2v2', '3v3', 'team_vs_team', 'creator_vs_community',
@@ -17,10 +26,6 @@ export const LIVE_ROOM_KINDS = Object.freeze([
 ]);
 
 export const STAGE_ROLES = Object.freeze(['host', 'speaker', 'audience']);
-
-export const TIMER_KINDS = Object.freeze([
-  'countdown', 'stopwatch', 'round', 'break', 'focus', 'presentation'
-]);
 
 export const MINI_GAMES = Object.freeze([
   'trivia', 'guess_image', 'word_challenge', 'reaction_race',
@@ -329,75 +334,4 @@ export function stageRemove(stage, userId, hostId) {
   return stage;
 }
 
-/** Server-authoritative timer — clients sync to serverNow. */
-export function createServerTimer({
-  id, scopeType, scopeId, kind = 'countdown', durationSec = 60, label = ''
-} = {}) {
-  if (!TIMER_KINDS.includes(kind)) throw new Error('INVALID_TIMER_KIND');
-  const serverNow = Date.now();
-  return {
-    id,
-    scopeType, // live | battle | quiz | challenge | study | meeting | presentation | event | call
-    scopeId,
-    kind,
-    label: String(label || kind).slice(0, 80),
-    durationSec: Math.max(1, Number(durationSec) || 60),
-    startedAtMs: serverNow,
-    endsAtMs: kind === 'stopwatch' ? null : serverNow + Math.max(1, Number(durationSec) || 60) * 1000,
-    status: 'running',
-    serverNowMs: serverNow,
-    sync: 'server_time',
-    note: 'Do not rely on client clocks alone.'
-  };
-}
-
-export function timerSnapshot(timer, nowMs = Date.now()) {
-  const remainingMs = timer.endsAtMs == null ? null : Math.max(0, timer.endsAtMs - nowMs);
-  const elapsedMs = Math.max(0, nowMs - timer.startedAtMs);
-  let status = timer.status;
-  if (timer.endsAtMs != null && remainingMs === 0 && status === 'running') status = 'completed';
-  return {
-    ...timer,
-    status,
-    serverNowMs: nowMs,
-    remainingMs,
-    elapsedMs,
-    remainingSec: remainingMs == null ? null : Math.ceil(remainingMs / 1000)
-  };
-}
-
-export const FOCUS_PRESETS = Object.freeze([
-  { id: '25_5', focusMin: 25, breakMin: 5 },
-  { id: '50_10', focusMin: 50, breakMin: 10 },
-  { id: 'custom', focusMin: null, breakMin: null }
-]);
-
-export function createFocusSession({
-  id, userId, roomId = null, preset = '25_5', focusMin = 25, breakMin = 5
-} = {}) {
-  const p = FOCUS_PRESETS.find(x => x.id === preset) || FOCUS_PRESETS[0];
-  const f = preset === 'custom' ? Math.max(1, Number(focusMin) || 25) : p.focusMin;
-  const b = preset === 'custom' ? Math.max(1, Number(breakMin) || 5) : p.breakMin;
-  const serverNow = Date.now();
-  return {
-    id,
-    userId,
-    roomId,
-    preset,
-    phase: 'focus',
-    focusMin: f,
-    breakMin: b,
-    notificationsMinimized: true,
-    aggressiveGamification: false,
-    timer: createServerTimer({
-      id: `${id}-timer`,
-      scopeType: 'study',
-      scopeId: roomId || id,
-      kind: 'focus',
-      durationSec: f * 60,
-      label: 'Focus'
-    }),
-    startedAtMs: serverNow,
-    status: 'running'
-  };
-}
+/* Timer helpers live in timer-engine.mjs and are re-exported above. */

@@ -1012,5 +1012,120 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, { mode: ecosystem.languageTutor(user, await body(req)) }), true;
   }
 
+
+  // —— Shared engines + Science/Social (238–255) ——
+  if (req.method === 'GET' && p === '/api/engines') {
+    return json(res, 200, ecosystem.sharedEngines()), true;
+  }
+  if (req.method === 'POST' && p === '/api/timers/assistant') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.timeAssistant(user, input.text || input.query || '')), true;
+  }
+  m = route('/api/timers/:id/:action', p);
+  if (req.method === 'POST' && m && ['pause', 'resume', 'complete'].includes(m.action)) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { timer: ecosystem.timerAction(user, m.id, m.action) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/quizzes') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { quiz: ecosystem.createSharedQuiz(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/quizzes/:id/answer', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, ecosystem.answerSharedQuiz(user, m.id, await body(req))), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/science/experiments') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { experiment: ecosystem.createExperiment(user, await body(req)) }), true;
+  }
+  m = route('/api/science/experiments/:id', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { experiment: ecosystem.updateExperiment(user, m.id, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/science/experiments/:id/versions/:version', p);
+  if (req.method === 'PUT' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 409, ecosystem.refuseExperimentRewrite(user, m.id, m.version)), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/science/calculators') {
+    return json(res, 200, ecosystem.calculators()), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/calculators/run') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { result: ecosystem.calculate(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/science/formulas') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { workspace: ecosystem.createFormula(user, await body(req)) }), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/statistics') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 200, { analysis: ecosystem.statisticsAssist(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'GET' && p === '/api/science/visualization') {
+    return json(res, 200, ecosystem.scienceViz()), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/match') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.scienceMatch(user, await body(req))), true;
+  }
+  if (req.method === 'POST' && p === '/api/science/circles') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { circle: ecosystem.createCircle(user, await body(req)) }), true;
+  }
+  m = route('/api/science/circles/:id/comments', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, ecosystem.commentCircle(user, m.id, await body(req))), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/conferences/program') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { program: ecosystem.createConferenceMode(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  m = route('/api/conferences/program/:id/qa', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { qa: ecosystem.conferenceQa(user, m.id, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/social/fun-rooms') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { room: ecosystem.createFunRoom(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/social/community-events') {
+    const user = await requireUser(req, res); if (!user) return true;
+    try { return json(res, 201, { event: ecosystem.createCommunityEvt(user, await body(req)) }), true; }
+    catch (e) { return json(res, 400, { error: e.message }), true; }
+  }
+  if (req.method === 'POST' && p === '/api/social/discovery') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, { profile: ecosystem.upsertDiscovery(user, await body(req)) }), true;
+  }
+  if (req.method === 'GET' && p === '/api/social/discovery/matches') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.runDiscovery(user)), true;
+  }
+  if (req.method === 'GET' && p === '/api/achievements') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 200, ecosystem.achievementsFor(user)), true;
+  }
+  if (req.method === 'POST' && p === '/api/live/seasonal') {
+    const user = await requireUser(req, res); if (!user) return true;
+    return json(res, 201, { event: ecosystem.createSeasonalEvent(user, await body(req)) }), true;
+  }
+
   return false;
 }

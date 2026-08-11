@@ -72,13 +72,28 @@ import {
 } from './sylora-os.mjs';
 
 import {
-  BATTLE_MODES, LIVE_ROOM_KINDS, MINI_GAMES, CHALLENGE_KINDS, TIMER_KINDS,
+  BATTLE_MODES, LIVE_ROOM_KINDS, MINI_GAMES, CHALLENGE_KINDS,
   createBattlePlan, applyBattleFactor, advanceBattleRound, resonanceWorldState,
   createLiveChallenge, createLiveQuiz, quizLeaderboard, createMiniGameSession,
   createAudienceVsSylora, createCoHostControl, createLiveRoomProfile,
-  createStageState, stageRaiseHand, stageInvite, stageRemove,
-  createServerTimer, timerSnapshot, createFocusSession, FOCUS_PRESETS
+  createStageState, stageRaiseHand, stageInvite, stageRemove
 } from './live-entertainment.mjs';
+import {
+  TIMER_KINDS, FOCUS_PRESETS, createServerTimer, timerSnapshot, createFocusSession,
+  parseTimeAssistantIntent, pauseTimer, resumeTimer, TIMER_SCOPES
+} from './timer-engine.mjs';
+import { createQuiz, openQuiz, submitAnswer, quizLeaderboard as engineQuizLeaderboard, QUIZ_CONTEXTS } from './quiz-engine.mjs';
+import {
+  createExperimentLog, appendExperimentVersion, mutateExperimentVersion,
+  listCalculators, runCalculator, createFormulaWorkspace, analyzeStatistics,
+  visualizationManifest, matchResearchers, createScienceCircle, addCircleComment
+} from './science-tools.mjs';
+import { createConferenceProgram, addConferenceQa, attachRecording, CONFERENCE_KINDS } from './conference-mode.mjs';
+import {
+  createFunSocialRoom, createCommunityEvent, createDiscoveryProfile, matchDiscovery,
+  evaluateAchievements, createSeasonalLiveEvent, SHARED_ENGINE_REGISTRY, PRIORITY_ORDER, QA_CHECKLIST,
+  FUN_ROOM_KINDS, ACHIEVEMENT_CATALOG
+} from './social-ecosystem.mjs';
 import {
   CALL_KINDS, createCallSession, acceptCall, declineCall, endCall, setCallMedia,
   enableCallTranslation, createSyloraCall, callHistoryEntry
@@ -187,8 +202,19 @@ function ensureCollections(store) {
   d.researchProjects ||= [];
   d.datasets ||= [];
   d.tutorSessions ||= [];
+  d.experimentLogs ||= [];
+  d.formulaWorkspaces ||= [];
+  d.scienceCircles ||= [];
+  d.conferencePrograms ||= [];
+  d.sharedQuizzes ||= [];
+  d.funSocialRooms ||= [];
+  d.communityEvents ||= [];
+  d.discoveryProfiles ||= [];
+  d.userAchievements ||= [];
+  d.seasonalLiveEvents ||= [];
   d.audit ||= d.audit || [];
 }
+
 
 
 function audit(store, actorId, action, targetType, targetId, metadata = {}) {
@@ -503,7 +529,7 @@ export class EcosystemService {
       }
       case 'create_room': {
         const title = String(input.title || 'Meeting').slice(0, 120);
-        const kind = input.kind === 'science' ? 'science' : 'business';
+        const kind = ['science', 'education', 'business'].includes(input.kind) ? input.kind : 'business';
         const room = {
           id: this.store.id(), ownerId: user.id, kind, title,
           description: String(input.description || '').slice(0, 800),
@@ -575,6 +601,8 @@ export class EcosystemService {
         return { ok: true, result: { goals: this.listGoals(user) } };
       case 'intelligent_inbox':
         return { ok: true, result: this.intelligentInbox(user) };
+      case 'timer_assistant':
+        return { ok: true, result: this.timeAssistant(user, input.raw || input.text || input.q || '') };
       default:
         return { ok: true, result: { accepted: true, type, note: 'No dedicated executor — marked complete' } };
     }
@@ -645,7 +673,7 @@ export class EcosystemService {
     const tool = getTool(plan.tool);
     const osTools = new Set([
       'daily_brief', 'list_open_work', 'prepare_meeting', 'content_history_search',
-      'recall_decision', 'list_goals', 'intelligent_inbox'
+      'recall_decision', 'list_goals', 'intelligent_inbox', 'timer_assistant'
     ]);
     this.recordActivity(user, {
       kind: 'universal_command',
@@ -2845,11 +2873,16 @@ export class EcosystemService {
   createTimer(user, input = {}) {
     const timer = createServerTimer({
       id: this.store.id(),
-      scopeType: input.scopeType || 'live',
+      scopeType: input.scopeType || 'personal',
       scopeId: input.scopeId || user.id,
       kind: input.kind || 'countdown',
       durationSec: input.durationSec,
-      label: input.label
+      label: input.label,
+      visibility: input.visibility || 'personal',
+      ownerId: user.id,
+      warnBeforeSec: input.warnBeforeSec,
+      scheduledStartAtMs: input.scheduledStartAtMs,
+      backgroundAllowed: input.backgroundAllowed !== false
     });
     this.store.data.liveTimers.push(timer);
     this.store.save();
@@ -2859,6 +2892,37 @@ export class EcosystemService {
   getTimer(timerId) {
     const timer = this.store.data.liveTimers.find(t => t.id === timerId);
     if (!timer) return null;
+    const snap = timerSnapshot(timer);
+    if (snap.warnDue && !timer.warnFired) {
+      timer.warnFired = true;
+      this.store.save();
+      snap.warnFiredNow = true;
+    }
+    // persist scheduled→running transition
+    if (snap.status !== timer.status || snap.startedAtMs !== timer.startedAtMs) {
+      Object.assign(timer, {
+        status: snap.status,
+        startedAtMs: snap.startedAtMs,
+        endsAtMs: snap.endsAtMs
+      });
+      this.store.save();
+    }
+    return snap;
+  }
+
+  timerAction(user, timerId, action) {
+    const timer = this.store.data.liveTimers.find(t => t.id === timerId);
+    if (!timer) throw new Error('TIMER_NOT_FOUND');
+    if (timer.ownerId && timer.ownerId !== user.id && timer.visibility === 'personal') {
+      throw new Error('TIMER_FORBIDDEN');
+    }
+    let next = timer;
+    if (action === 'pause') next = pauseTimer(timer);
+    else if (action === 'resume') next = resumeTimer(timer);
+    else if (action === 'complete') { timer.status = 'completed'; next = timer; }
+    else throw new Error('INVALID_TIMER_ACTION');
+    Object.assign(timer, next);
+    this.store.save();
     return timerSnapshot(timer);
   }
 
@@ -2872,8 +2936,284 @@ export class EcosystemService {
       breakMin: input.breakMin
     });
     this.store.data.focusSessions.push(session);
+    this.store.data.liveTimers.push(session.timer);
     this.store.save();
     return session;
+  }
+
+  timeAssistant(user, text) {
+    const intent = parseTimeAssistantIntent(text);
+    if (!intent) {
+      return {
+        ok: false,
+        error: 'TIME_INTENT_UNCLEAR',
+        hint: 'Examples: "постав 25 хвилин на навчання", "засічи роботу над проєктом", "попередь за 5 хвилин до кінця презентації"',
+        engine: 'timer_engine_v1'
+      };
+    }
+    if (intent.action === 'start_stopwatch') {
+      const timer = this.createTimer(user, {
+        kind: 'stopwatch',
+        scopeType: intent.scopeType,
+        label: intent.label,
+        durationSec: 1
+      });
+      return { ok: true, intent, timer, engine: 'timer_engine_v1' };
+    }
+    if (intent.preset === '25_5' && intent.scopeType === 'study') {
+      const session = this.startFocus(user, { preset: '25_5' });
+      return { ok: true, intent, session, timer: timerSnapshot(session.timer), engine: 'timer_engine_v1' };
+    }
+    const timer = this.createTimer(user, {
+      kind: 'countdown',
+      scopeType: intent.scopeType,
+      label: intent.label,
+      durationSec: intent.durationSec,
+      warnBeforeSec: intent.warnBeforeSec
+    });
+    return { ok: true, intent, timer, engine: 'timer_engine_v1' };
+  }
+
+  sharedEngines() {
+    return {
+      registry: SHARED_ENGINE_REGISTRY,
+      priority: PRIORITY_ORDER,
+      qa: QA_CHECKLIST,
+      timerScopes: TIMER_SCOPES,
+      quizContexts: QUIZ_CONTEXTS,
+      conferenceKinds: CONFERENCE_KINDS,
+      funRoomKinds: FUN_ROOM_KINDS,
+      rule: 'New features must reuse shared engines — Learning/LIVE/Science quizzes share quiz_engine_v1.'
+    };
+  }
+
+  // —— Science tools 238–244 ——
+  createExperiment(user, input = {}) {
+    const log = createExperimentLog({ researcherId: user.id, ...input });
+    this.store.data.experimentLogs.unshift(log);
+    this.store.save();
+    return log;
+  }
+
+  updateExperiment(user, experimentId, patch = {}) {
+    const log = this.store.data.experimentLogs.find(e => e.id === experimentId);
+    if (!log) throw new Error('EXPERIMENT_NOT_FOUND');
+    if (log.researcherId !== user.id) throw new Error('FORBIDDEN');
+    appendExperimentVersion(log, patch, user.id);
+    this.store.save();
+    return log;
+  }
+
+  refuseExperimentRewrite(user, experimentId, version) {
+    const log = this.store.data.experimentLogs.find(e => e.id === experimentId);
+    if (!log) throw new Error('EXPERIMENT_NOT_FOUND');
+    return mutateExperimentVersion(log, Number(version), {});
+  }
+
+  calculators() { return { calculators: listCalculators() }; }
+
+  calculate(user, input = {}) {
+    return runCalculator(input.moduleId, input.op, input.inputs || {});
+  }
+
+  createFormula(user, input = {}) {
+    const ws = createFormulaWorkspace({ ...input, ownerId: user.id });
+    this.store.data.formulaWorkspaces.unshift(ws);
+    this.store.save();
+    return ws;
+  }
+
+  statisticsAssist(user, input = {}) {
+    return analyzeStatistics(input || {});
+  }
+
+  scienceViz() { return visualizationManifest(); }
+
+  scienceMatch(user, input = {}) {
+    const library = this.store.data.researchLibrary || [];
+    const projects = this.store.data.researchProjects || [];
+    const researchers = (this.store.data.users || []).slice(0, 50).map(u => ({
+      userId: u.id,
+      username: u.username,
+      interests: input.seedInterests || []
+    }));
+    return matchResearchers({
+      interests: input.interests || [],
+      researchers,
+      projects: projects.map(p => ({ id: p.id, title: p.title, tags: [p.hypothesis || ''], interests: [] })),
+      institutions: input.institutions || []
+    });
+  }
+
+  createCircle(user, input = {}) {
+    const circle = createScienceCircle({ ...input, ownerId: user.id });
+    this.store.data.scienceCircles.unshift(circle);
+    this.store.save();
+    return circle;
+  }
+
+  commentCircle(user, circleId, input = {}) {
+    const circle = this.store.data.scienceCircles.find(c => c.id === circleId);
+    if (!circle) throw new Error('CIRCLE_NOT_FOUND');
+    const comment = addCircleComment(circle, { userId: user.id, ...input });
+    this.store.save();
+    return { circle, comment };
+  }
+
+  // —— Conference mode / Quiz engine ——
+  createConferenceMode(user, input = {}) {
+    const program = createConferenceProgram({
+      conferenceId: input.conferenceId || this.store.id(),
+      kind: input.kind || 'science',
+      agenda: input.agenda,
+      speakers: input.speakers,
+      sessions: input.sessions,
+      documents: input.documents,
+      translationEnabled: !!input.translationEnabled
+    });
+    program.ownerId = user.id;
+    this.store.data.conferencePrograms.unshift(program);
+    this.store.save();
+    return program;
+  }
+
+  conferenceQa(user, programId, input = {}) {
+    const program = this.store.data.conferencePrograms.find(p => p.id === programId);
+    if (!program) throw new Error('PROGRAM_NOT_FOUND');
+    const item = addConferenceQa(program, { userId: user.id, ...input });
+    this.store.save();
+    return item;
+  }
+
+  createSharedQuiz(user, input = {}) {
+    const quiz = createQuiz({
+      id: this.store.id(),
+      context: input.context || 'learning',
+      ownerId: user.id,
+      spaceId: input.spaceId || null,
+      title: input.title,
+      questions: input.questions || [],
+      timerSec: input.timerSec,
+      randomizeOrder: !!input.randomizeOrder,
+      teamMode: !!input.teamMode
+    });
+    if (input.open) {
+      const opened = openQuiz(quiz, { durationSec: input.timerSec });
+      Object.assign(quiz, opened);
+      if (quiz.timerSec) {
+        const timer = this.createTimer(user, {
+          scopeType: 'quiz',
+          scopeId: quiz.id,
+          kind: 'countdown',
+          durationSec: quiz.timerSec,
+          label: quiz.title,
+          visibility: 'shared'
+        });
+        quiz.timerRef = timer.id;
+      }
+    }
+    this.store.data.sharedQuizzes.unshift(quiz);
+    this.store.save();
+    return quiz;
+  }
+
+  answerSharedQuiz(user, quizId, input = {}) {
+    const quiz = this.store.data.sharedQuizzes.find(q => q.id === quizId);
+    if (!quiz) throw new Error('QUIZ_NOT_FOUND');
+    const entry = submitAnswer(quiz, {
+      userId: user.id,
+      questionId: input.questionId,
+      value: input.value,
+      teamId: input.teamId
+    });
+    this.store.save();
+    return { entry, leaderboard: engineQuizLeaderboard(quiz, { teamMode: quiz.teamMode }) };
+  }
+
+  // —— Social 248–252 ——
+  createFunRoom(user, input = {}) {
+    const room = createFunSocialRoom({
+      id: this.store.id(),
+      hostId: user.id,
+      kind: input.kind || 'coffee',
+      title: input.title,
+      liveId: input.liveId || null
+    });
+    this.store.data.funSocialRooms.unshift(room);
+    this.store.save();
+    return room;
+  }
+
+  createCommunityEvt(user, input = {}) {
+    const evt = createCommunityEvent({
+      id: this.store.id(),
+      communityId: input.communityId || null,
+      hostId: user.id,
+      kind: input.kind || 'workshop',
+      title: input.title,
+      startsAt: input.startsAt || null,
+      liveId: input.liveId || null,
+      quizId: input.quizId || null,
+      timerId: input.timerId || null
+    });
+    this.store.data.communityEvents.unshift(evt);
+    // also mirror into platform events when possible
+    this.store.data.platformEvents?.unshift?.({
+      id: this.store.id(),
+      title: evt.title,
+      startsAt: evt.startsAt || 'tba',
+      mode: 'community',
+      kind: evt.kind,
+      hostId: user.id,
+      createdAt: this.store.now()
+    });
+    this.store.save();
+    return evt;
+  }
+
+  upsertDiscovery(user, input = {}) {
+    const profile = createDiscoveryProfile({ userId: user.id, ...input });
+    this.store.data.discoveryProfiles = this.store.data.discoveryProfiles.filter(p => p.userId !== user.id);
+    this.store.data.discoveryProfiles.push(profile);
+    this.store.save();
+    return profile;
+  }
+
+  runDiscovery(user) {
+    const me = this.store.data.discoveryProfiles.find(p => p.userId === user.id);
+    if (!me) return { matches: [], note: 'Create an opt-in discovery profile first.' };
+    return matchDiscovery(me, this.store.data.discoveryProfiles);
+  }
+
+  achievementsFor(user) {
+    const signals = {
+      coursesCompleted: (this.store.data.enrollments || []).filter(e => e.userId === user.id && (e.progress || 0) >= 1).length,
+      livesHosted: (this.store.data.liveRooms || []).filter(r => r.hostId === user.id).length,
+      researchPublished: (this.store.data.researchProjects || []).filter(p => p.ownerId === user.id).length,
+      communityActions: (this.store.data.communityPosts || []).filter(p => p.userId === user.id).length,
+      invoicesDrafted: (this.store.data.invoices || []).filter(i => i.ownerId === user.id).length,
+      studyDays: (this.store.data.focusSessions || []).filter(f => f.userId === user.id).length
+    };
+    const result = evaluateAchievements({ signals });
+    for (const a of result.unlocked) {
+      if (!this.store.data.userAchievements.some(x => x.userId === user.id && x.id === a.id)) {
+        this.store.data.userAchievements.push({ ...a, userId: user.id, unlockedAt: this.store.now() });
+      }
+    }
+    this.store.save();
+    return {
+      ...result,
+      catalog: ACHIEVEMENT_CATALOG,
+      mine: this.store.data.userAchievements.filter(a => a.userId === user.id)
+    };
+  }
+
+  createSeasonalEvent(user, input = {}) {
+    const evt = createSeasonalLiveEvent({ id: this.store.id(), ...input });
+    evt.hostId = user.id;
+    this.store.data.seasonalLiveEvents.unshift(evt);
+    this.store.save();
+    return evt;
   }
 
   // —— Call Engine (194–198) ——

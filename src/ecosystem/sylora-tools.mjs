@@ -85,6 +85,9 @@ export function detectIntent(text = '', locale = 'uk') {
   if (/що\s*сьогодні|daily brief|важливого сьогодні/i.test(lower)) {
     return { intent: 'daily_brief', tool: 'manage_notifications', confidence: 0.55, slots, view: 'home', osTool: 'daily_brief' };
   }
+  if (/постав\s*\d+|таймер|timer|pomodoro|засіч|stopwatch|попередь\s*за|хвилин\s*на\s*навчан/i.test(lower)) {
+    return { intent: 'time_assistant', tool: 'manage_notifications', confidence: 0.7, slots: { ...slots, text: q }, view: 'dashboard', osTool: 'timer_assistant' };
+  }
 
   return { intent: 'ask_sylora', tool: 'search_platform', confidence: 0.4, slots: { ...slots, q }, view: 'ai', naturalLanguage: true };
 }
