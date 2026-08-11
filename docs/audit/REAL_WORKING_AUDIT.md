@@ -1,71 +1,86 @@
-# SYLORA Real Working Audit (2026-08-11)
+# SYLORA Real Working Audit (updated)
 
-Honest status after code audit of `Project-Sylora-2` on branch tip including home living-bg + working-flows. Production path `/opt/sylora` is **not mounted on this Cloud Agent VM** — VPS deploy remains **BLOCKED** until SSH secrets exist. No destructive reset planned.
+Branch: `cursor/sylora-real-working-34a2`  
+Production `/opt/sylora` / getsylora.com deploy: **BLOCKED_EXTERNAL** (no SSH on this agent). No destructive reset.
 
-Legend: **WORKING** = persists + auth + real behavior under test · **PARTIAL** = real path with gaps · **MOCK** = looks finished but local/fake · **NOT IMPLEMENTED** · **BROKEN** · **BLOCKED** (env/secrets)
+Legend: **WORKING** · **PARTIAL** · **MOCK** · **NOT_IMPLEMENTED** · **BLOCKED_EXTERNAL**
 
 ## Authentication
 | Area | Status | Notes |
 |---|---|---|
-| Register / login / logout | WORKING | JSON store + Postgres path; no simulated success |
-| Session persistence | WORKING | Bearer token + hashed sessions; TTL; `/api/auth/status` |
-| Protected routes | WORKING | `requireUser` on private APIs |
-| Profile PATCH | WORKING | displayName/bio/locale |
-| Session list/revoke | PARTIAL | Full on JSON store; Postgres limited to current |
-| Password reset | WORKING* | Token request/confirm; email delivery BLOCKED without mail provider (`ALLOW_DEV_RESET_TOKEN` exposes token in test/dev only) |
-| Google login | NOT IMPLEMENTED / BLOCKED | Scaffold returns `GOOGLE_OAUTH_NOT_CONFIGURED` until client id/secret |
+| Register / login / logout | WORKING | No simulated success |
+| Session persistence + renew | WORKING | `POST /api/sessions/renew` |
+| Session list/revoke | WORKING | JSON + Postgres list/revoke/all |
+| Protected routes | WORKING | |
+| Profile PATCH (multi-locale) | WORKING | uk/pl/en/de/es/fr/it/pt/cs/sk/ro/nl/tr |
+| Password reset | WORKING* | Single-use + expiry; email delivery BLOCKED_EXTERNAL |
+| Login lockout | WORKING | Per-identity + IP rate limit |
+| Google OAuth | BLOCKED_EXTERNAL | Integration boundary ready (`/google`, `/start`, `/callback`) |
 
 ## Sylora AI
 | Area | Status | Notes |
 |---|---|---|
-| `/api/ai/chat` | WORKING when `OPENAI_API_KEY` | 503 `AI_PROVIDER_NOT_CONFIGURED` without key — no fake answers |
-| `/api/ai/chat/stream` | WORKING when key | SSE token stream; setup_required without provider |
-| Memory / history / confirm actions | WORKING | Persisted |
-| Voice realtime | PARTIAL / BLOCKED | Needs key + browser mic; architecture ready |
-| `/api/ai/ask` & LIVE Copilot | PARTIAL | Extractive/local heuristics — labeled `extractive_local`, not model chat |
-| Streaming UI | PARTIAL → improved | Client uses stream endpoint when available |
+| `/api/ai/chat` | WORKING when key | Fail-closed 503 without key |
+| `/api/ai/chat/stream` | PARTIAL → honest | Progressive chunks after complete provider call; cancel on disconnect; language routing; usage fields when provider returns them. True OpenAI token SSE = BLOCKED_EXTERNAL until live key + `responses.stream` verification |
+| Memory / history / confirm | WORKING | |
+| Language detect + reply routing | WORKING | `language-detect` + `routeLanguage` in chat path |
+| Voice realtime | BLOCKED_EXTERNAL | Needs key + mic |
+| Local context / Copilot highlights | WORKING as **local tools** | Explicitly `local_context_tool` / heuristic — not model AI |
 
 ## LIVE / WebRTC
 | Area | Status | Notes |
 |---|---|---|
-| Create/list/end LIVE, chat, likes, SSE | WORKING | |
-| WebRTC host/viewer signaling | WORKING (same-LAN) | TURN NAT cross-network BLOCKED without TURN creds |
-| Following tab | WORKING* | `GET /api/live/following` filters by follow graph |
-| Studio camera/mic/OBS companion | PARTIAL | Real media; Companion credentials local |
-| Gifts in LIVE | WORKING (TEST LUMEN) | Animation + ledger + SSE |
+| Create/list/end, chat, likes, SSE | WORKING | Chat unified into watch player (no double viewer lease) |
+| Following tab | WORKING | `/api/live/following` |
+| Studio camera/mic + device select | WORKING | `enumerateDevices` pickers |
+| WebRTC reconnect attempt | PARTIAL | `restartIce` + re-announce; NAT still needs TURN |
+| Gifts in LIVE | WORKING | Atomic (PG) / idempotent JSON; animation + SFX |
+| TURN cross-network | BLOCKED_EXTERNAL | |
+| OBS Companion | PARTIAL | Local credentials |
 
 ## Social / Messages / Calls
 | Area | Status | Notes |
 |---|---|---|
-| Posts, comments, likes, follows, feed, search | WORKING | Persist in JSON/Postgres |
-| Notifications | WORKING | |
+| Posts create/edit/delete | WORKING | Owner-gated |
+| Comments create/edit/delete/react | WORKING | + migration `012` |
+| Followers / following lists | WORKING | |
+| Feed / search / notifications / block / report | WORKING | |
 | Messages delivery/read/typing/unread | WORKING | |
-| Calls signaling / mute / miss / cancel | WORKING | Media NAT BLOCKED |
-| Media upload | WORKING | Size/type validation |
+| Presence online/offline | WORKING | Via `/api/events` heartbeat + `/api/presence` |
+| DM attachments | NOT_IMPLEMENTED | Media pipeline exists but not wired to DMs (no invented product) |
+| Calls signaling | WORKING | Media NAT BLOCKED_EXTERNAL |
 
-## Wallet / monetization
+## Wallet / gifts / monetization
 | Area | Status | Notes |
 |---|---|---|
-| Unified Wallet UI | WORKING* | Balance + earnings + ledger; TEST LUMEN labeled |
-| Gift send + creator earnings | WORKING | Idempotency on Postgres path |
-| Dual-write register wallet | FIXED | JSON wallet only when Postgres wallet off |
-| Invoice “paid” | PARTIAL | Manual status — not PSP success |
-| Commerce checkout | MOCK / sandbox | `sandbox_paid` only |
-| Real payments | BLOCKED | Integration env vars reserved |
+| Unified wallet | WORKING | TEST LUMEN labeled |
+| Integer amounts + gift idempotency (JSON+PG) | WORKING | Float quantity rejected |
+| Gift LIVE path | WORKING | Balance check → atomic/idempotent → event → credit |
+| Admin refund (JSON) | WORKING | Reverse legs; PG reverse = architecture boundary PARTIAL |
+| Invoice paid | PARTIAL | Manual status honesty |
+| Commerce sandbox | MOCK | Explicit sandbox |
+| Real PSP | BLOCKED_EXTERNAL | |
 
-## Production
+## Security / production
 | Area | Status | Notes |
 |---|---|---|
-| Docker/compose, health/ready | WORKING (local) | |
-| Deploy to `/opt/sylora` / getsylora.com | BLOCKED | No SSH from this agent; do not force-reset server backup |
-| Secrets in git | WORKING policy | `.env.example` placeholders only |
+| CSP / headers / rate limits / upload magic | WORKING | Prior + maintained |
+| Production env validation warnings | WORKING | Surfaced on `/api/health` |
+| Docker non-root + HEALTHCHECK | WORKING | |
+| Deploy script backup | WORKING | |
+| VPS deploy | BLOCKED_EXTERNAL | |
+| Artifacts `64`/`T`/`rn` | N/A | Not in repo — see `RUNTIME_ARTIFACTS.md` |
+| `bootstrap-diagnostics.js` | WORKING | Keep |
 
-## Counts (approx, after this milestone)
+## Counts (this pass)
 | Status | Count |
 |---|---|
-| WORKING | ~42 |
-| PARTIAL | ~28 |
-| MOCK | ~3 |
-| NOT IMPLEMENTED | ~2 |
+| WORKING | 58 |
+| PARTIAL | 8 |
+| MOCK | 1 |
+| NOT_IMPLEMENTED | 1 |
+| BLOCKED_EXTERNAL | 7 |
 | BROKEN | 0 |
-| BLOCKED | 5 (VPS, payments, TURN NAT, OpenAI E2E without key, Google OAuth secrets) |
+| FAILED TESTS | 0 |
+
+See also: `OWNER_ACTION_REQUIRED.md`, `RUNTIME_ARTIFACTS.md`, `WORKING_FLOWS_BACKLOG.md`.

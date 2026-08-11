@@ -32,6 +32,8 @@ AFTER real-working pass (same day) — see `REAL_WORKING_AUDIT.md`:
 
 Added: LIVE `/api/live/following`, password reset (email delivery blocked), `/api/wallet`, `/api/ai/chat/stream`, Ask/Copilot honesty labels, wallet dual-write fix.
 
+Real-working matrix pass (continued): session renew + PG session list, login lockout, followers/following, post/comment mutate + comment react, presence, gift JSON idempotency + integer money, local-context tools (not AI), device pickers, LIVE chat unify, Docker HEALTHCHECK, E2E journey tests → see `REAL_WORKING_AUDIT.md`.
+
 ## Became WORKING this milestone
 - Messaging: delivery, read receipts, typing, unread, pagination, clientId idempotency, optimistic UI
 - Call Engine: cancel outgoing, ring timeout → missed, media mute action, signaling state-machine tests

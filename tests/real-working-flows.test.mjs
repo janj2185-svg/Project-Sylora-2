@@ -75,6 +75,7 @@ test('password reset + LIVE following + ask honesty + wallet + AI stream fail-cl
     });
     assert.equal(ask.status, 200);
     assert.equal(ask.data.mode, 'extractive_local');
+    assert.equal(ask.data.toolKind, 'local_context_tool');
     assert.match(String(ask.data.answer), /Local extract/i);
     assert.equal(ask.data.modelChat, false);
 

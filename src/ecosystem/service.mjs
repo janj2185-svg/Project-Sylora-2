@@ -996,14 +996,15 @@ export class EcosystemService {
     return {
       plan,
       context,
-      mode: providerReady ? 'provider_or_extractive' : 'extractive_local',
+      mode: 'extractive_local',
+      toolKind: 'local_context_tool',
       answer,
       originalAvailable: true,
       modelChat: false,
       honesty: {
         ...(summary.result?.honesty || {}),
-        state: providerReady ? 'extractive_with_provider_available' : 'extractive_local_not_model',
-        note: 'Ask-about-context uses extractive local summary of the surface. Full conversational AI is /api/ai/chat when OPENAI_API_KEY is set.'
+        state: 'local_context_tool_not_model_ai',
+        note: 'Local context tool (extractive). Not Sylora model AI. Conversational AI is only /api/ai/chat(+stream) when OPENAI_API_KEY is set.'
       }
     };
   }

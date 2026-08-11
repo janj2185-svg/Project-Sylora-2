@@ -4,7 +4,7 @@ function userFromRow(row) {
   return { id: row.id, email: row.email, username: row.username, passwordHash: row.password_hash, displayName: row.display_name, bio: row.bio || '', locale: row.locale || 'uk', avatar: row.avatar || '', role: row.role || 'user', createdAt: iso(row.created_at) };
 }
 function postFromRow(row) { return row ? { id: row.id, userId: row.user_id, text: row.body || '', kind: row.kind || 'text', createdAt: iso(row.created_at) } : null; }
-function commentFromRow(row) { return row ? { id:row.id,postId:row.post_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at) } : null; }
+function commentFromRow(row) { return row ? { id:row.id,postId:row.post_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at),editedAt:row.edited_at?iso(row.edited_at):null } : null; }
 function messageFromRow(row) { return row ? { id:row.id,conversationId:row.conversation_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at),editedAt:row.edited_at?iso(row.edited_at):null } : null; }
 function notificationFromRow(row) { return row ? { id:row.id,userId:row.user_id,actorId:row.actor_id,type:row.type,payload:row.payload||{},read:!!row.read_at,createdAt:iso(row.created_at) } : null; }
 
@@ -46,6 +46,17 @@ export class PostgresAuthSocialRepository {
 
   async createSession(session) { await this.pool.query('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)', [session.tokenHash,session.userId,session.expiresAt,session.createdAt]); }
   async deleteSession(tokenHash) { await this.pool.query('DELETE FROM sessions WHERE token_hash=$1', [tokenHash]); }
+  async deleteAllSessionsForUser(userId) { await this.pool.query('DELETE FROM sessions WHERE user_id=$1', [userId]); }
+  async renewSession(tokenHash, expiresAt) {
+    const result = await this.pool.query('UPDATE sessions SET expires_at=$2 WHERE token_hash=$1 AND expires_at>now() RETURNING token_hash,user_id,expires_at,created_at', [tokenHash, expiresAt]);
+    if (!result.rowCount) return null;
+    const row = result.rows[0];
+    return { tokenHash: row.token_hash, userId: row.user_id, expiresAt: iso(row.expires_at), createdAt: iso(row.created_at) };
+  }
+  async listSessionsForUser(userId) {
+    const result = await this.pool.query('SELECT token_hash, created_at, expires_at FROM sessions WHERE user_id=$1 AND expires_at>now() ORDER BY created_at DESC', [userId]);
+    return result.rows.map(r => ({ id: r.token_hash, createdAt: iso(r.created_at), expiresAt: iso(r.expires_at) }));
+  }
 
   async userForSession(tokenHash) {
     const result = await this.pool.query('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() LIMIT 1', [tokenHash]);
@@ -63,6 +74,14 @@ export class PostgresAuthSocialRepository {
   }
 
   async findPost(id) { const result = await this.pool.query('SELECT * FROM posts WHERE id=$1 LIMIT 1', [id]); return postFromRow(result.rows[0]); }
+  async updatePost(id, userId, text) {
+    const result = await this.pool.query('UPDATE posts SET body=$3 WHERE id=$1 AND user_id=$2 RETURNING *', [id, userId, text]);
+    return postFromRow(result.rows[0]);
+  }
+  async deletePost(id, userId) {
+    const result = await this.pool.query('DELETE FROM posts WHERE id=$1 AND user_id=$2 RETURNING id', [id, userId]);
+    return result.rowCount > 0;
+  }
 
   async listPosts(limit = 100) {
     const result = await this.pool.query('SELECT p.*,u.email AS author_email,u.username AS author_username,u.display_name AS author_display_name,u.bio AS author_bio,u.locale AS author_locale,u.avatar AS author_avatar,u.role AS author_role,u.created_at AS author_created_at FROM posts p JOIN users u ON u.id=p.user_id ORDER BY p.created_at DESC LIMIT $1', [Math.max(1,Math.min(200,Number(limit)||100))]);
@@ -83,6 +102,13 @@ export class PostgresAuthSocialRepository {
   async toggleReaction(postId,userId){const client=await this.pool.connect();try{await client.query('BEGIN');const removed=await client.query("DELETE FROM reactions WHERE post_id=$1 AND user_id=$2 AND kind='spark' RETURNING post_id",[postId,userId]);let reacted=false;if(!removed.rowCount){await client.query("INSERT INTO reactions(post_id,user_id,kind) VALUES($1,$2,'spark')",[postId,userId]);reacted=true}await client.query('COMMIT');return reacted}catch(error){try{await client.query('ROLLBACK')}catch{}throw error}finally{client.release()}}
   async listComments(postId){const result=await this.pool.query('SELECT c.*,u.email AS author_email,u.username AS author_username,u.display_name AS author_display_name,u.bio AS author_bio,u.locale AS author_locale,u.avatar AS author_avatar,u.role AS author_role,u.created_at AS author_created_at FROM comments c JOIN users u ON u.id=c.user_id WHERE c.post_id=$1 ORDER BY c.created_at',[postId]);return result.rows.map(row=>({comment:commentFromRow(row),author:userFromRow({id:row.user_id,email:row.author_email,username:row.author_username,password_hash:'',display_name:row.author_display_name,bio:row.author_bio,locale:row.author_locale,avatar:row.author_avatar,role:row.author_role,created_at:row.author_created_at})}))}
   async createComment(comment){const result=await this.pool.query('INSERT INTO comments(id,post_id,user_id,body,created_at) VALUES($1,$2,$3,$4,$5) RETURNING *',[comment.id,comment.postId,comment.userId,comment.text,comment.createdAt]);return commentFromRow(result.rows[0])}
+  async findComment(id){const result=await this.pool.query('SELECT * FROM comments WHERE id=$1 LIMIT 1',[id]);return commentFromRow(result.rows[0])}
+  async updateComment(id,userId,text){const result=await this.pool.query('UPDATE comments SET body=$3, edited_at=now() WHERE id=$1 AND user_id=$2 RETURNING *',[id,userId,text]);return commentFromRow(result.rows[0])}
+  async deleteComment(id,userId){const result=await this.pool.query('DELETE FROM comments WHERE id=$1 AND user_id=$2 RETURNING id',[id,userId]);return result.rowCount>0}
+  async toggleCommentReaction(commentId,userId){const client=await this.pool.connect();try{await client.query('BEGIN');const removed=await client.query("DELETE FROM comment_reactions WHERE comment_id=$1 AND user_id=$2 AND kind='spark' RETURNING comment_id",[commentId,userId]);let reacted=false;if(!removed.rowCount){await client.query("INSERT INTO comment_reactions(comment_id,user_id,kind) VALUES($1,$2,'spark')",[commentId,userId]);reacted=true}await client.query('COMMIT');return reacted}catch(error){try{await client.query('ROLLBACK')}catch{}throw error}finally{client.release()}}
+  async commentReactionCount(commentId){const result=await this.pool.query('SELECT count(*)::int AS n FROM comment_reactions WHERE comment_id=$1',[commentId]);return Number(result.rows[0]?.n||0)}
+  async listFollowers(userId,limit=50){const result=await this.pool.query('SELECT u.* FROM follows f JOIN users u ON u.id=f.follower_id WHERE f.following_id=$1 ORDER BY f.created_at DESC LIMIT $2',[userId,Math.max(1,Math.min(100,Number(limit)||50))]);return result.rows.map(userFromRow)}
+  async listFollowing(userId,limit=50){const result=await this.pool.query('SELECT u.* FROM follows f JOIN users u ON u.id=f.following_id WHERE f.follower_id=$1 ORDER BY f.created_at DESC LIMIT $2',[userId,Math.max(1,Math.min(100,Number(limit)||50))]);return result.rows.map(userFromRow)}
   async toggleFollow(followerId,followingId){const client=await this.pool.connect();try{await client.query('BEGIN');const removed=await client.query('DELETE FROM follows WHERE follower_id=$1 AND following_id=$2 RETURNING follower_id',[followerId,followingId]);let following=false;if(!removed.rowCount){await client.query('INSERT INTO follows(follower_id,following_id) VALUES($1,$2)',[followerId,followingId]);following=true}await client.query('COMMIT');return following}catch(error){try{await client.query('ROLLBACK')}catch{}throw error}finally{client.release()}}
   async block(blockerId,blockedId){const client=await this.pool.connect();try{await client.query('BEGIN');await client.query('INSERT INTO blocks(blocker_id,blocked_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[blockerId,blockedId]);await client.query('DELETE FROM follows WHERE (follower_id=$1 AND following_id=$2) OR (follower_id=$2 AND following_id=$1)',[blockerId,blockedId]);await client.query('COMMIT')}catch(error){try{await client.query('ROLLBACK')}catch{}throw error}finally{client.release()}}
   async unblock(blockerId,blockedId){await this.pool.query('DELETE FROM blocks WHERE blocker_id=$1 AND blocked_id=$2',[blockerId,blockedId])}
