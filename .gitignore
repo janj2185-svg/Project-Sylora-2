@@ -6,3 +6,5 @@ node_modules/
 *.log
 artifacts/screenshots/seed.json
 artifacts/screenshots/*-log.txt
+
+artifacts/screenshots/home-living-bg/frames/

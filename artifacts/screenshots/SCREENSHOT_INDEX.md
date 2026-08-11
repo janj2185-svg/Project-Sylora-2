@@ -163,6 +163,24 @@ Captured via Settings modules / nav: **Identity**, **Personal Dashboard**, **Can
 
 ---
 
+## Home living background (additive light atmosphere)
+
+Folder: `artifacts/screenshots/home-living-bg/` · QA notes: `HOME_LIVING_BG_QA.md`
+
+| FILE | VIEWPORT / STATE | STATUS | NOTES |
+|---|---|---|---|
+| home-mobile-390x844.png | 390×844 | WORKING | Ivory/pearl layered bg; composition intact |
+| home-tablet-820x1180.png | 820×1180 | WORKING | Soft aurora/opal behind hero |
+| home-desktop-1440x900.png | 1440×900 | WORKING | Parallax-ready layers; CTA readable |
+| home-desktop-listening.png | listening hover | WORKING | Soft energy aura near Sylora |
+| home-desktop-reduced-motion.png | reduced-motion | WORKING | Static opalescent composition |
+| home-presence-*.png | idle→error | WORKING | Presence visual states |
+| home-living-bg-preview.mp4 | motion preview | WORKING | Short presence-cycle recording |
+
+Re-run: `node scripts/capture-home-living-bg.mjs`
+
+---
+
 ## How to re-run
 
 ```bash
