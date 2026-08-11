@@ -24,6 +24,16 @@ import {
   SYLORA_MODES,
   sanitizeMemoryValue
 } from './sylora-intelligence.mjs';
+import {
+  analyzeLiveRoom,
+  buildCreatorContentPack,
+  buildMeetingBrief,
+  summarizeMeetingNotes,
+  proposeTasksFromDecisions,
+  buildLessonQuiz,
+  adaptiveLearningState,
+  homeHubPayload
+} from './domain-intelligence.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -48,6 +58,8 @@ function ensureCollections(store) {
   d.reputations ||= [];
   d.provenance ||= [];
   d.commerceItems ||= [];
+  d.quizzes ||= [];
+  d.quizAttempts ||= [];
   d.commerceOrders ||= [];
   d.privacyRequests ||= [];
   d.aiBudgets ||= [];
@@ -526,8 +538,50 @@ export class EcosystemService {
     return row;
   }
 
-  securityCenter(user, { sessions = [], blocks = [] } = {}) {
-    return createSecurityCenterView({ userId: user.id, sessions, blocks, exportReady: true });
+  securityCenter(user, { sessions = [], blocks = [], capabilities = {} } = {}) {
+    const agent = this.ensurePersonalAgent(user);
+    const memories = (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const activity = this.store.data.aiActivity.filter(a => a.userId === user.id).slice(-50);
+    const integrations = (this.store.data.agentInstalls || [])
+      .filter(x => x.userId === user.id && !x.removedAt)
+      .map(x => {
+        const agentRow = this.store.data.agentCatalog.find(a => a.id === x.agentId);
+        return { id: x.id, agentId: x.agentId, name: agentRow?.name || x.agentId, installedAt: x.installedAt };
+      });
+    return createSecurityCenterView({
+      userId: user.id,
+      sessions,
+      blocks,
+      exportReady: true,
+      agent,
+      memories,
+      activity,
+      integrations,
+      capabilities
+    });
+  }
+
+  updatePrivacyControls(user, patch = {}) {
+    const agent = this.ensurePersonalAgent(user);
+    agent.privacyControls = { ...(agent.privacyControls || {}), ...Object.fromEntries(
+      Object.entries(patch).filter(([, v]) => typeof v === 'boolean')
+    ) };
+    if (patch.proactiveLevel) {
+      const next = String(patch.proactiveLevel).toUpperCase();
+      if (PROACTIVE_LEVELS.includes(next)) agent.proactiveLevel = next;
+    }
+    if (patch.voicePersonality) agent.voicePersonality = String(patch.voicePersonality).slice(0, 40);
+    agent.updatedAt = this.store.now();
+    this.store.save();
+    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
+    this.recordActivity(user, {
+      kind: 'privacy_controls_updated',
+      summary: 'Sylora оновила privacy / AI controls за запитом користувача',
+      dataUsed: ['personal_agent'],
+      reason: 'User changed Privacy & AI Control Center',
+      context: 'security'
+    });
+    return agent;
   }
 
   requestPrivacy(user, type, details) {
@@ -603,7 +657,40 @@ export class EcosystemService {
     return defaultRevenueShares();
   }
 
+  creatorLiveInsights(user, { room, engagement, chat, gifts, battle } = {}) {
+    if (!room || room.hostId !== user.id) throw new Error('LIVE_HOST_REQUIRED');
+    const analysis = analyzeLiveRoom({ room, engagement, chat, gifts, battle });
+    this.recordActivity(user, {
+      kind: 'creator_live_analyzed',
+      summary: `Sylora проаналізувала LIVE “${room.title}”`,
+      dataUsed: ['live_engagement', 'live_chat', 'ledger_gifts'],
+      reason: 'Creator requested LIVE insights',
+      context: 'studio'
+    });
+    return { analysis, contentPack: buildCreatorContentPack({ topic: room.title, analysis, locale: user.locale || 'uk' }) };
+  }
+
+  creatorContentPack(user, { topic, analysis } = {}) {
+    const pack = buildCreatorContentPack({ topic, analysis, locale: user.locale || 'uk' });
+    const action = this.proposeAction(user, {
+      type: 'prepare_content_pack',
+      level: ACTION_LEVELS.REQUEST_CONFIRMATION,
+      context: 'studio',
+      reason: 'Creator asked Sylora for titles/clips/captions drafts',
+      input: { pack }
+    });
+    this.recordActivity(user, {
+      kind: 'creator_content_pack_proposed',
+      summary: 'Sylora підготувала content pack (потрібне підтвердження)',
+      dataUsed: ['creator_studio'],
+      reason: 'Draft only — no publish',
+      context: 'studio'
+    });
+    return { action, pack };
+  }
+
   creatorStudioPlan(user, topic) {
+    const pack = buildCreatorContentPack({ topic, locale: user.locale || 'uk' });
     const plan = {
       topic: String(topic || '').slice(0, 200),
       structure: ['Hook', 'Core value', 'Interactive mid', 'CTA', 'Outro'],
@@ -612,8 +699,11 @@ export class EcosystemService {
       questions: [`What is your experience with ${topic}?`, 'What should we deep-dive next?'],
       interactives: ['Poll', 'Q&A', 'Resonance invite'],
       moderation: 'Suggest only — host confirms',
-      clips: 'Post-LIVE summary + 3 short clip candidates require approval',
-      subtitlePlan: ['Detect speech language', 'Generate captions', 'Offer translated captions'],
+      clips: pack.clipCandidates,
+      captions: pack.captions,
+      titles: pack.titles,
+      thumbnailIdeas: pack.thumbnailIdeas,
+      subtitlePlan: pack.subtitles.plan,
       status: 'proposal'
     };
     const action = this.proposeAction(user, {
@@ -906,6 +996,167 @@ export class EcosystemService {
       locale: agent.locale || user.locale || 'uk',
       proactive: agent.proactiveLevel || 'IMPORTANT_ONLY'
     });
+  }
+
+  meetingBrief(user, orgId, input = {}) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership) throw new Error('FORBIDDEN');
+    const documents = this.store.data.orgDocuments.filter(d => d.orgId === orgId).slice(-20);
+    const brief = buildMeetingBrief({
+      title: input.title || 'Meeting brief',
+      agenda: input.agenda || '',
+      documents,
+      participants: input.participants || []
+    });
+    const doc = this.addOrgDocument(user, orgId, {
+      title: `[Brief] ${brief.title}`,
+      body: JSON.stringify(brief, null, 2),
+      privacy: 'business'
+    });
+    if (!doc.ok) throw new Error(doc.error || 'FORBIDDEN');
+    this.recordActivity(user, {
+      kind: 'meeting_brief_created',
+      summary: `Sylora створила meeting brief “${brief.title}”`,
+      dataUsed: ['org_documents'],
+      reason: 'Business mode assist',
+      context: 'business'
+    });
+    return { brief, document: doc.document };
+  }
+
+  meetingSummary(user, orgId, input = {}) {
+    const membership = this.store.data.orgMembers.find(m => m.orgId === orgId && m.userId === user.id);
+    if (!membership) throw new Error('FORBIDDEN');
+    const summary = summarizeMeetingNotes({
+      title: input.title || 'Meeting summary',
+      notes: input.notes || '',
+      locale: user.locale || 'uk'
+    });
+    const doc = this.addOrgDocument(user, orgId, {
+      title: `[Summary] ${summary.title}`,
+      body: JSON.stringify(summary, null, 2),
+      privacy: 'business'
+    });
+    if (!doc.ok) throw new Error(doc.error || 'FORBIDDEN');
+    const proposedTasks = proposeTasksFromDecisions([...(summary.decisions || []), ...(summary.actionCandidates || [])]);
+    this.recordActivity(user, {
+      kind: 'meeting_summary_created',
+      summary: `Sylora зробила meeting summary “${summary.title}”`,
+      dataUsed: ['org_documents', 'notes'],
+      reason: 'Business mode assist — tasks not auto-created',
+      context: 'business'
+    });
+    return { summary, document: doc.document, proposedTasks };
+  }
+
+  confirmProposedTasks(user, orgId, tasks = []) {
+    const created = [];
+    for (const t of (tasks || []).slice(0, 20)) {
+      if (t.financialOrLegal && !t.confirmed) continue;
+      if (!t.confirmed && t.requiresConfirmation !== false) continue;
+      const out = this.addOrgTask(user, orgId, { title: t.title });
+      if (out.ok) created.push(out.task);
+    }
+    this.recordActivity(user, {
+      kind: 'tasks_created_from_meeting',
+      summary: `Sylora створила ${created.length} task(s) після підтвердження`,
+      dataUsed: ['org_tasks'],
+      reason: 'User confirmed proposed tasks',
+      context: 'business'
+    });
+    return { created };
+  }
+
+  ensureLessonQuiz(user, lesson) {
+    ensureCollections(this.store);
+    let quiz = this.store.data.quizzes.find(q => q.lessonId === lesson.id);
+    if (!quiz) {
+      const attempts = this.store.data.quizAttempts.filter(a => a.userId === user.id);
+      const adaptive = adaptiveLearningState({
+        progressRatio: 0.5,
+        attempts: attempts.slice(-20)
+      });
+      const built = buildLessonQuiz({ lesson, difficulty: adaptive.difficulty, locale: user.locale || 'uk' });
+      quiz = {
+        id: this.store.id(),
+        lessonId: lesson.id,
+        courseId: lesson.courseId,
+        ...built,
+        createdAt: this.store.now()
+      };
+      this.store.data.quizzes.push(quiz);
+      this.store.save();
+    }
+    const publicQuiz = {
+      id: quiz.id,
+      lessonId: quiz.lessonId,
+      difficulty: quiz.difficulty,
+      questions: quiz.questions.map(q => ({
+        id: q.id,
+        prompt: q.prompt,
+        options: q.options
+      }))
+    };
+    return { quiz: publicQuiz, adaptive: adaptiveLearningState({
+      progressRatio: 0.5,
+      attempts: this.store.data.quizAttempts.filter(a => a.userId === user.id && a.quizId === quiz.id)
+    }) };
+  }
+
+  gradeQuizAttempt(user, quizId, answers = {}) {
+    ensureCollections(this.store);
+    const quiz = this.store.data.quizzes.find(q => q.id === quizId);
+    if (!quiz) throw new Error('QUIZ_NOT_FOUND');
+    const q = quiz.questions[0];
+    const selected = answers[q.id];
+    const correct = selected === q.correctOptionId;
+    const attempt = {
+      id: this.store.id(),
+      quizId,
+      userId: user.id,
+      lessonId: quiz.lessonId,
+      correct,
+      selected,
+      createdAt: this.store.now()
+    };
+    this.store.data.quizAttempts.push(attempt);
+    this.store.save();
+    const adaptive = adaptiveLearningState({
+      progressRatio: correct ? 0.8 : 0.3,
+      attempts: this.store.data.quizAttempts.filter(a => a.userId === user.id && a.lessonId === quiz.lessonId)
+    });
+    this.recordActivity(user, {
+      kind: 'quiz_attempt',
+      summary: correct ? 'Sylora перевірила quiz — відповідь правильна' : 'Sylora перевірила quiz — потрібне інше пояснення',
+      dataUsed: ['lesson_quiz'],
+      reason: 'Learning mode',
+      context: 'learning'
+    });
+    return {
+      correct,
+      explanation: correct ? quiz.explanations.correct : quiz.explanations.incorrect,
+      adaptive
+    };
+  }
+
+  buildHomeHub(user, collections = {}) {
+    return homeHubPayload({ me: user, ...collections });
+  }
+
+  capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {
+    return {
+      aiText: !!aiConfigured,
+      aiRealtimeVoice: !!realtimeConfigured && !!aiConfigured,
+      tts: !!aiConfigured,
+      stt: !!aiConfigured,
+      translation: true,
+      websocket: true,
+      degraded: {
+        ai: !aiConfigured,
+        voice: !realtimeConfigured || !aiConfigured
+      },
+      oneSylora: true
+    };
   }
 }
 

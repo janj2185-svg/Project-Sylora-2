@@ -28,7 +28,19 @@ export function createProvenance({
   };
 }
 
-export function createSecurityCenterView({ userId, sessions = [], devices = [], blocks = [], exportReady = false }) {
+export function createSecurityCenterView({
+  userId,
+  sessions = [],
+  devices = [],
+  blocks = [],
+  exportReady = false,
+  agent = null,
+  memories = [],
+  activity = [],
+  integrations = [],
+  capabilities = {}
+}) {
+  const controls = agent?.privacyControls || {};
   return {
     userId,
     sessions,
@@ -37,7 +49,19 @@ export function createSecurityCenterView({ userId, sessions = [], devices = [], 
     parentalControls: { enabled: false },
     loginAlerts: true,
     exportReady,
-    deleteAccount: { status: 'available', note: 'Request is logged and processed through privacy workflow.' }
+    deleteAccount: { status: 'available', note: 'Request is logged and processed through privacy workflow.' },
+    aiControl: {
+      oneSylora: true,
+      permissions: agent?.permissions || {},
+      privacyControls: controls,
+      proactiveLevel: agent?.proactiveLevel || 'IMPORTANT_ONLY',
+      voicePersonality: agent?.voicePersonality || 'warm',
+      canSee: Object.entries(agent?.permissions || {}).filter(([, v]) => v).map(([k]) => k),
+      remembers: memories.slice(-30).map(m => ({ id: m.id, label: m.label, source: m.source || 'user' })),
+      activity: activity.slice(-40),
+      integrations,
+      capabilities
+    }
   };
 }
 

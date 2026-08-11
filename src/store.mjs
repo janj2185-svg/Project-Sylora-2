@@ -11,7 +11,7 @@ const initial = () => ({
   organizations: [], orgMembers: [], orgTeams: [], orgDocuments: [], orgTasks: [], agentNegotiations: [],
   enterpriseControls: [], reputations: [], provenance: [], studioAiPlans: [],
   commerceItems: [], commerceOrders: [], privacyRequests: [], aiBudgets: [], aiUsage: [],
-  communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [],
+  communities: [], communityMembers: [], communityChannels: [], communityPosts: [], courses: [], lessons: [], enrollments: [], lessonProgress: [], quizzes: [], quizAttempts: [],
   businesses: [], conferenceRooms: [], conferenceMembers: [], conferenceInvites: [], liveRooms: [], liveMessages: [], liveEngagement: [], liveBattles: [], donorProgress: [], supportProgress: [], studioScenes: [], media: [], mediaJobs: [], videos: [], audit: [], gifts: [
     { id: 'spark', name: 'Crystal Star', price: 10, tier: 'basic', color: '#e8b95f' },
     { id: 'pulse', name: 'Crystal Heart', price: 25, tier: 'basic', color: '#a98ae8' },

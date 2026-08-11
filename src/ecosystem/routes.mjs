@@ -201,6 +201,64 @@ export async function handleEcosystemRoutes(ctx) {
     const out = ecosystem.confirmCreatorStudioPlan(user, m.id);
     return json(res, out.ok ? 200 : 404, out), true;
   }
+  if (req.method === 'POST' && p === '/api/studio/ai/content-pack') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.creatorContentPack(user, { topic: safeText(input.topic, 200) })), true;
+  }
+  m = route('/api/orgs/:id/meeting-brief', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 201, ecosystem.meetingBrief(user, m.id, input)), true; }
+    catch (e) { return json(res, e.message === 'FORBIDDEN' ? 403 : 400, { error: e.message }), true; }
+  }
+  m = route('/api/orgs/:id/meeting-summary', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    try { return json(res, 201, ecosystem.meetingSummary(user, m.id, input)), true; }
+    catch (e) { return json(res, e.message === 'FORBIDDEN' ? 403 : 400, { error: e.message }), true; }
+  }
+  m = route('/api/orgs/:id/proposed-tasks/confirm', p);
+  if (req.method === 'POST' && m) {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    return json(res, 200, ecosystem.confirmProposedTasks(user, m.id, input.tasks || [])), true;
+  }
+  if (req.method === 'GET' && p === '/api/ai/capabilities') {
+    return json(res, 200, ecosystem.capabilitiesSnapshot({
+      aiConfigured: !!process.env.OPENAI_API_KEY,
+      realtimeConfigured: !!process.env.OPENAI_API_KEY
+    })), true;
+  }
+  if (req.method === 'GET' && p === '/api/home/hub') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const roomsSource = (store.data.liveRooms || []).filter(r => r.status === 'live');
+    const rooms = roomsSource.slice(0, 12).map(r => {
+      const host = store.data.users.find(u => u.id === r.hostId);
+      return { ...r, host: store.publicUser(host), viewerCount: r.viewerCount || 0 };
+    });
+    const conversations = (store.data.conversations || [])
+      .filter(c => (c.memberIds || []).includes(user.id) || (c.members || []).some(m => m.id === user.id))
+      .slice(0, 8);
+    const hub = ecosystem.buildHomeHub(user, {
+      posts: (store.data.posts || []).slice(0, 30).map(p => ({
+        ...p,
+        author: store.publicUser(store.data.users.find(u => u.id === p.userId))
+      })),
+      rooms,
+      notifications: (store.data.notifications || []).filter(n => n.userId === user.id).slice(0, 20),
+      conversations,
+      communities: (store.data.communities || []).slice(0, 12),
+      courses: (store.data.courses || []).filter(c => c.published),
+      enrollments: (store.data.enrollments || []).filter(e => e.userId === user.id),
+      orgs: ecosystem.listOrgs(user),
+      activity: (store.data.aiActivity || []).filter(a => a.userId === user.id).slice(-10).reverse(),
+      videos: (store.data.videos || []).filter(v => v.userId === user.id).slice(0, 12)
+    });
+    return json(res, 200, { hub }), true;
+  }
 
   // —— AI-to-AI economy ——
   if (req.method === 'GET' && p === '/api/agents/negotiations') {
@@ -290,7 +348,20 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/security-center') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, ecosystem.securityCenter(user, { blocks: store.data.blocks.filter(b => b.userId === user.id) })), true;
+    const capabilities = ecosystem.capabilitiesSnapshot({
+      aiConfigured: !!process.env.OPENAI_API_KEY,
+      realtimeConfigured: !!process.env.OPENAI_API_KEY
+    });
+    return json(res, 200, ecosystem.securityCenter(user, {
+      blocks: store.data.blocks.filter(b => b.blockerId === user.id || b.userId === user.id),
+      capabilities
+    })), true;
+  }
+  if (req.method === 'PATCH' && p === '/api/ai/privacy-controls') {
+    const user = await requireUser(req, res); if (!user) return true;
+    const input = await body(req);
+    const agent = ecosystem.updatePrivacyControls(user, input || {});
+    return json(res, 200, { agent }), true;
   }
   if (req.method === 'POST' && p === '/api/privacy/requests') {
     const user = await requireUser(req, res); if (!user) return true;

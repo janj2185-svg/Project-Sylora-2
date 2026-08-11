@@ -451,6 +451,36 @@ async function api(req, res, url) {
   if(req.method==='GET'&&p==='/api/stats'){const user=await requireUser(req,res);if(!user)return;const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),creatorEarnings:wallet?.earnings||0};return json(res,200,{...social,...giftStats});}
   if(req.method==='GET'&&p==='/api/progress'){const user=await requireUser(req,res);if(!user)return;const progress=authSocial.enabled?await walletRepo.progress(user.id):{donorXp:store.data.donorProgress.find(x=>x.userId===user.id)?.giftXp||0};return json(res,200,{...progress,orbitLevel:levelFromXp(progress.donorXp)})}
   if(req.method==='GET'&&p==='/api/ai/history'){const user=await requireUser(req,res);if(!user)return;const [messages,memories,pendingActions]=await Promise.all([aiListMessages(user.id,50),aiListMemories(user.id,50),aiListPendingActions(user.id,20)]);return json(res,200,{messages,memories,pendingActions,model:openaiModel,configured:!!openai})}
+  if(req.method==='DELETE'&&p==='/api/ai/history'){
+    const user=await requireUser(req,res);if(!user)return;
+    if(aiRepo.enabled){try{await aiRepo.clearMessages?.(user.id)}catch{}}
+    store.data.aiMessages=store.data.aiMessages.filter(x=>x.userId!==user.id);store.save();
+    ecosystem.recordActivity(user,{kind:'conversation_cleared',summary:'Sylora очистила історію розмови за запитом користувача',dataUsed:['ai_messages'],reason:'Privacy & AI Control Center',context:'security'});
+    return json(res,200,{cleared:true});
+  }
+  m=route('/api/live/:id/creator-insights',p);if(req.method==='GET'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});
+    if(live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    const chat=await listLiveMessages(live.id);
+    const gifts=(store.data.ledger||[]).filter(x=>x.type==='gift'&&x.liveId===live.id).slice(0,100);
+    try{
+      const out=ecosystem.creatorLiveInsights(user,{room:{...live,viewerCount:await liveViewerCount(live.id)},engagement:await liveEngagement(live.id),chat,gifts,battle:await activeBattle(live.id)});
+      return json(res,200,out);
+    }catch(e){return json(res,400,{error:e.message})}
+  }
+  m=route('/api/lessons/:id/quiz',p);if(req.method==='GET'&&m){
+    const user=await requireUser(req,res);if(!user)return;
+    const lesson=store.data.lessons.find(x=>x.id===m.id),course=lesson&&store.data.courses.find(x=>x.id===lesson.courseId);
+    if(!lesson||!course)return json(res,404,{error:'LESSON_NOT_FOUND'});
+    const enrollment=store.data.enrollments.find(x=>x.courseId===course.id&&x.userId===user.id);
+    if(!enrollment&&course.instructorId!==user.id)return json(res,403,{error:'ENROLLMENT_REQUIRED'});
+    return json(res,200,ecosystem.ensureLessonQuiz(user,lesson));
+  }
+  m=route('/api/quizzes/:id/attempt',p);if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;const input=await body(req);
+    try{return json(res,200,ecosystem.gradeQuizAttempt(user,m.id,input.answers||{}))}catch(e){return json(res,404,{error:e.message})}
+  }
   if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),label=safeText(input.label,80),value=safeText(input.value,1000);if(!label||!value)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,createdAt:store.now(),source:'user'});return json(res,201,{memory})}
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}

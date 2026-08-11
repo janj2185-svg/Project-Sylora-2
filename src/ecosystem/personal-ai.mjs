@@ -19,6 +19,19 @@ export function createPersonalAgent({ id, userId, name = 'Sylora', locale = 'uk'
     memory: { shortTermCap: 40, longTermCap: 200 },
     proactiveLevel: 'IMPORTANT_ONLY',
     voicePersonality: 'warm',
+    privacyControls: {
+      memory: true,
+      microphone: true,
+      camera: false,
+      location: false,
+      contacts: false,
+      files: false,
+      notifications: true,
+      personalization: true,
+      aiActions: true,
+      voice: true,
+      translation: true
+    },
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
