@@ -35,8 +35,16 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
 fi
 
 echo "==> Creating sylora database + role password (if needed)"
-"$PG_BIN/pg_ctl" -D "$PGDATA" -o "-k $SYLORA_HOME" -l "$SYLORA_HOME/pg-install.log" -w start
-trap '"$PG_BIN/pg_ctl" -D "$PGDATA" -m fast -w stop >/dev/null 2>&1 || true' EXIT
+if [ -f "$PGDATA/postmaster.pid" ] && ! "$PG_BIN/pg_ctl" -D "$PGDATA" status >/dev/null 2>&1; then
+  rm -f "$PGDATA/postmaster.pid"
+fi
+if "$PG_BIN/pg_isready" -h 127.0.0.1 -U sylora >/dev/null 2>&1; then
+  ALREADY_RUNNING=1
+else
+  ALREADY_RUNNING=0
+  "$PG_BIN/pg_ctl" -D "$PGDATA" -o "-k $SYLORA_HOME" -l "$SYLORA_HOME/pg-install.log" -w start
+fi
+trap '[ "$ALREADY_RUNNING" = "0" ] && "$PG_BIN/pg_ctl" -D "$PGDATA" -m fast -w stop >/dev/null 2>&1 || true' EXIT
 "$PG_BIN/psql" -h 127.0.0.1 -U sylora -d postgres -tAc \
   "SELECT 1 FROM pg_database WHERE datname='sylora'" | grep -q 1 \
   || "$PG_BIN/createdb" -h 127.0.0.1 -U sylora sylora

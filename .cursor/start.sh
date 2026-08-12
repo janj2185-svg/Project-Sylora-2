@@ -17,8 +17,13 @@ if ! redis-cli ping >/dev/null 2>&1; then
   redis-server --daemonize yes --dir "$SYLORA_HOME" --appendonly no --save ""
 fi
 
-echo "==> Starting PostgreSQL (if not already running)"
-if ! "$PG_BIN/pg_ctl" -D "$PGDATA" status >/dev/null 2>&1; then
+echo "==> Starting PostgreSQL (if not already accepting connections)"
+if ! "$PG_BIN/pg_isready" -h 127.0.0.1 -U sylora >/dev/null 2>&1; then
+  # A snapshot may embed a stale postmaster.pid from when the cluster was
+  # captured while running; clear it if no server is actually alive.
+  if [ -f "$PGDATA/postmaster.pid" ] && ! "$PG_BIN/pg_ctl" -D "$PGDATA" status >/dev/null 2>&1; then
+    rm -f "$PGDATA/postmaster.pid"
+  fi
   "$PG_BIN/pg_ctl" -D "$PGDATA" -o "-k $SYLORA_HOME" -l "$SYLORA_HOME/pg.log" -w start
 fi
 
