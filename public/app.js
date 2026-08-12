@@ -4,11 +4,15 @@ import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';
 import { ObsWebSocketClient, normalizeObsUrl } from './obs-client.js';
 import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client.js';
-import { renderLiveStudio } from './live-studio.js';
+import { renderLiveStudio, cleanupLiveStudio } from './live-studio.js';
 import { mountHomeLivingBg, destroyHomeLivingBg } from './home-living-bg.js';
 (()=>{try{const u=new URL(location.href);const gt=u.searchParams.get('google_token');if(gt){localStorage.setItem('sylora_token',gt);u.searchParams.delete('google_token');history.replaceState({},'',u.pathname+u.search+u.hash)}}catch{}})();
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null;let homeLivingRoot=null;const studioPeers=new Map();
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0;
+/** Session bootstrap gate — prevents auth flash / false login redirect while /api/me restores. */
+window.__syloraBooted=false;let pendingNavView=null;let renderSeq=0;
+function sessionRestoring(){return !!(state.token&&!state.me&&!window.__syloraBooted)}
+function requireSession(viewRender){if(state.me)return viewRender();if(sessionRestoring()){app.innerHTML=`<div class="loading" data-session-restore="1">${esc(t('loading')||'Відновлюємо сесію…')}</div>`;return}return renderAuth()}
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
 const STUDIO_P2P_PEER_LIMIT=6;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -35,16 +39,19 @@ async function initGiftEngine(){
   }catch(error){reportClientIssue('gift-runtime',error)}
 }
 async function bootstrap(){
+  window.__syloraBooted=false;
   if(state.token){
     try{const session=await api('/api/me');state.me=session.user;state.wallet=session.wallet||null;if(!localStorage.getItem('sylora_locale'))setLocale(state.me.locale)}
-    catch(error){reportClientIssue('session',error);state.token='';localStorage.removeItem('sylora_token')}
+    catch(error){reportClientIssue('session',error);state.token='';state.me=null;state.wallet=null;localStorage.removeItem('sylora_token')}
   }
   applyShellLanguage();
   if(!document.querySelector('#syloraDegraded'))document.body.insertAdjacentHTML('afterbegin',degradedBannerHtml());
   refreshCapabilities();
   account();
-  await render();
   window.__syloraBooted=true;
+  const queued=pendingNavView;pendingNavView=null;
+  if(queued)state.view=queued;
+  await render();
   Promise.allSettled([refreshRightRail(),refreshRailProgress(),initGiftEngine()]);
   if(state.me)startUserEvents();
   try{
@@ -106,16 +113,46 @@ function showIncomingCallBanner(){
     state.incomingCall=null;el.remove();
   };
 }
-function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(state.view==='feed'&&view!=='feed'){destroyHomeLivingBg(homeLivingRoot);homeLivingRoot=null}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
+function nav(view){
+  if(sessionRestoring()){pendingNavView=view;app.innerHTML=`<div class="loading" data-session-restore="1">${esc(t('loading')||'Відновлюємо сесію…')}</div>`;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));return}
+  if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='liveStudio'&&view!=='liveStudio')cleanupLiveStudio();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(state.view==='feed'&&view!=='feed'){destroyHomeLivingBg(homeLivingRoot);homeLivingRoot=null}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()
+}
 /** QA / screenshot harness — same navigation path as UI clicks. */
-window.__syloraNav=nav;window.__syloraState=state;window.__syloraShowIncoming=showIncomingCallBanner;
+window.__syloraNav=nav;window.__syloraState=state;window.__syloraShowIncoming=showIncomingCallBanner;window.__syloraSessionRestoring=sessionRestoring;
 document.querySelectorAll('.nav').forEach(x=>x.onclick=()=>nav(x.dataset.view));
 document.querySelector('#globalSearch')?.addEventListener('click',launchCommandPalette);
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();launchCommandPalette()}});
 document.querySelectorAll('[data-create-hub]').forEach(b=>b.addEventListener('click',launchCreateHub));
 document.querySelector('.brand')?.addEventListener('click',e=>{e.preventDefault();nav('feed')});
 document.querySelectorAll('[data-rail-view]').forEach(x=>x.onclick=()=>nav(x.dataset.railView));
-async function render(){document.body.dataset.view=state.view;if(state.view==='gifts')return renderGifts();if(state.view==='wallet')return state.me?renderWallet():renderAuth();if(state.view==='profile')return state.me?renderProfile():renderAuth();if(state.view==='clips')return renderClips();if(state.view==='videos')return renderVideos();if(state.view==='explore')return renderExplore();if(state.view==='live')return renderLive();if(state.view==='liveStudio')return state.me?renderLiveStudio({app,api,esc,toast,state,nav,t}):renderAuth();if(state.view==='studio')return state.me?renderStudio():renderAuth();if(state.view==='messages')return state.me?renderMessages():renderAuth();if(state.view==='ai')return state.me?renderAI():renderAuth();if(state.view==='more')return renderMore();if(state.view==='identity')return state.me?renderIdentity():renderAuth();if(state.view==='agents')return state.me?renderAgents():renderAuth();if(state.view==='developer')return state.me?renderDeveloper():renderAuth();if(state.view==='security')return state.me?renderSecurityCenter():renderAuth();if(state.view==='dashboard')return state.me?renderPersonalDashboard():renderAuth();if(state.view==='canvas')return state.me?renderCanvas():renderAuth();if(state.view==='admin')return state.me?.role==='admin'?renderAdmin():nav('more');if(state.view==='communities')return renderCommunities();if(state.view==='learning')return renderLearning();if(state.view==='business')return renderBusiness();return renderFeed()}
+async function render(){
+  const seq=++renderSeq;
+  document.body.dataset.view=state.view;
+  const run=async(fn)=>{const out=fn();if(out&&typeof out.then==='function')await out;return seq===renderSeq};
+  if(state.view==='gifts')return run(()=>renderGifts());
+  if(state.view==='wallet')return run(()=>requireSession(renderWallet));
+  if(state.view==='profile')return run(()=>requireSession(renderProfile));
+  if(state.view==='clips')return run(()=>renderClips());
+  if(state.view==='videos')return run(()=>renderVideos());
+  if(state.view==='explore')return run(()=>renderExplore());
+  if(state.view==='live')return run(()=>renderLive());
+  if(state.view==='liveStudio')return run(()=>requireSession(()=>renderLiveStudio({app,api,esc,toast,state,nav,t})));
+  if(state.view==='studio')return run(()=>requireSession(renderStudio));
+  if(state.view==='messages')return run(()=>requireSession(renderMessages));
+  if(state.view==='ai')return run(()=>requireSession(renderAI));
+  if(state.view==='more')return run(()=>renderMore());
+  if(state.view==='identity')return run(()=>requireSession(renderIdentity));
+  if(state.view==='agents')return run(()=>requireSession(renderAgents));
+  if(state.view==='developer')return run(()=>requireSession(renderDeveloper));
+  if(state.view==='security')return run(()=>requireSession(renderSecurityCenter));
+  if(state.view==='dashboard')return run(()=>requireSession(renderPersonalDashboard));
+  if(state.view==='canvas')return run(()=>requireSession(renderCanvas));
+  if(state.view==='admin')return run(()=>requireSession(()=>state.me?.role==='admin'?renderAdmin():nav('more')));
+  if(state.view==='communities')return run(()=>renderCommunities());
+  if(state.view==='learning')return run(()=>renderLearning());
+  if(state.view==='business')return run(()=>renderBusiness());
+  return run(()=>renderFeed())
+}
 async function renderFeed(){
   let posts=[],rooms=[],users=[],communities=[],courses=[],businesses=[],hub=null;
   try{const feed=await api('/api/feed');posts=Array.isArray(feed.posts)?feed.posts:[]}catch(error){reportClientIssue('feed',error)}

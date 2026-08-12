@@ -26,13 +26,29 @@ export class BaseLiveAdapter {
     return {
       platform: this.platformId,
       name: this.capabilities.name || this.platformId,
-      state: this.state,
+      state: this.honestConnectionState(),
       lastError: this.lastError,
       reconnectAttempt: this.reconnectAttempt,
       capabilities: this.capabilities,
       canReadChat: this.getCapability('readChat') === 'WORKING',
       canSendChat: this.getCapability('sendChat') === 'WORKING'
     };
+  }
+
+  /**
+   * UI-facing state: never imply Connected. External platforms without credentials
+   * surface AUTH_REQUIRED / UNAVAILABLE / CONFIGURATION_REQUIRED even before connect().
+   */
+  honestConnectionState() {
+    if (['CONNECTED', 'CONNECTING', 'RECONNECTING', 'ERROR', 'API_LIMITED'].includes(this.state)) {
+      return this.state;
+    }
+    if (this.state === 'AUTH_REQUIRED' || this.state === 'UNAVAILABLE') return this.state;
+    const status = this.capabilities?.status;
+    if (status === 'UNAVAILABLE') return 'UNAVAILABLE';
+    if (status === 'SETUP_REQUIRED') return 'AUTH_REQUIRED';
+    if (status === 'PARTIAL' && this.state === 'DISCONNECTED') return 'CONFIGURATION_REQUIRED';
+    return this.state;
   }
 
   async connect() {

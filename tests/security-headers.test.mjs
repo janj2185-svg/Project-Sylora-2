@@ -36,6 +36,8 @@ test('security headers include production HSTS/CSP upgrades when enabled', async
     const csp = res.headers.get('content-security-policy') || '';
     assert.match(csp, /upgrade-insecure-requests/);
     assert.match(csp, /https:\/\/companion\.example/);
+    assert.match(csp, /sha256-dkIVxJOkhk\+dsLekdBE1wjlHzMelv\+mUnkUYQRC39To=/);
+    assert.match(csp, /worker-src/);
     assert.equal(res.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
     assert.equal(res.headers.get('x-frame-options'), 'DENY');
   } finally {

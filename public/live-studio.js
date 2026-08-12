@@ -3,17 +3,28 @@
  * Uses real /api/sylora-live/* endpoints. Never invents Connected/chat/gifts.
  */
 
+let liveStudioCleanup = null;
+
+export function cleanupLiveStudio() {
+  if (typeof liveStudioCleanup === 'function') {
+    liveStudioCleanup();
+    liveStudioCleanup = null;
+  }
+}
+
 export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) {
   if (!state.me) return nav('live');
+  cleanupLiveStudio();
 
   let sheet = localStorage.getItem('sylora_live_sheet') || 'preview';
-  let overview, chat, director, analytics;
+  let overview, chat, director, analytics, voice;
   try {
-    [overview, chat, director, analytics] = await Promise.all([
+    [overview, chat, director, analytics, voice] = await Promise.all([
       api('/api/sylora-live/overview'),
       api('/api/sylora-live/chat?limit=80').catch(() => ({ messages: [], priority: [] })),
       api('/api/sylora-live/director').catch(() => ({ suggestions: [] })),
-      api('/api/sylora-live/analytics').catch(() => ({ analytics: {} }))
+      api('/api/sylora-live/analytics').catch(() => ({ analytics: {} })),
+      api('/api/sylora-live/voice').catch(() => ({ status: {} }))
     ]);
   } catch (e) {
     toast(e.message || 'LIVE studio failed');
@@ -27,17 +38,20 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
   const msgs = chat.messages || [];
   const tips = director.suggestions || [];
   const avatarState = host.avatarState || 'idle';
+  const aiState = host.aiState || overview.honesty?.ai || 'AI_CONFIGURATION_REQUIRED';
+  const voiceStatus = voice.status || overview.voice || {};
+  const broadcast = overview.broadcast || {};
 
   const connCards = conns.map(c => {
     const stateLabel = c.state || 'DISCONNECTED';
+    const honest = ['AUTH_REQUIRED', 'CONFIGURATION_REQUIRED', 'SETUP_REQUIRED', 'UNAVAILABLE', 'API_LIMITED', 'DISCONNECTED', 'ERROR'].includes(stateLabel);
     const canConnect = !['CONNECTED', 'UNAVAILABLE'].includes(stateLabel);
     return `<article class="sl-card" data-platform="${esc(c.platform)}">
       <div class="row"><b>${esc(c.name || c.platform)}</b><span class="sl-badge ${esc(stateLabel)}">${esc(stateLabel)}</span></div>
-      <small class="muted">${esc(c.capabilities?.notes || c.lastError || '')}</small>
+      <small class="muted">${esc(c.capabilities?.notes || c.lastError || (honest ? 'Credentials / platform approval required' : ''))}</small>
       <div class="row">
         ${canConnect ? `<button type="button" class="ghost sl-connect" data-p="${esc(c.platform)}">Connect</button>` : ''}
         ${stateLabel === 'CONNECTED' ? `<button type="button" class="ghost sl-disconnect" data-p="${esc(c.platform)}">Disconnect</button>` : ''}
-        ${c.canSendChat === false && c.canReadChat === false ? `<span class="muted" style="font-size:11px">Chat via API: not available</span>` : ''}
       </div>
     </article>`;
   }).join('');
@@ -45,12 +59,20 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
   const chatHtml = msgs.length
     ? msgs.map(m => {
       const badge = m.badge || { label: m.platform, color: '#888' };
-      return `<div class="sl-msg ${m.highlighted ? 'hi' : ''}" data-mid="${esc(m.id)}">
+      const flags = [
+        m.isSubscriber ? 'sub' : '',
+        m.isFollower ? 'fol' : '',
+        m.moderation?.action ? `mod:${m.moderation.action}` : ''
+      ].filter(Boolean).join(' · ');
+      return `<div class="sl-msg ${m.highlighted ? 'hi' : ''}" data-mid="${esc(m.id)}" data-platform="${esc(m.platform || '')}">
         <div class="meta"><span class="sl-platform" style="background:${esc(badge.color)}">${esc(badge.label)}</span>
         <b>@${esc(m.username || 'user')}</b>
         ${m.language ? `<span>${esc(m.language)}</span>` : ''}
-        ${m.priority ? `<span>P${m.priority}</span>` : ''}</div>
-        <div>${esc(m.text)}</div>
+        ${m.priority ? `<span>P${m.priority}</span>` : ''}
+        ${flags ? `<span>${esc(flags)}</span>` : ''}</div>
+        <div>${esc(m.text || m.message || '')}</div>
+        ${m.donation ? `<small class="muted">donation ${esc(String(m.donation.amount))} ${esc(m.donation.currency || '')}</small>` : ''}
+        ${m.gift ? `<small class="muted">gift ${esc(m.gift.name || m.gift.id || '')}</small>` : ''}
       </div>`;
     }).join('')
     : `<p class="sl-empty">Unified chat is empty. Bind a SYLORA LIVE room or wait for real platform events — nothing is simulated.</p>`;
@@ -60,15 +82,19 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
     <div class="sl-top">
       <div>
         <span class="eyebrow">SYLORA LIVE · COMMAND CENTER</span>
-        <h1>Ефір з AI-співведучою</h1>
+        <h1>Центр керування ефіром</h1>
         <p class="muted" style="margin:4px 0 0">Unified platforms · honest connections · Sylora co-host</p>
       </div>
-      <div class="row" style="gap:10px;align-items:center">
+      <div class="row" style="gap:10px;align-items:center;flex-wrap:wrap">
         <span class="sl-status-dot" aria-hidden="true"></span>
         <button type="button" class="ghost" id="slBackLive">← LIVE hub</button>
         <button type="button" class="ghost" id="slOpenStudio">Studio / OBS</button>
         <button type="button" class="primary" id="slGoLive">Go Live (SYLORA)</button>
       </div>
+    </div>
+
+    <div class="sl-banner ${aiState === 'AI_CONFIGURATION_REQUIRED' ? 'warn' : ''}" id="slAiBanner">
+      AI co-host: <b>${esc(aiState)}</b> · ${esc(overview.honesty?.aiNote || (aiState === 'AI_CONFIGURATION_REQUIRED' ? 'Local tool replies only until OPENAI_API_KEY is set.' : 'Model path available.'))}
     </div>
 
     <div class="sl-tabs" role="tablist">
@@ -79,20 +105,26 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
 
     <div class="sl-grid">
       <aside class="sl-panel sl-left" data-sheet="platforms">
-        <h3>Connected Platforms</h3>
-        <div class="sl-conn">${connCards}</div>
+        <h3>Platforms</h3>
+        <div class="sl-conn">${connCards || '<p class="sl-empty">No adapters registered</p>'}</div>
         <button type="button" class="ghost" id="slRefreshConn">Refresh status</button>
       </aside>
 
       <section class="sl-panel sl-center" data-sheet="preview">
-        <div class="row" style="justify-content:space-between">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
           <h3>LIVE preview</h3>
           <small class="muted">viewers ${esc(String(a.viewers ?? 0))} · peak ${esc(String(a.peakViewers ?? 0))} · chat/min ${esc(String(a.chatPerMin ?? 0))}</small>
+        </div>
+        <div class="sl-health" aria-label="Stream health">
+          <span><small>Network</small><b>${esc(a.network || 'local')}</b></span>
+          <span><small>Bitrate</small><b>${esc(a.bitrate || 'n/a')}</b></span>
+          <span><small>FPS</small><b>${esc(String(a.fps ?? 'n/a'))}</b></span>
+          <span><small>Bound room</small><b>${esc(overview.boundLiveId || '—')}</b></span>
         </div>
         <div class="sl-preview" id="slPreview">
           <div>
             <p style="margin:0;opacity:.8">Camera preview uses Studio devices</p>
-            <p style="margin:6px 0 0;font-size:12px;opacity:.65">Open Studio to start capture · WebRTC P2P remains the native path</p>
+            <p style="margin:6px 0 0;font-size:12px;opacity:.65">WebRTC P2P is the native path · RTMP/CDN stay CONFIGURATION_REQUIRED without owner infra</p>
           </div>
           <div class="sl-ai-orb" data-state="${esc(avatarState)}" title="Sylora avatar state">✦</div>
         </div>
@@ -116,14 +148,23 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
           <button type="button" class="ghost" id="slObs">OBS</button>
           <button type="button" class="ghost" id="slRecap">Recap</button>
         </div>
+        <div class="sl-stream-controls">
+          <div class="item"><b>Scenes / overlays</b><small>Managed in Studio · alerts & gift animations on gift engine</small></div>
+          <div class="item"><b>AI avatar</b><small>State: ${esc(avatarState)} · ${esc(aiState)}</small></div>
+          <div class="item"><b>Guests</b><small>${esc(broadcast.guests?.note || 'Guest layout stub — native WebRTC path')}</small></div>
+          <div class="item"><b>RTMP / multi-dest</b><small>${esc((broadcast.capabilities && broadcast.capabilities.rtmp) || 'CONFIGURATION_REQUIRED without owner RTMP/CDN')}</small></div>
+          <div class="item"><b>Voice STT/TTS</b><small>${esc(voiceStatus.stt || voiceStatus.state || 'BLOCKED_EXTERNAL without keys')}</small></div>
+          <div class="item"><b>Recording</b><small>Use Studio recorder · no fake cloud archive</small></div>
+        </div>
       </footer>
     </div>
 
     <section class="sl-panel" data-sheet="ai" id="slAiPanel">
-      <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <h3>Sylora AI Co-Host</h3>
-        <small class="muted">${host.providerConfigured ? 'Model key detected' : 'Local co-host tool · OPENAI_API_KEY for generative voice'}</small>
+        <span class="sl-badge ${esc(aiState)}">${esc(aiState)}</span>
       </div>
+      <p class="muted" style="margin:0;font-size:12px">Pipeline: LIVE events → normalize → bus → context → decision → chat/TTS/avatar/action. Interrupt protection avoids talking over the host.</p>
       <div class="sl-autonomy" id="slAutonomy">
         ${['OFF', 'ASSIST', 'CO_HOST', 'AUTONOMOUS'].map(level =>
           `<button type="button" data-autonomy="${level}" class="${controls.autonomy === level ? 'on' : 'ghost'}">${level.replace('_', '-')}</button>`
@@ -135,8 +176,8 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
         <label>Language <select id="slLang"><option value="auto">auto</option><option value="uk">uk</option><option value="pl">pl</option><option value="en">en</option><option value="de">de</option></select></label>
       </div>
       <div class="row" style="flex-wrap:wrap;gap:8px">
-        <label><input type="checkbox" id="slGiftReact" ${controls.giftReactions !== false ? 'checked' : ''}> Gift reactions</label>
-        <label><input type="checkbox" id="slChatReact" ${controls.chatReactions !== false ? 'checked' : ''}> Chat reactions</label>
+        <label><input type="checkbox" id="slGiftReact" ${controls.giftReactions !== false ? 'checked' : ''}> Gift / donate reactions</label>
+        <label><input type="checkbox" id="slChatReact" ${controls.chatReactions !== false ? 'checked' : ''}> Chat / follow / join reactions</label>
         <label><input type="checkbox" id="slInterrupt" ${controls.interruptProtection !== false ? 'checked' : ''}> Interrupt protection</label>
         <button type="button" class="primary" id="slSaveHost">Save AI controls</button>
       </div>
@@ -147,6 +188,9 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
   if (langSel) langSel.value = controls.language || 'auto';
 
   applySheet(sheet);
+  const onResize = () => applySheet(sheet);
+  window.addEventListener('resize', onResize);
+
   document.querySelectorAll('[data-sheet]').forEach(btn => {
     if (btn.tagName === 'BUTTON' && btn.dataset.sheet && btn.closest('.sl-tabs')) {
       btn.onclick = () => {
@@ -166,7 +210,8 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
     try {
       const out = await api(`/api/sylora-live/connections/${b.dataset.p}/connect`, { method: 'POST', body: '{}' });
       const st = out.connection?.state;
-      toast(st === 'CONNECTED' ? `${b.dataset.p} connected` : `${b.dataset.p}: ${st} — ${out.connection?.lastError || 'needs owner credentials'}`);
+      if (st === 'CONNECTED') toast(`${b.dataset.p} connected`);
+      else toast(`${b.dataset.p}: ${st} — ${out.connection?.lastError || 'needs owner credentials'}`);
       renderLiveStudio({ app, api, esc, toast, state, nav, t });
     } catch (e) { toast(e.message); }
   });
@@ -212,15 +257,25 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
     toast(`Recap ready · peak ${out.recap?.summary?.peakViewers ?? 0} (not published)`);
   });
 
-  // Mic meter via getUserMedia (permission-gated, real)
+  let micRaf = 0;
+  let micStream = null;
+  let micCtx = null;
   document.querySelector('#slMic')?.addEventListener('click', async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      if (micStream) {
+        micStream.getTracks().forEach(tr => tr.stop());
+        micStream = null;
+        if (micCtx) { micCtx.close().catch(() => {}); micCtx = null; }
+        cancelAnimationFrame(micRaf);
+        toast('Microphone meter stopped');
+        return;
+      }
+      micStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const src = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
+      micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = micCtx.createMediaStreamSource(micStream);
+      const analyser = micCtx.createAnalyser();
       analyser.fftSize = 256;
       src.connect(analyser);
       const data = new Uint8Array(analyser.frequencyBinCount);
@@ -238,7 +293,7 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
           method: 'POST',
           body: JSON.stringify({ speaking: rms > 0.04, rms })
         }).catch(() => {});
-        requestAnimationFrame(tick);
+        micRaf = requestAnimationFrame(tick);
       };
       tick();
       toast('Microphone meter active');
@@ -250,6 +305,32 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
   document.querySelector('#slCam')?.addEventListener('click', () => nav('studio'));
   document.querySelector('#slScreen')?.addEventListener('click', () => nav('studio'));
 
+  // Soft refresh unified chat without full remount (keeps controls stable).
+  const chatTimer = setInterval(async () => {
+    if (state.view !== 'liveStudio') return;
+    try {
+      const fresh = await api('/api/sylora-live/chat?limit=80');
+      const box = document.querySelector('#slChat');
+      if (!box || !fresh.messages) return;
+      if ((fresh.messages || []).length === msgs.length) return;
+      const html = (fresh.messages || []).map(m => {
+        const badge = m.badge || { label: m.platform, color: '#888' };
+        return `<div class="sl-msg ${m.highlighted ? 'hi' : ''}" data-mid="${esc(m.id)}">
+          <div class="meta"><span class="sl-platform" style="background:${esc(badge.color)}">${esc(badge.label)}</span>
+          <b>@${esc(m.username || 'user')}</b></div><div>${esc(m.text || '')}</div></div>`;
+      }).join('') || `<p class="sl-empty">Unified chat is empty.</p>`;
+      box.innerHTML = html;
+    } catch { /* keep UI */ }
+  }, 8000);
+
+  liveStudioCleanup = () => {
+    window.removeEventListener('resize', onResize);
+    clearInterval(chatTimer);
+    cancelAnimationFrame(micRaf);
+    if (micStream) micStream.getTracks().forEach(tr => tr.stop());
+    if (micCtx) micCtx.close().catch(() => {});
+  };
+
   function applySheet(id) {
     document.querySelectorAll('.sl-tabs [data-sheet]').forEach(b => {
       b.className = b.dataset.sheet === id ? 'primary' : 'ghost';
@@ -260,10 +341,9 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
         p.classList.add('on');
         return;
       }
-      p.classList.toggle('on', p.dataset.sheet === id || p.dataset.sheet === 'controls' && id === 'controls');
-      if (id === 'preview') {
-        document.querySelector('.sl-center')?.classList.add('on');
-      }
+      const sheetId = p.dataset.sheet;
+      const show = sheetId === id || sheetId === 'controls' || (id === 'preview' && sheetId === 'preview');
+      p.classList.toggle('on', show);
     });
   }
 

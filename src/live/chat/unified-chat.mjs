@@ -29,23 +29,33 @@ export class UnifiedLiveChat {
     }
     const language = event.language || detectLanguageHint(event.message || '') || null;
     const filterHit = this.#matchFilter(event.message || '');
+    const meta = event.metadata || {};
     const msg = {
       id: event.id,
       platform: event.platform,
       streamId: event.streamId,
+      externalUserId: event.userId,
       userId: event.userId,
       username: event.username,
       displayName: event.displayName || event.username,
       avatar: event.avatar,
       text: event.message || '',
+      message: event.message || '',
       timestamp: event.timestamp,
       language,
       badge: platformBadge(event.platform),
+      badges: event.badges || meta.badges || [],
+      isSubscriber: event.isSubscriber ?? meta.isSubscriber ?? null,
+      isFollower: event.isFollower ?? meta.isFollower ?? null,
+      gift: event.gift || meta.gift || null,
+      donation: event.amount != null ? { amount: event.amount, currency: event.currency || null } : (meta.donation || null),
+      moderation: event.moderation || meta.moderation || null,
+      eventType: event.eventType || 'chat_message',
       priority: 0,
       highlighted: false,
       hidden: filterHit?.action === 'hide',
       flagged: filterHit?.action === 'flag',
-      replyTo: event.metadata?.replyTo || null,
+      replyTo: meta.replyTo || null,
       mentionsSylora: /\b(sylora|силора)\b/i.test(event.message || '')
     };
     if (!msg.hidden) {

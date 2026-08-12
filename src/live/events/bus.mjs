@@ -81,9 +81,7 @@ export class LiveEventBus {
   }
 
   #normalize(raw, platform) {
-    if (raw && LIVE_EVENT_TYPES.includes(raw.eventType) && raw.id) {
-      return { ...raw, platform: raw.platform || platform };
-    }
+    // Always go through createLiveEvent so aliases (comment→chat_message) apply.
     return createLiveEvent({
       id: raw?.id,
       platform: raw?.platform || platform,
@@ -100,7 +98,11 @@ export class LiveEventBus {
       currency: raw?.currency ?? null,
       gift: raw?.gift ?? null,
       metadata: raw?.metadata || {},
-      language: raw?.language ?? null
+      language: raw?.language ?? null,
+      badges: raw?.badges ?? null,
+      isSubscriber: raw?.isSubscriber ?? raw?.metadata?.isSubscriber ?? null,
+      isFollower: raw?.isFollower ?? raw?.metadata?.isFollower ?? null,
+      moderation: raw?.moderation ?? raw?.metadata?.moderation ?? null
     });
   }
 

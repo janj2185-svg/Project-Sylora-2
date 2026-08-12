@@ -119,16 +119,19 @@ function securityHeaders(res) {
   res.setHeader('x-frame-options', 'DENY');
   res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   res.setHeader('permissions-policy', 'camera=(self), microphone=(self), geolocation=()');
+  // Importmap in public/index.html is an inline script — allow by hash only (not unsafe-inline).
+  const importMapSha = "'sha256-dkIVxJOkhk+dsLekdBE1wjlHzMelv+mUnkUYQRC39To='";
   const csp = [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self' ${importMapSha}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
     `connect-src 'self' ${companionConnectSrc()}`,
     "object-src 'none'",
     "base-uri 'self'",
-    "frame-ancestors 'none'"
+    "frame-ancestors 'none'",
+    "worker-src 'self' blob:"
   ];
   if (process.env.NODE_ENV === 'production') csp.push('upgrade-insecure-requests');
   res.setHeader('content-security-policy', csp.join('; '));

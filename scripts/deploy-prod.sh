@@ -17,7 +17,7 @@ MODE="${2:-deploy}"
 # Verified tip of Project-Sylora-2 (LIVE ecosystem). Override with SYLORA_DEPLOY_REF.
 REF="${SYLORA_DEPLOY_REF:-cursor/sylora-live-ecosystem-34a2}"
 SMOKE_BASE="${SMOKE_BASE:-https://getsylora.com}"
-EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260811}"
+EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260812}"
 
 cd "$ROOT"
 ROOT="$(pwd)"
@@ -56,7 +56,8 @@ wait_ready() {
     i=$((i + 1))
     sleep 2
   done
-  die "[ready] $url not ready in time"
+  log "[ready] $url not ready in time"
+  return 1
 }
 
 smoke_public() {
@@ -90,14 +91,26 @@ smoke_public() {
   log "[smoke] PASS"
 }
 
+rollback_to() {
+  prev="$1"
+  [ -n "$prev" ] || return 1
+  log "[rollback] restoring $prev"
+  git checkout --force "$prev" || return 1
+  docker compose up -d --build || return 1
+  wait_ready "http://127.0.0.1:8787/api/ready"
+  log "[rollback] ready after restore"
+}
+
 deploy_on_server() {
   command -v git >/dev/null 2>&1 || die "git required"
   command -v docker >/dev/null 2>&1 || die "docker required on production host"
   [ -f compose.yaml ] || die "compose.yaml missing in $ROOT — is this /opt/sylora?"
 
   backup_tree
+  prev_head="$(git rev-parse HEAD 2>/dev/null || true)"
+  printf '%s\n' "$prev_head" >"${ROOT}/.deploy-backup-latest-HEAD.txt" 2>/dev/null || true
 
-  log "[deploy] fetching origin / ref=$REF"
+  log "[deploy] fetching origin / ref=$REF (prev=$prev_head)"
   git fetch origin "$REF" || git fetch origin
   # Prefer remote branch tip; fall back to tag/sha
   if git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
@@ -110,12 +123,35 @@ deploy_on_server() {
   fi
 
   log "[deploy] HEAD=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
-  docker compose up -d --build
-  wait_ready "http://127.0.0.1:8787/api/ready"
+  if ! docker compose up -d --build; then
+    log "[deploy] compose failed — attempting rollback"
+    rollback_to "$prev_head" || die "[deploy] compose failed and rollback failed"
+    die "[deploy] compose failed; rolled back to $prev_head"
+  fi
+
+  # Non-destructive migrations (compose entrypoint may also run these)
+  if [ -f scripts/migrate.mjs ]; then
+    log "[deploy] running migrations"
+    if command -v docker >/dev/null 2>&1; then
+      docker compose exec -T app node scripts/migrate.mjs 2>/dev/null \
+        || docker compose run --rm app node scripts/migrate.mjs 2>/dev/null \
+        || log "[deploy] migrate skipped/failed non-fatally — check container logs"
+    fi
+  fi
+
+  if ! wait_ready "http://127.0.0.1:8787/api/ready"; then
+    log "[deploy] ready check failed — attempting rollback"
+    rollback_to "$prev_head" || die "[deploy] ready failed and rollback failed"
+    die "[deploy] ready failed; rolled back to $prev_head"
+  fi
   curl -fsS "http://127.0.0.1:8787/api/ready"; echo
   log "[deploy] local ready OK — verifying public domain if reachable"
   if curl -fsS "$SMOKE_BASE/api/ready" >/dev/null 2>&1; then
-    smoke_public "$SMOKE_BASE" || log "[deploy] public smoke WARN — check nginx/TLS; local container is up"
+    if ! smoke_public "$SMOKE_BASE"; then
+      log "[deploy] public smoke FAIL — attempting rollback"
+      rollback_to "$prev_head" || die "[deploy] smoke failed and rollback failed"
+      die "[deploy] public smoke failed; rolled back to $prev_head"
+    fi
   else
     log "[deploy] public $SMOKE_BASE not reachable from this host yet; local container healthy"
   fi
@@ -157,7 +193,7 @@ case "$MODE" in
     command -v docker >/dev/null 2>&1 || die "docker required for dry-run"
     docker compose config >/dev/null
     docker compose up -d --build
-    wait_ready "http://127.0.0.1:8787/api/ready"
+    wait_ready "http://127.0.0.1:8787/api/ready" || die "dry-run ready failed"
     ;;
   deploy) deploy_on_server ;;
   remote) remote_deploy ;;

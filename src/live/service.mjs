@@ -97,7 +97,11 @@ export class SyloraLiveService {
       automationTemplates: AUTOMATION_TEMPLATES,
       boundLiveId: s.boundLiveId,
       honesty: {
-        note: 'External platforms stay AUTH_REQUIRED/UNAVAILABLE until owner credentials. No fake connected states.'
+        note: 'External platforms stay AUTH_REQUIRED/UNAVAILABLE until owner credentials. No fake connected states.',
+        ai: s.host.snapshot().aiState,
+        aiNote: s.host.snapshot().providerConfigured
+          ? 'Model key present — generative path optional.'
+          : 'AI_CONFIGURATION_REQUIRED — local co-host only until OPENAI_API_KEY is set.'
       }
     };
   }
@@ -339,7 +343,12 @@ export class SyloraLiveService {
         const [top] = rankMessages([ingested.message], {
           recentGiftUserIds: new Set(s.giftHistory.map(g => g.userId).filter(Boolean))
         });
-        const decision = s.host.considerEvent(ingested.message, { priorityScore: top?.score || 0 });
+        // Pass chat fields + bus eventType so co-host reads message/text consistently.
+        const decision = s.host.considerEvent({
+          ...ingested.message,
+          message: ingested.message.text || ingested.message.message || '',
+          eventType: 'chat_message'
+        }, { priorityScore: top?.score || 0 });
         if (decision.speak) {
           s.avatar.setState('speaking');
           s.bus.publish({
@@ -347,7 +356,28 @@ export class SyloraLiveService {
             streamId: event.streamId,
             eventType: 'ai_spoke',
             message: decision.reply?.text,
-            metadata: { reason: decision.reason, mode: decision.mode }
+            metadata: {
+              reason: decision.reason,
+              mode: decision.mode,
+              aiState: decision.aiState || s.host.snapshot().aiState,
+              addressedTo: decision.reply?.addressedTo || null
+            }
+          });
+        }
+      }
+    }
+
+    if (['follow', 'subscription', 'membership', 'viewer_joined', 'guest_join', 'like', 'reaction'].includes(event.eventType)) {
+      if (s.host.controls.chatReactions || s.host.controls.giftReactions) {
+        const decision = s.host.considerEvent(event, { priorityScore: event.eventType === 'subscription' ? 80 : 55 });
+        if (decision.speak) {
+          s.avatar.setState(decision.avatarState || 'speaking');
+          s.bus.publish({
+            platform: 'sylora',
+            streamId: event.streamId,
+            eventType: 'ai_spoke',
+            message: decision.reply?.text,
+            metadata: { reason: decision.reason, trigger: event.eventType, aiState: decision.aiState }
           });
         }
       }

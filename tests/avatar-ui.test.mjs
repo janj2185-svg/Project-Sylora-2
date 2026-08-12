@@ -47,6 +47,7 @@ test('deploy prep artifacts exist without inventing SSH secrets', () => {
   assert.ok(fs.existsSync('infra/nginx/sylora.conf.example'));
   assert.ok(fs.existsSync('docs/DEPLOY-HETZNER.md'));
   assert.ok(fs.existsSync('scripts/deploy-prod.sh'));
+  assert.ok(fs.existsSync('scripts/owner-deploy-getsylora.sh'));
   assert.ok(fs.existsSync('scripts/prod-smoke.sh'));
   assert.ok(fs.existsSync('docs/audit/PRODUCTION_DEPLOY_STATUS.md'));
   const deployDoc = fs.readFileSync('docs/DEPLOY-HETZNER.md', 'utf8');
@@ -54,8 +55,10 @@ test('deploy prep artifacts exist without inventing SSH secrets', () => {
   assert.match(deployDoc, /77\.42\.42\.246/);
   assert.match(deployDoc, /Do not invent/);
   assert.match(deployDoc, /\/opt\/sylora/);
+  assert.match(deployDoc, /owner-deploy-getsylora/);
   assert.match(deploySh, /SYLORA_DEPLOY_REF/);
   assert.match(deploySh, /backup_tree/);
+  assert.match(deploySh, /rollback_to/);
   assert.doesNotMatch(deployDoc, /BEGIN (OPENSSH |RSA )?PRIVATE KEY/);
   assert.doesNotMatch(deploySh, /BEGIN (OPENSSH |RSA )?PRIVATE KEY/);
 });

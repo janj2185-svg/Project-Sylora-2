@@ -6,7 +6,7 @@ set -eu
 ROOT="${1:-/opt/sylora}"
 export SYLORA_DEPLOY_REF="${SYLORA_DEPLOY_REF:-cursor/sylora-live-ecosystem-34a2}"
 export SMOKE_BASE="${SMOKE_BASE:-https://getsylora.com}"
-export EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260811}"
+export EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260812}"
 
 cd "$ROOT"
 # Prefer the full deploy helper once it exists on disk; otherwise bootstrap pull then re-run.

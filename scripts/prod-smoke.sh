@@ -28,10 +28,14 @@ check_code /api/live/following 200
 
 html="$(curl -fsS "$BASE/" || true)"
 case "$html" in
-  *20260811*) pass "frontend cache bust ≥ 20260811" ;;
+  *20260812*) pass "frontend cache bust ≥ 20260812" ;;
+  *20260811*) pass "frontend cache bust ≥ 20260811 (acceptable tip)" ;;
   *20260809-3*) fail "frontend still on stale cache bust 20260809-3 — deploy not applied" ;;
   *) fail "frontend cache bust unknown" ;;
 esac
+# Favicon should not 404 after ready tip
+fav="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/assets/sylora-mark-v2.svg" || echo 000)"
+[ "$fav" = "200" ] && pass "brand mark asset → 200" || fail "brand mark asset → $fav"
 
 # Auth journey
 EMAIL="smoke$(date +%s)@getsylora-smoke.test"

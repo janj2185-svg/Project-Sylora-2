@@ -58,14 +58,14 @@ export class SyloraLiveHost {
       at: new Date().toISOString(),
       reason: decision.reason,
       eventType: event?.eventType,
-      preview: String(event?.message || event?.gift?.name || '').slice(0, 80)
+      preview: String(eventText(event) || event?.gift?.name || '').slice(0, 80)
     });
     if (this.memory) {
       this.memory.rememberInteraction({
         platform: event?.platform,
         userId: event?.userId,
         username: event?.username,
-        kind: isGift ? 'gift' : 'chat',
+        kind: isGift ? 'gift' : (event?.eventType || 'chat'),
         summary: reply.text.slice(0, 160)
       });
     }
@@ -78,7 +78,8 @@ export class SyloraLiveHost {
       reply,
       mode: this.openai ? 'model_optional' : 'local_cohost_tool',
       modelChat: false,
-      providerConfigured: !!this.openai
+      providerConfigured: !!this.openai,
+      aiState: this.openai ? 'MODEL_AVAILABLE' : 'AI_CONFIGURATION_REQUIRED'
     };
   }
 
@@ -89,13 +90,19 @@ export class SyloraLiveHost {
       hostSpeaking: this.hostSpeaking,
       lastSpokeAt: this.lastSpokeAt ? new Date(this.lastSpokeAt).toISOString() : null,
       providerConfigured: !!this.openai,
+      aiState: this.openai ? 'MODEL_AVAILABLE' : 'AI_CONFIGURATION_REQUIRED',
+      pipeline: [
+        'live_events', 'normalize', 'event_bus', 'context',
+        'ai_decision', 'response', 'chat_tts_avatar_action'
+      ],
       recentNotes: this.sessionNotes.slice(-20)
     };
   }
 
   #localReply(event, { addressed, isGift }) {
+    const sourceText = eventText(event);
     const lang = this.controls.language === 'auto'
-      ? (detectLanguageHint(event?.message || '') || 'uk')
+      ? (detectLanguageHint(sourceText) || 'uk')
       : this.controls.language;
     const name = event?.displayName || event?.username || 'друже';
     let text;
@@ -110,10 +117,25 @@ export class SyloraLiveHost {
       this.avatarState = 'excited';
     } else if (addressed) {
       text = pick(lang, {
-        uk: `${name}, я тут. ${shortAck(event?.message)}`,
-        pl: `${name}, jestem tu. ${shortAck(event?.message)}`,
-        en: `${name}, I'm here. ${shortAck(event?.message)}`,
-        de: `${name}, ich bin da. ${shortAck(event?.message)}`
+        uk: `${name}, я тут. ${shortAck(sourceText)}`,
+        pl: `${name}, jestem tu. ${shortAck(sourceText)}`,
+        en: `${name}, I'm here. ${shortAck(sourceText)}`,
+        de: `${name}, ich bin da. ${shortAck(sourceText)}`
+      });
+    } else if (event?.eventType === 'follow' || event?.eventType === 'subscription' || event?.eventType === 'membership') {
+      text = pick(lang, {
+        uk: `${name}, вітаємо у спільноті — раді тебе бачити!`,
+        pl: `${name}, witamy w społeczności!`,
+        en: `${name}, welcome to the community!`,
+        de: `${name}, willkommen in der Community!`
+      });
+      this.avatarState = 'happy';
+    } else if (event?.eventType === 'viewer_joined' || event?.eventType === 'guest_join') {
+      text = pick(lang, {
+        uk: `${name} щойно зайшов — привітаймо!`,
+        pl: `${name} właśnie dołączył — powitajmy!`,
+        en: `${name} just joined — say hi!`,
+        de: `${name} ist gerade dabei — begrüßen wir!`
       });
     } else {
       text = pick(lang, {
@@ -126,13 +148,20 @@ export class SyloraLiveHost {
     return {
       text,
       language: lang,
+      addressedTo: event?.userId || event?.username || null,
+      platform: event?.platform || null,
       toolKind: 'local_live_cohost',
       hardcodeForbidden: false,
+      aiState: this.openai ? 'MODEL_AVAILABLE' : 'AI_CONFIGURATION_REQUIRED',
       note: this.openai
         ? 'Local co-host draft; model path available when OPENAI_API_KEY set for richer speech.'
-        : 'Local co-host tool (not model AI). Configure OPENAI_API_KEY for generative voice/chat.'
+        : 'AI_CONFIGURATION_REQUIRED — local co-host tool only until OPENAI_API_KEY is set.'
     };
   }
+}
+
+function eventText(event) {
+  return String(event?.message ?? event?.text ?? '');
 }
 
 function pick(lang, map) {

@@ -79,7 +79,7 @@
   }
   .mobile-dock .nav{height:48px!important;gap:1px!important;font-size:7.5px!important}
   .mobile-dock .nav>span:first-child{font-size:16px!important}
-  .mobile-dock .nav>span:last-child{font-size:7.5px!important;letter-spacing:0}
+  .mobile-dock .nav>span:last-child{font-size:7.5px!important;letter-spacing:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .living-horizon{min-height:auto!important;padding-bottom:12px}
   .horizon-copy{padding-top:max(22px,env(safe-area-inset-top))!important}
   .horizon-flow{
