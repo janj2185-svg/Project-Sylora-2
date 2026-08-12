@@ -636,7 +636,7 @@ function setRealtimeButton(active,label){const button=document.querySelector('#a
 function realtimeClock(){const elapsed=Math.max(0,Date.now()-syloraCallStartedAt),minutes=String(Math.floor(elapsed/60000)).padStart(2,'0'),seconds=String(Math.floor(elapsed/1000)%60).padStart(2,'0'),el=document.querySelector('#realtimeTimer');if(el)el.textContent=`${minutes}:${seconds}`}
 function setRealtimeUi(active){const hero=document.querySelector('.sylora-ai-hero'),deck=document.querySelector('#realtimeDeck');hero?.classList.toggle('realtime-live',active);if(deck)deck.hidden=!active;if(active){syloraCallStartedAt=Date.now();clearInterval(syloraCallTimer);syloraCallTimer=setInterval(realtimeClock,1000);realtimeClock()}else{clearInterval(syloraCallTimer);syloraCallTimer=null}}
 function toggleSyloraRealtimeMute(){const track=syloraRealtimeStream?.getAudioTracks?.()[0],button=document.querySelector('#aiMute');if(!track)return;track.enabled=!track.enabled;if(button){button.classList.toggle('muted',!track.enabled);button.textContent=track.enabled?'Мікрофон':'Мікрофон вимкнено'}setSyloraPresence(track.enabled?'ready':'muted')}
-function syloraGestureSrc(name='neutral'){return SYLORA_GESTURE_SRC[name]||SYLORA_GESTURE_SRC.neutral}
+function syloraGestureSrc(name='neutral'){return GESTURE_CATALOG[name]||GESTURE_CATALOG.neutral}
 function mountSyloraAvatarLayers(){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
@@ -691,7 +691,7 @@ function setSyloraGesture(name='neutral',duration=0){
   // Fallback if controller not mounted yet
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
-  const gestureName=SYLORA_GESTURE_SRC[name]?name:'neutral';
+  const gestureName=GESTURE_CATALOG[name]?name:'neutral';
   const layers=[...hero.querySelectorAll('.sylora-avatar-gesture')];
   clearTimeout(hero._syloraGestureTimer);
   hero.dataset.gesture=gestureName;
