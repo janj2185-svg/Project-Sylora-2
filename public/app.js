@@ -10,9 +10,19 @@ import { mountHomeLivingBg, destroyHomeLivingBg } from './home-living-bg.js';
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null;let homeLivingRoot=null;const studioPeers=new Map();
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0;
 /** Session bootstrap gate — prevents auth flash / false login redirect while /api/me restores. */
-window.__syloraBooted=false;let pendingNavView=null;let renderSeq=0;
+window.__syloraBooted=false;let pendingNavView=null;let renderSeq=0;let renderQueue=Promise.resolve();
 function sessionRestoring(){return !!(state.token&&!state.me&&!window.__syloraBooted)}
 function requireSession(viewRender){if(state.me)return viewRender();if(sessionRestoring()){app.innerHTML=`<div class="loading" data-session-restore="1">${esc(t('loading')||'Відновлюємо сесію…')}</div>`;return}return renderAuth()}
+/** Serialize async view renders so a slow feed paint cannot clobber LIVE Studio / other views. */
+function queueRender(){
+  const seq=++renderSeq;
+  const view=state.view;
+  renderQueue=renderQueue.catch(()=>{}).then(async()=>{
+    if(seq!==renderSeq)return;
+    await renderView(view,()=>seq===renderSeq);
+  });
+  return renderQueue;
+}
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
 const STUDIO_P2P_PEER_LIMIT=6;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -115,7 +125,7 @@ function showIncomingCallBanner(){
 }
 function nav(view){
   if(sessionRestoring()){pendingNavView=view;app.innerHTML=`<div class="loading" data-session-restore="1">${esc(t('loading')||'Відновлюємо сесію…')}</div>`;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));return}
-  if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='liveStudio'&&view!=='liveStudio')cleanupLiveStudio();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(state.view==='feed'&&view!=='feed'){destroyHomeLivingBg(homeLivingRoot);homeLivingRoot=null}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()
+  if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='liveStudio'&&view!=='liveStudio')cleanupLiveStudio();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(state.view==='feed'&&view!=='feed'){destroyHomeLivingBg(homeLivingRoot);homeLivingRoot=null}if(liveEventSource){liveEventSource.close();liveEventSource=null}  state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));queueRender()
 }
 /** QA / screenshot harness — same navigation path as UI clicks. */
 window.__syloraNav=nav;window.__syloraState=state;window.__syloraShowIncoming=showIncomingCallBanner;window.__syloraSessionRestoring=sessionRestoring;
@@ -125,32 +135,37 @@ document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLower
 document.querySelectorAll('[data-create-hub]').forEach(b=>b.addEventListener('click',launchCreateHub));
 document.querySelector('.brand')?.addEventListener('click',e=>{e.preventDefault();nav('feed')});
 document.querySelectorAll('[data-rail-view]').forEach(x=>x.onclick=()=>nav(x.dataset.railView));
-async function render(){
-  const seq=++renderSeq;
-  document.body.dataset.view=state.view;
-  const run=async(fn)=>{const out=fn();if(out&&typeof out.then==='function')await out;return seq===renderSeq};
-  if(state.view==='gifts')return run(()=>renderGifts());
-  if(state.view==='wallet')return run(()=>requireSession(renderWallet));
-  if(state.view==='profile')return run(()=>requireSession(renderProfile));
-  if(state.view==='clips')return run(()=>renderClips());
-  if(state.view==='videos')return run(()=>renderVideos());
-  if(state.view==='explore')return run(()=>renderExplore());
-  if(state.view==='live')return run(()=>renderLive());
-  if(state.view==='liveStudio')return run(()=>requireSession(()=>renderLiveStudio({app,api,esc,toast,state,nav,t})));
-  if(state.view==='studio')return run(()=>requireSession(renderStudio));
-  if(state.view==='messages')return run(()=>requireSession(renderMessages));
-  if(state.view==='ai')return run(()=>requireSession(renderAI));
-  if(state.view==='more')return run(()=>renderMore());
-  if(state.view==='identity')return run(()=>requireSession(renderIdentity));
-  if(state.view==='agents')return run(()=>requireSession(renderAgents));
-  if(state.view==='developer')return run(()=>requireSession(renderDeveloper));
-  if(state.view==='security')return run(()=>requireSession(renderSecurityCenter));
-  if(state.view==='dashboard')return run(()=>requireSession(renderPersonalDashboard));
-  if(state.view==='canvas')return run(()=>requireSession(renderCanvas));
-  if(state.view==='admin')return run(()=>requireSession(()=>state.me?.role==='admin'?renderAdmin():nav('more')));
-  if(state.view==='communities')return run(()=>renderCommunities());
-  if(state.view==='learning')return run(()=>renderLearning());
-  if(state.view==='business')return run(()=>renderBusiness());
+function render(){return queueRender()}
+async function renderView(view,stillCurrent=()=>true){
+  document.body.dataset.view=view;
+  const run=async(fn)=>{
+    if(!stillCurrent())return false;
+    const out=fn();
+    if(out&&typeof out.then==='function')await out;
+    return stillCurrent();
+  };
+  if(view==='gifts')return run(()=>renderGifts());
+  if(view==='wallet')return run(()=>requireSession(renderWallet));
+  if(view==='profile')return run(()=>requireSession(renderProfile));
+  if(view==='clips')return run(()=>renderClips());
+  if(view==='videos')return run(()=>renderVideos());
+  if(view==='explore')return run(()=>renderExplore());
+  if(view==='live')return run(()=>renderLive());
+  if(view==='liveStudio')return run(()=>requireSession(()=>renderLiveStudio({app,api,esc,toast,state,nav,t})));
+  if(view==='studio')return run(()=>requireSession(renderStudio));
+  if(view==='messages')return run(()=>requireSession(renderMessages));
+  if(view==='ai')return run(()=>requireSession(renderAI));
+  if(view==='more')return run(()=>renderMore());
+  if(view==='identity')return run(()=>requireSession(renderIdentity));
+  if(view==='agents')return run(()=>requireSession(renderAgents));
+  if(view==='developer')return run(()=>requireSession(renderDeveloper));
+  if(view==='security')return run(()=>requireSession(renderSecurityCenter));
+  if(view==='dashboard')return run(()=>requireSession(renderPersonalDashboard));
+  if(view==='canvas')return run(()=>requireSession(renderCanvas));
+  if(view==='admin')return run(()=>requireSession(()=>state.me?.role==='admin'?renderAdmin():nav('more')));
+  if(view==='communities')return run(()=>renderCommunities());
+  if(view==='learning')return run(()=>renderLearning());
+  if(view==='business')return run(()=>renderBusiness());
   return run(()=>renderFeed())
 }
 async function renderFeed(){

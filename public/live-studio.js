@@ -77,6 +77,7 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
     }).join('')
     : `<p class="sl-empty">Unified chat is empty. Bind a SYLORA LIVE room or wait for real platform events — nothing is simulated.</p>`;
 
+  if (state.view !== 'liveStudio') return;
   app.innerHTML = `
   <section class="sl-shell">
     <div class="sl-top">

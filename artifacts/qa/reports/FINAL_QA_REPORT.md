@@ -90,6 +90,7 @@ See repository HEAD after the QA commit on `cursor/sylora-live-ecosystem-34a2`.
 
 1. **Mobile/tablet horizontal overflow** on home — `.eco-carousel` flex children expanded document width → fixed in `design-consolidation.css` (`min-width:0`, `max-width:100%`, overflow containment). Re-verified: `scrollWidth === clientWidth` at 390 and 768.
 2. **Duplicate AI banner text** in LIVE Command Center (`AI_CONFIGURATION_REQUIRED · AI_CONFIGURATION_REQUIRED`) → cleaned in `live-studio.js`.
+3. **Async render race** — slow `renderFeed` could paint over LIVE Command Center while `body.dataset.view` already said `liveStudio` → serialized via `queueRender()` in `app.js`. Browser E2E now 5/5 stable.
 
 ## E. Owner keys / accounts still required
 
