@@ -1,0 +1,1408 @@
+{
+  "users": [
+    {
+      "id": "5883af8e-5440-4094-aace-ff1025a11d76",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:00:58.312Z"
+    },
+    {
+      "id": "4f06f6c3-f0ca-4635-bedc-c0ff319d4bb1",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:00:58.381Z"
+    },
+    {
+      "id": "a0b1a3d8-f0eb-479b-a95d-68f273230862",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:00:58.444Z"
+    },
+    {
+      "id": "b541d3a1-a980-4ab6-8754-03b1b96e6b13",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:01:06.047Z"
+    },
+    {
+      "id": "60138bac-f750-48eb-a977-cb21f0f015d5",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:01:06.103Z"
+    },
+    {
+      "id": "c7cd359f-0da8-4783-98bb-82de4d59cfc1",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:02:33.493Z"
+    },
+    {
+      "id": "7172c7e1-6b94-43d4-bbf5-e81602f8015d",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:02:33.548Z"
+    },
+    {
+      "id": "e5536c2d-e999-428f-a59a-4ed76927fb19",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:04:37.046Z"
+    },
+    {
+      "id": "23855ea2-77a1-435e-90ff-4b71dff3bffc",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:04:37.100Z"
+    },
+    {
+      "id": "f6210bff-806d-46bb-a04f-76ec7069e2b7",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:16:21.966Z"
+    },
+    {
+      "id": "a8f164fc-f5a4-495e-9a7a-1e0bfc42a14e",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:16:22.024Z"
+    },
+    {
+      "id": "d135a4b2-69b7-4fb7-921d-c99c83c64c16",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:25:02.633Z"
+    },
+    {
+      "id": "e18d4992-a97d-4964-bfef-48a71d45ad54",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:25:02.686Z"
+    },
+    {
+      "id": "239634ac-44f6-4a7e-8319-df159e52437b",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:38:58.025Z"
+    },
+    {
+      "id": "28b3e5af-818b-41d5-a3c3-132174b3d44a",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:38:58.099Z"
+    },
+    {
+      "id": "d31b6db6-462c-40a3-970c-10e608f76a41",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:39:05.543Z"
+    },
+    {
+      "id": "03b805e7-eb34-49a1-bd58-4dd67cd78912",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:39:05.609Z"
+    },
+    {
+      "id": "991d7ed0-6ee4-4171-b87d-f6f557051458",
+      "username": "host",
+      "displayName": "Host",
+      "email": "h@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:39:16.595Z"
+    },
+    {
+      "id": "a4170a40-9696-4182-8f6c-09c2aeddeaad",
+      "username": "viewer",
+      "displayName": "Viewer",
+      "email": "v@test.dev",
+      "passwordHash": "x",
+      "locale": "en",
+      "bio": "",
+      "role": "user",
+      "createdAt": "2026-08-12T20:39:16.656Z"
+    }
+  ],
+  "sessions": [],
+  "posts": [],
+  "comments": [],
+  "reactions": [],
+  "follows": [],
+  "blocks": [],
+  "reports": [],
+  "notifications": [],
+  "wallets": [],
+  "ledger": [],
+  "messages": [],
+  "conversations": [],
+  "aiMessages": [],
+  "aiMemories": [],
+  "aiActions": [],
+  "identities": [],
+  "personalAgents": [],
+  "aiActivity": [],
+  "kgNodes": [],
+  "kgEdges": [],
+  "ecosystemActions": [],
+  "agentCatalog": [
+    {
+      "id": "96dedb6e-1617-4265-a823-cb29b9b5ab8f",
+      "developerId": "sylora-platform",
+      "slug": "live-moderator",
+      "name": "LIVE Moderator",
+      "summary": "Helps moderate LIVE chat within granted permissions.",
+      "category": "live_moderator",
+      "permissions": [
+        "live_assist",
+        "live_moderate"
+      ],
+      "capabilities": [
+        "moderate",
+        "summarize"
+      ],
+      "tools": [
+        "moderate",
+        "summarize"
+      ],
+      "pricing": {
+        "model": "free",
+        "price": 0,
+        "currency": "LUMEN"
+      },
+      "version": "0.1.0",
+      "status": "sandbox",
+      "securityReview": "pending",
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "installs": 0,
+      "revenueShareBps": 7000,
+      "createdAt": "2026-08-12T20:00:58.312Z",
+      "updatedAt": "2026-08-12T20:00:58.312Z"
+    },
+    {
+      "id": "02ac502c-961c-4570-a347-c83a907e2ce8",
+      "developerId": "sylora-platform",
+      "slug": "creator-assistant",
+      "name": "Creator Assistant",
+      "summary": "Prepares LIVE outlines, titles and post-summaries for confirmation.",
+      "category": "creator_assistant",
+      "permissions": [
+        "content_assist",
+        "live_assist"
+      ],
+      "capabilities": [
+        "prepare",
+        "generate"
+      ],
+      "tools": [
+        "prepare",
+        "generate"
+      ],
+      "pricing": {
+        "model": "free",
+        "price": 0,
+        "currency": "LUMEN"
+      },
+      "version": "0.1.0",
+      "status": "sandbox",
+      "securityReview": "pending",
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "installs": 0,
+      "revenueShareBps": 7000,
+      "createdAt": "2026-08-12T20:00:58.312Z",
+      "updatedAt": "2026-08-12T20:00:58.312Z"
+    },
+    {
+      "id": "590d2953-ea99-41ac-b9eb-69436ca8b514",
+      "developerId": "sylora-platform",
+      "slug": "business-analyst",
+      "name": "Business Analyst",
+      "summary": "Reads permitted business metrics and proposes actions.",
+      "category": "business_analyst",
+      "permissions": [
+        "business_assist"
+      ],
+      "capabilities": [
+        "analyze",
+        "propose"
+      ],
+      "tools": [
+        "analyze",
+        "propose"
+      ],
+      "pricing": {
+        "model": "subscription",
+        "price": 500,
+        "currency": "LUMEN"
+      },
+      "version": "0.1.0",
+      "status": "sandbox",
+      "securityReview": "pending",
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "installs": 0,
+      "revenueShareBps": 7000,
+      "createdAt": "2026-08-12T20:00:58.312Z",
+      "updatedAt": "2026-08-12T20:00:58.312Z"
+    },
+    {
+      "id": "fa6e95ca-6bdd-4993-8f15-91cead42ba9f",
+      "developerId": "sylora-platform",
+      "slug": "translator",
+      "name": "Translator Agent",
+      "summary": "Permissioned translation for chat and LIVE captions.",
+      "category": "translator",
+      "permissions": [
+        "translate"
+      ],
+      "capabilities": [
+        "translate"
+      ],
+      "tools": [
+        "translate"
+      ],
+      "pricing": {
+        "model": "free",
+        "price": 0,
+        "currency": "LUMEN"
+      },
+      "version": "0.1.0",
+      "status": "sandbox",
+      "securityReview": "pending",
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "installs": 0,
+      "revenueShareBps": 7000,
+      "createdAt": "2026-08-12T20:00:58.312Z",
+      "updatedAt": "2026-08-12T20:00:58.312Z"
+    },
+    {
+      "id": "772ceffc-855c-40f1-804f-6e9d9fc2a348",
+      "developerId": "sylora-platform",
+      "slug": "teacher",
+      "name": "Teacher Agent",
+      "summary": "Tutoring assistant for enrolled learning contexts.",
+      "category": "teacher",
+      "permissions": [
+        "learn_assist"
+      ],
+      "capabilities": [
+        "teach",
+        "quiz"
+      ],
+      "tools": [
+        "teach",
+        "quiz"
+      ],
+      "pricing": {
+        "model": "paid",
+        "price": 250,
+        "currency": "LUMEN"
+      },
+      "version": "0.1.0",
+      "status": "sandbox",
+      "securityReview": "pending",
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "installs": 0,
+      "revenueShareBps": 7000,
+      "createdAt": "2026-08-12T20:00:58.312Z",
+      "updatedAt": "2026-08-12T20:00:58.312Z"
+    }
+  ],
+  "agentInstalls": [],
+  "developerApps": [],
+  "apiKeys": [],
+  "translationJobs": [],
+  "organizations": [],
+  "orgMembers": [],
+  "orgTeams": [],
+  "orgDocuments": [],
+  "orgTasks": [],
+  "agentNegotiations": [],
+  "enterpriseControls": [],
+  "reputations": [],
+  "provenance": [],
+  "studioAiPlans": [],
+  "commerceItems": [],
+  "commerceOrders": [],
+  "privacyRequests": [],
+  "aiBudgets": [],
+  "aiUsage": [],
+  "communities": [],
+  "communityMembers": [],
+  "communityChannels": [],
+  "communityPosts": [],
+  "courses": [],
+  "lessons": [],
+  "enrollments": [],
+  "lessonProgress": [],
+  "quizzes": [],
+  "quizAttempts": [],
+  "businesses": [],
+  "conferenceRooms": [],
+  "conferenceMembers": [],
+  "conferenceInvites": [],
+  "liveRooms": [],
+  "liveMessages": [],
+  "liveEngagement": [],
+  "liveBattles": [
+    {
+      "id": "fc64a1f1-d510-467c-a008-a4d3939551f4",
+      "hostLiveId": "edee2e3a-73c0-4ea8-bf70-5f05c4b7760c",
+      "opponentLiveId": "bf3c0b82-6d81-4cc3-a8ff-0cfbdf66d920",
+      "mode": "1v1",
+      "teamA": [
+        "4f06f6c3-f0ca-4635-bedc-c0ff319d4bb1"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:00:58.427Z",
+      "endsAt": "2026-08-12T20:03:58.427Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "3520f0aa-af5c-45c4-8b01-c62242cb35dc",
+      "hostLiveId": "309ed89b-e4e4-4ed4-8a35-313017e288e6",
+      "opponentLiveId": "5546bbc8-1eba-42fd-b54f-6e7779729753",
+      "mode": "1v1",
+      "teamA": [
+        "b541d3a1-a980-4ab6-8754-03b1b96e6b13"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:01:06.083Z",
+      "endsAt": "2026-08-12T20:04:06.084Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "1b2df77a-6186-4e74-9723-c343cee72278",
+      "hostLiveId": "9f9a4c3e-9c64-46ca-9191-e5224ff91389",
+      "opponentLiveId": "b0f09447-bb9f-4cb5-ac23-caae70894261",
+      "mode": "1v1",
+      "teamA": [
+        "c7cd359f-0da8-4783-98bb-82de4d59cfc1"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:02:33.537Z",
+      "endsAt": "2026-08-12T20:05:33.537Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "68470f2f-2e7a-442c-9f72-c48ca3131414",
+      "hostLiveId": "ce4b7928-6ef7-4859-a902-183ac9aaccd5",
+      "opponentLiveId": "d184749d-3ecd-4db1-93a9-0967be08213d",
+      "mode": "1v1",
+      "teamA": [
+        "e5536c2d-e999-428f-a59a-4ed76927fb19"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:04:37.082Z",
+      "endsAt": "2026-08-12T20:07:37.082Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "f8f43458-3743-4b87-b053-eed5a3a61411",
+      "hostLiveId": "0186f1ff-9e20-4641-bcc5-20eef8ec4926",
+      "opponentLiveId": "860375fc-1301-4386-8478-4a3d7a78191f",
+      "mode": "1v1",
+      "teamA": [
+        "f6210bff-806d-46bb-a04f-76ec7069e2b7"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:16:22.006Z",
+      "endsAt": "2026-08-12T20:19:22.006Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "48cf75fb-2aec-49f4-afbf-03ad66884e5f",
+      "hostLiveId": "dfda4aac-81fa-4eb1-9065-7dc8ea22a026",
+      "opponentLiveId": "c6fc20ee-8ba7-42f5-b4fd-42e74b9293cb",
+      "mode": "1v1",
+      "teamA": [
+        "d135a4b2-69b7-4fb7-921d-c99c83c64c16"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:25:02.674Z",
+      "endsAt": "2026-08-12T20:28:02.674Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "423668f1-cc35-412e-81ab-a88ae0783b5a",
+      "hostLiveId": "1fdf2275-7eb5-4366-9004-9739140e09f2",
+      "opponentLiveId": "aa735fb6-c1d4-40a7-ae84-e1be86ee453b",
+      "mode": "1v1",
+      "teamA": [
+        "239634ac-44f6-4a7e-8319-df159e52437b"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:38:58.080Z",
+      "endsAt": "2026-08-12T20:41:58.080Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "add09e34-cf5e-45df-922f-5d94e813787b",
+      "hostLiveId": "8d7a1938-1814-441e-ad4d-267293b314a0",
+      "opponentLiveId": "0f8d0276-9776-4635-883a-6967e51aa059",
+      "mode": "1v1",
+      "teamA": [
+        "d31b6db6-462c-40a3-970c-10e608f76a41"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:39:05.585Z",
+      "endsAt": "2026-08-12T20:42:05.585Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    },
+    {
+      "id": "c9b8689b-8b71-4696-b26c-b3ba69cc385a",
+      "hostLiveId": "79067d64-0342-4812-ad45-3289b1d9fab9",
+      "opponentLiveId": "00a35c79-a7d4-4f76-a905-864efb0df670",
+      "mode": "1v1",
+      "teamA": [
+        "991d7ed0-6ee4-4171-b87d-f6f557051458"
+      ],
+      "teamB": [],
+      "rounds": [
+        {
+          "index": 1,
+          "kind": "likes",
+          "label": "ROUND 1 — Likes",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "active"
+        },
+        {
+          "index": 2,
+          "kind": "community_interaction",
+          "label": "ROUND 2 — Community interaction",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 3,
+          "kind": "gifts",
+          "label": "ROUND 3 — Gifts",
+          "weight": 1,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        },
+        {
+          "index": 4,
+          "kind": "resonance_storm",
+          "label": "FINAL — Resonance Storm",
+          "weight": 1.5,
+          "scoreA": 0,
+          "scoreB": 0,
+          "status": "pending"
+        }
+      ],
+      "currentRound": 1,
+      "status": "live",
+      "hostScore": 0,
+      "opponentScore": 0,
+      "factors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "opponentFactors": {
+        "likes": 0,
+        "gifts": 0,
+        "comments": 0,
+        "challengePoints": 0,
+        "quizPoints": 0,
+        "teamParticipation": 0
+      },
+      "comebackEvents": [],
+      "startedAt": "2026-08-12T20:39:16.640Z",
+      "endsAt": "2026-08-12T20:42:16.640Z",
+      "endedAt": null,
+      "fairness": {
+        "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
+      }
+    }
+  ],
+  "donorProgress": [],
+  "supportProgress": [],
+  "studioScenes": [],
+  "media": [],
+  "mediaJobs": [],
+  "videos": [],
+  "platformEvents": [],
+  "calendarItems": [],
+  "projects": [],
+  "projectMembers": [],
+  "projectTasks": [],
+  "projectMilestones": [],
+  "collaborativeDocuments": [],
+  "contentAttributions": [],
+  "verificationRequests": [],
+  "featureFlagOverrides": [],
+  "continuitySessions": [],
+  "smartNotificationBundles": [],
+  "toolAudit": [],
+  "activityGraph": [],
+  "contentUnderstanding": [],
+  "contentHistory": [],
+  "sharedMemories": [],
+  "decisionRecords": [],
+  "universalTasks": [],
+  "goals": [],
+  "meetingResults": [],
+  "canvasWorkspaces": [],
+  "connectedServices": [],
+  "skillInstalls": [],
+  "ownershipGraph": [],
+  "revenueSplits": [],
+  "learningGraphs": [],
+  "businessWorkflows": [],
+  "dailyBriefPrefs": [],
+  "liveChallenges": [],
+  "liveQuizzes": [],
+  "liveMiniGames": [],
+  "liveStages": [
+    {
+      "liveId": "edee2e3a-73c0-4ea8-bf70-5f05c4b7760c",
+      "hostId": "4f06f6c3-f0ca-4635-bedc-c0ff319d4bb1",
+      "speakers": [
+        {
+          "userId": "4f06f6c3-f0ca-4635-bedc-c0ff319d4bb1",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "a0b1a3d8-f0eb-479b-a95d-68f273230862"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:00:58.445Z"
+    },
+    {
+      "liveId": "309ed89b-e4e4-4ed4-8a35-313017e288e6",
+      "hostId": "b541d3a1-a980-4ab6-8754-03b1b96e6b13",
+      "speakers": [
+        {
+          "userId": "b541d3a1-a980-4ab6-8754-03b1b96e6b13",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "60138bac-f750-48eb-a977-cb21f0f015d5"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:01:06.104Z"
+    },
+    {
+      "liveId": "9f9a4c3e-9c64-46ca-9191-e5224ff91389",
+      "hostId": "c7cd359f-0da8-4783-98bb-82de4d59cfc1",
+      "speakers": [
+        {
+          "userId": "c7cd359f-0da8-4783-98bb-82de4d59cfc1",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "7172c7e1-6b94-43d4-bbf5-e81602f8015d"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:02:33.549Z"
+    },
+    {
+      "liveId": "ce4b7928-6ef7-4859-a902-183ac9aaccd5",
+      "hostId": "e5536c2d-e999-428f-a59a-4ed76927fb19",
+      "speakers": [
+        {
+          "userId": "e5536c2d-e999-428f-a59a-4ed76927fb19",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "23855ea2-77a1-435e-90ff-4b71dff3bffc"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:04:37.101Z"
+    },
+    {
+      "liveId": "0186f1ff-9e20-4641-bcc5-20eef8ec4926",
+      "hostId": "f6210bff-806d-46bb-a04f-76ec7069e2b7",
+      "speakers": [
+        {
+          "userId": "f6210bff-806d-46bb-a04f-76ec7069e2b7",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "a8f164fc-f5a4-495e-9a7a-1e0bfc42a14e"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:16:22.025Z"
+    },
+    {
+      "liveId": "dfda4aac-81fa-4eb1-9065-7dc8ea22a026",
+      "hostId": "d135a4b2-69b7-4fb7-921d-c99c83c64c16",
+      "speakers": [
+        {
+          "userId": "d135a4b2-69b7-4fb7-921d-c99c83c64c16",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "e18d4992-a97d-4964-bfef-48a71d45ad54"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:25:02.687Z"
+    },
+    {
+      "liveId": "1fdf2275-7eb5-4366-9004-9739140e09f2",
+      "hostId": "239634ac-44f6-4a7e-8319-df159e52437b",
+      "speakers": [
+        {
+          "userId": "239634ac-44f6-4a7e-8319-df159e52437b",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "28b3e5af-818b-41d5-a3c3-132174b3d44a"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:38:58.100Z"
+    },
+    {
+      "liveId": "8d7a1938-1814-441e-ad4d-267293b314a0",
+      "hostId": "d31b6db6-462c-40a3-970c-10e608f76a41",
+      "speakers": [
+        {
+          "userId": "d31b6db6-462c-40a3-970c-10e608f76a41",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "03b805e7-eb34-49a1-bd58-4dd67cd78912"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:39:05.610Z"
+    },
+    {
+      "liveId": "79067d64-0342-4812-ad45-3289b1d9fab9",
+      "hostId": "991d7ed0-6ee4-4171-b87d-f6f557051458",
+      "speakers": [
+        {
+          "userId": "991d7ed0-6ee4-4171-b87d-f6f557051458",
+          "role": "host"
+        }
+      ],
+      "raisedHands": [
+        "a4170a40-9696-4182-8f6c-09c2aeddeaad"
+      ],
+      "audienceCount": 0,
+      "updatedAt": "2026-08-12T20:39:16.657Z"
+    }
+  ],
+  "liveRoomProfiles": [],
+  "liveTimers": [],
+  "focusSessions": [],
+  "callSessions": [],
+  "callHistory": [],
+  "syloraCalls": [],
+  "businessCountryProfiles": [],
+  "invoices": [],
+  "expenseExtractions": [],
+  "crmRecords": [],
+  "quotes": [],
+  "timeEntries": [],
+  "projectBudgets": [],
+  "inventoryItems": [],
+  "accountantInvites": [],
+  "contracts": [],
+  "flashcardDecks": [],
+  "examPlans": [],
+  "assignments": [],
+  "quizBuilders": [],
+  "smartNotes": [],
+  "whiteboards": [],
+  "researchLibrary": [],
+  "researchProjects": [],
+  "datasets": [],
+  "tutorSessions": [],
+  "experimentLogs": [],
+  "formulaWorkspaces": [],
+  "scienceCircles": [],
+  "conferencePrograms": [],
+  "sharedQuizzes": [],
+  "funSocialRooms": [],
+  "communityEvents": [],
+  "discoveryProfiles": [],
+  "userAchievements": [],
+  "seasonalLiveEvents": [],
+  "audit": [],
+  "gifts": [
+    {
+      "id": "spark",
+      "name": "Crystal Star",
+      "price": 10,
+      "tier": "basic",
+      "color": "#e8b95f"
+    },
+    {
+      "id": "pulse",
+      "name": "Crystal Heart",
+      "price": 25,
+      "tier": "basic",
+      "color": "#a98ae8"
+    },
+    {
+      "id": "lumen-bloom",
+      "name": "Eternal Lotus",
+      "price": 75,
+      "tier": "basic",
+      "color": "#72cfb8"
+    },
+    {
+      "id": "nova",
+      "name": "Cosmic Bloom",
+      "price": 250,
+      "tier": "premium",
+      "color": "#d98fc2"
+    },
+    {
+      "id": "dream-orbit",
+      "name": "Orbital Core",
+      "price": 500,
+      "tier": "premium",
+      "color": "#79cbdc"
+    },
+    {
+      "id": "aurora",
+      "name": "Royal Crown",
+      "price": 1000,
+      "tier": "epic",
+      "color": "#d9a84b"
+    },
+    {
+      "id": "celestial-wing",
+      "name": "Divine Wings",
+      "price": 1800,
+      "tier": "epic",
+      "color": "#9d84df"
+    },
+    {
+      "id": "time-gate",
+      "name": "Portal of Infinity",
+      "price": 3000,
+      "tier": "epic",
+      "color": "#69c9c5"
+    },
+    {
+      "id": "cosmos",
+      "name": "Phoenix Rebirth",
+      "price": 5000,
+      "tier": "legendary",
+      "color": "#eea45e"
+    },
+    {
+      "id": "infinite-sylora",
+      "name": "Infinity",
+      "price": 10000,
+      "tier": "legendary",
+      "color": "#b782db"
+    }
+  ]
+}

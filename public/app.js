@@ -2,7 +2,9 @@ import { t, setLocale, getLocale, humanError } from './i18n.js';
 import { openCreateHub } from './create-hub.js';
 import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig } from './sylora-motion.js';
-import { SyloraLivingController, GESTURE_CATALOG, detectEmotionFromText } from './sylora-living.js';
+import { GESTURE_CATALOG, detectEmotionFromText } from './sylora-living.js';
+import { createAvatarAdapter } from './avatar/adapter.js';
+import { normalizeBehavior } from './avatar/contract.js';
 import { ObsWebSocketClient, normalizeObsUrl } from './obs-client.js';
 import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client.js';
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null;const studioPeers=new Map();
@@ -431,9 +433,67 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
   })();
 }
 
-function renderMore(){app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Спокійні налаштування профілю, приватності, Sylora AI та всієї екосистеми.</p></div><section class="settings-scene"><div class="settings-copy"><span class="eyebrow">НАЛАШТУВАННЯ</span><h2>Усе під твоїм контролем.</h2><p>SYLORA не ховає важливі рішення: профіль, пам’ять AI та комунікації відкриваються окремо.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><div class="module-grid settings-grid"><div class="card module" data-go="profile"><span class="icon">○</span><h3>Акаунт і профіль</h3><p>Ім’я, мова, профіль, гаманець і статистика.</p></div><div class="card module" data-go="identity"><span class="icon">◈</span><h3>SYLORA Identity</h3><p>Цифрова ідентичність, навички, портфоліо та рівні приватності.</p></div><div class="card module" data-go="ai"><span class="icon">✦</span><h3>Sylora AI</h3><p>Один Personal AI, пам’ять, дозволи та прозора історія дій.</p></div>
+function renderMore(){
+  const rtVoice=localStorage.getItem('sylora_realtime_voice')||'marin';
+  const ttsVoice=localStorage.getItem('sylora_tts_voice')||'';
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Спокійні налаштування профілю, приватності, Sylora AI та всієї екосистеми.</p></div><section class="settings-scene"><div class="settings-copy"><span class="eyebrow">НАЛАШТУВАННЯ</span><h2>Усе під твоїм контролем.</h2><p>SYLORA не ховає важливі рішення: профіль, пам’ять AI та комунікації відкриваються окремо.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section>
+  <section class="card" id="voiceSettingsCard"><span class="eyebrow">SYLORA VOICE</span><h3>Голос і присутність</h3><p class="muted">Обери LIVE-голос і попередньо прослухай м’який зразок. Немає жорсткої прив’язки до одного voice id.</p>
+  <div class="fields"><label>LIVE Realtime voice<select id="settingsRealtimeVoice">
+    <option value="marin">Marin · soft warm (default)</option>
+    <option value="shimmer">Shimmer · gentle</option>
+    <option value="sage">Sage · calm</option>
+    <option value="coral">Coral · bright</option>
+    <option value="ballad">Ballad · soft</option>
+    <option value="alloy">Alloy · neutral</option>
+    <option value="echo">Echo · clear</option>
+    <option value="ash">Ash · steady</option>
+  </select></label>
+  <label>Chat TTS (браузер)<select id="settingsTtsVoice"><option value="">Авто · найкращий для мови</option></select></label>
+  <label>Avatar renderer<select id="settingsAvatarRenderer"><option value="auto">Auto (3D коли asset з’явиться)</option><option value="2d">2D PNG fallback</option><option value="3d">3D VRM (ASSET_REQUIRED поки немає моделі)</option></select></label>
+  <div class="row"><button type="button" class="primary" id="voicePreviewBtn">Preview голосу</button><button type="button" class="ghost" id="voiceSaveBtn">Зберегти</button></div>
+  <p id="voiceSettingsHint" class="muted"></p></div></section>
+  <div class="module-grid settings-grid"><div class="card module" data-go="profile"><span class="icon">○</span><h3>Акаунт і профіль</h3><p>Ім’я, мова, профіль, гаманець і статистика.</p></div><div class="card module" data-go="identity"><span class="icon">◈</span><h3>SYLORA Identity</h3><p>Цифрова ідентичність, навички, портфоліо та рівні приватності.</p></div><div class="card module" data-go="ai"><span class="icon">✦</span><h3>Sylora AI</h3><p>Один Personal AI, пам’ять, дозволи та прозора історія дій.</p></div>
 <div class="card module" data-go="dashboard"><span class="icon">▣</span><h3>Personal Dashboard</h3><p>Today · Tasks · Goals · Brief · Continuity.</p></div>
-<div class="card module" data-go="canvas"><span class="icon">▭</span><h3>Sylora Canvas</h3><p>AI workspace for documents, plans and research.</p></div><div class="card module" data-go="agents"><span class="icon">⬡</span><h3>Agent Marketplace</h3><p>Встановлюй і керуй AI-агентами з явними дозволами.</p></div><div class="card module" data-go="developer"><span class="icon">⌁</span><h3>Developer Platform</h3><p>Додатки, API-ключі, scopes і пісочниця інтеграцій.</p></div><div class="card module" data-go="security"><span class="icon">⛨</span><h3>Центр безпеки</h3><p>Приватність, експорт даних, репутація та provenance.</p></div><div class="card module" data-go="messages"><span class="icon">◌</span><h3>Комунікації</h3><p>Приватні повідомлення та твій простір спілкування.</p></div><div class="card module" data-go="videos"><span class="icon">▻</span><h3>Медіа</h3><p>Відео, довгі формати та медіа-пайплайн.</p></div><div class="card module" data-go="gifts"><span class="icon">♢</span><h3>Gift Gallery</h3><p>Подарунки для LIVE, Battles і Creator Studio.</p></div><div class="card module" data-go="communities"><span class="icon">◎</span><h3>Спільноти</h3><p>Твої кола, канали й простори.</p></div><div class="card module" data-go="learning"><span class="icon">⌬</span><h3>Science</h3><p>Навчання, дослідження та закриті конференції.</p></div><div class="card module" data-go="business"><span class="icon">◈</span><h3>Business</h3><p>Організації, команди та Enterprise AI Control Plane.</p></div>${state.me?.role==='admin'?'<div class="card module" data-go="admin"><span class="icon">⚙</span><h3>Moderation</h3><p>Reports та audit log.</p></div>':''}</div>`;document.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>nav(x.dataset.go))}
+<div class="card module" data-go="canvas"><span class="icon">▭</span><h3>Sylora Canvas</h3><p>AI workspace for documents, plans and research.</p></div><div class="card module" data-go="agents"><span class="icon">⬡</span><h3>Agent Marketplace</h3><p>Встановлюй і керуй AI-агентами з явними дозволами.</p></div><div class="card module" data-go="developer"><span class="icon">⌁</span><h3>Developer Platform</h3><p>Додатки, API-ключі, scopes і пісочниця інтеграцій.</p></div><div class="card module" data-go="security"><span class="icon">⛨</span><h3>Центр безпеки</h3><p>Приватність, експорт даних, репутація та provenance.</p></div><div class="card module" data-go="messages"><span class="icon">◌</span><h3>Комунікації</h3><p>Приватні повідомлення та твій простір спілкування.</p></div><div class="card module" data-go="videos"><span class="icon">▻</span><h3>Медіа</h3><p>Відео, довгі формати та медіа-пайплайн.</p></div><div class="card module" data-go="gifts"><span class="icon">♢</span><h3>Gift Gallery</h3><p>Подарунки для LIVE, Battles і Creator Studio.</p></div><div class="card module" data-go="communities"><span class="icon">◎</span><h3>Спільноти</h3><p>Твої кола, канали й простори.</p></div><div class="card module" data-go="learning"><span class="icon">⌬</span><h3>Science</h3><p>Навчання, дослідження та закриті конференції.</p></div><div class="card module" data-go="business"><span class="icon">◈</span><h3>Business</h3><p>Організації, команди та Enterprise AI Control Plane.</p></div>${state.me?.role==='admin'?'<div class="card module" data-go="admin"><span class="icon">⚙</span><h3>Moderation</h3><p>Reports та audit log.</p></div>':''}</div>`;
+  document.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>nav(x.dataset.go));
+  const rt=document.querySelector('#settingsRealtimeVoice');if(rt)rt.value=rtVoice;
+  const ar=document.querySelector('#settingsAvatarRenderer');if(ar)ar.value=localStorage.getItem('sylora_avatar_renderer')||'auto';
+  const tts=document.querySelector('#settingsTtsVoice');
+  if(tts&&'speechSynthesis'in window){
+    const fill=()=>{
+      const voices=window.speechSynthesis.getVoices();
+      const locale=syloraSpeechLocale().toLowerCase();
+      tts.innerHTML=`<option value="">Авто · найкращий для ${esc(locale)}</option>`+[...voices].slice(0,30).map(v=>`<option value="${esc(v.name)}" ${ttsVoice===v.name?'selected':''}>${esc(v.name)} · ${esc(v.lang)}</option>`).join('');
+    };
+    fill();window.speechSynthesis.onvoiceschanged=fill;
+  }
+  api('/api/ai/voices').then(v=>{
+    const hint=document.querySelector('#voiceSettingsHint');
+    if(hint)hint.textContent=`${v.honesty||''} Default LIVE: ${v.realtimeDefault||'marin'}.`;
+  }).catch(()=>{});
+  api('/api/ai/avatar/architecture').then(a=>{
+    const hint=document.querySelector('#voiceSettingsHint');
+    if(hint)hint.textContent=(hint.textContent||'')+` Avatar: ${a.modelStatus}.`;
+  }).catch(()=>{});
+  document.querySelector('#voiceSaveBtn')?.addEventListener('click',()=>{
+    localStorage.setItem('sylora_realtime_voice',document.querySelector('#settingsRealtimeVoice')?.value||'marin');
+    localStorage.setItem('sylora_tts_voice',document.querySelector('#settingsTtsVoice')?.value||'');
+    localStorage.setItem('sylora_avatar_renderer',document.querySelector('#settingsAvatarRenderer')?.value||'auto');
+    toast('Голос збережено');
+  });
+  document.querySelector('#voicePreviewBtn')?.addEventListener('click',()=>{
+    if(!('speechSynthesis'in window))return toast('Preview недоступний у цьому браузері');
+    const sample='Привіт. Я поруч — говорю м’яко і природно.';
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(sample);
+    u.lang=syloraSpeechLocale();
+    u.rate=0.97;u.pitch=1.02;
+    const preferred=document.querySelector('#settingsTtsVoice')?.value||'';
+    if(preferred){const named=window.speechSynthesis.getVoices().find(v=>v.name===preferred);if(named)u.voice=named}
+    else{const picked=pickBrowserVoice(u);if(picked)u.voice=picked}
+    window.speechSynthesis.speak(u);
+  });
+}
 async function renderIdentity(){
   const [{identity},kg]=await Promise.all([api('/api/identity'),api('/api/kg').catch(()=>({nodes:[],edges:[]}))]);
   const p=identity.privacy||{};
@@ -566,12 +626,17 @@ async function renderCanvas(){
   document.querySelector('#canvasAsk').onsubmit=async e=>{e.preventDefault();const q=new FormData(e.currentTarget).get('q');const out=await api('/api/ai/command',{method:'POST',body:JSON.stringify({text:q,view:'canvas'})});const pre=document.querySelector('#canvasAskOut');pre.hidden=false;pre.textContent=JSON.stringify(out.result||out.plan||out,null,2).slice(0,1800)};
 }
 function syloraSpeechLocale(){return({uk:'uk-UA',pl:'pl-PL',en:'en-US'})[getLocale()]||'uk-UA'}
-function syloraLiving(){return document.querySelector('.sylora-ai-hero')?._syloraLiving||null}
+function syloraAvatar(){return document.querySelector('.sylora-ai-hero')?._syloraAvatarAdapter||null}
+function syloraLiving(){return document.querySelector('.sylora-ai-hero')?._syloraLiving||syloraAvatar()?.controller||null}
 function setSyloraPresence(mode='ready'){
   const hero=document.querySelector('.sylora-ai-hero'),label=document.querySelector('#aiPresenceStatus');
-  const living=syloraLiving();
-  if(living)living.setPresence(mode);
-  else if(hero){hero.dataset.presence=mode;hero._syloraMotionRig?.setPresence(mode)}
+  const adapter=syloraAvatar();
+  if(adapter)adapter.setPresence(mode);
+  else{
+    const living=syloraLiving();
+    if(living)living.setPresence(mode);
+    else if(hero){hero.dataset.presence=mode;hero._syloraMotionRig?.setPresence(mode)}
+  }
   if(label)label.textContent=mode==='listening'?'СЛУХАЮ':mode==='thinking'?'ДУМАЮ':mode==='speaking'?'ГОВОРЮ':mode==='muted'?'МІКРОФОН ВИМКНЕНО':'Я ПОРУЧ';
 }
 function stopSyloraVoice(){syloraRecognition?.stop?.();syloraRecognition=null;window.speechSynthesis?.cancel();setSyloraPresence('ready')}
@@ -592,28 +657,22 @@ function pickBrowserVoice(utterance){
   }).sort((a,b)=>b.score-a.score);
   return scored[0]?.v||null;
 }
-function normalizeSpeakMeta(meta={}){
-  const b=(meta&&typeof meta==='object'&&meta.behavior&&typeof meta.behavior==='object')?meta.behavior:meta;
-  return {
-    emotion:b.emotion||null,
-    intensity:b.intensity??0.4,
-    voiceStyle:b.voiceStyle||'warm',
-    facialExpression:b.facialExpression||b.emotion||null,
-    gestureIntent:b.gestureIntent||null,
-    gazeIntent:b.gazeIntent||null,
-    animationCue:b.animationCue||null
-  };
-}
+function normalizeSpeakMeta(meta={}){return normalizeBehavior(meta)}
 function speakSylora(text,meta={}){
   if(!syloraVoiceEnabled||!text||!('speechSynthesis'in window))return;
-  const cues=normalizeSpeakMeta(meta);
-  const emotion=cues.emotion||detectEmotionFromText(text);
-  const living=syloraLiving();
-  if(living){
-    living.intensity=cues.intensity;
-    living.setEmotion(emotion,{duration:5200,cue:cues.animationCue||null});
-    if(cues.gestureIntent&&GESTURE_CATALOG[cues.gestureIntent])living.applyGesture(cues.gestureIntent,{force:true,duration:1600});
-  }else setSyloraEmotion(emotion,5200);
+  const cues=normalizeSpeakMeta({...meta,text});
+  const emotion=cues.emotion&&cues.emotion!=='neutral'?cues.emotion:detectEmotionFromText(text);
+  const behavior={...cues,emotion,presence:'speaking'};
+  const adapter=syloraAvatar();
+  if(adapter)adapter.applyBehavior(behavior);
+  else{
+    const living=syloraLiving();
+    if(living){
+      living.intensity=cues.intensity;
+      living.setEmotion(emotion,{duration:5200,cue:cues.animationCue||null});
+      if(cues.gestureIntent&&GESTURE_CATALOG[cues.gestureIntent])living.applyGesture(cues.gestureIntent,{force:true,duration:1600});
+    }else setSyloraEmotion(emotion,5200);
+  }
   window.speechSynthesis.cancel();
   const utterance=new SpeechSynthesisUtterance(text);
   utterance.lang=syloraSpeechLocale();
@@ -641,11 +700,10 @@ function mountSyloraAvatarLayers(){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
   if(hero.querySelector('.sylora-avatar-motion'))return;
-  // Dispose any orphaned living controller from a previous hero instance
   if(hero._syloraLiving){try{hero._syloraLiving.dispose()}catch{}}
+  if(hero._syloraAvatarAdapter){try{hero._syloraAvatarAdapter.dispose()}catch{}}
   if(hero._syloraMotionDetach){try{hero._syloraMotionDetach()}catch{}}
   hero.classList.add('sylora-assembled');
-  // Mobile-first framing class based on viewport aspect
   const w=window.innerWidth||390;
   const h=window.innerHeight||800;
   const portrait=h>=w;
@@ -678,11 +736,11 @@ function mountSyloraAvatarLayers(){
     rig.setPresence(hero.dataset.presence||'ready');
     hero._syloraMotionDetach=rig.attach(hero);
   }
-  const living=new SyloraLivingController(hero,{motionRig:hero._syloraMotionRig||null});
-  living.layer=0;
-  living.mountOverlays();
-  hero._syloraLiving=living;
-  living.applyGesture(hero.dataset.gesture||'neutral',{force:true});
+  // Adapter layer: prefer 3d when asset exists; otherwise honest 2D fallback
+  const prefer=localStorage.getItem('sylora_avatar_renderer')||'auto';
+  const adapter=createAvatarAdapter(hero,{prefer,motionRig:hero._syloraMotionRig||null});
+  adapter.mount();
+  hero._syloraAvatarAdapter=adapter;
 }
 function detectSyloraEmotion(text=''){return detectEmotionFromText(text)}
 function setSyloraGesture(name='neutral',duration=0){
@@ -776,7 +834,7 @@ async function startSyloraRealtime(){
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}),pc=new RTCPeerConnection();syloraRealtimeStream=stream;syloraRealtimePeer=pc;
     const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');audio.hidden=true;document.body.append(audio);syloraRealtimeAudio=audio;pc.ontrack=e=>{audio.srcObject=e.streams[0];startSyloraAudioReactive(e.streams[0])};pc.onconnectionstatechange=()=>{if(['failed','disconnected','closed'].includes(pc.connectionState))stopSyloraRealtime()};pc.addTrack(stream.getAudioTracks()[0],stream);
     const dc=pc.createDataChannel('oai-events');syloraRealtimeChannel=dc;dc.onopen=()=>{setRealtimeButton(true,'Завершити LIVE');setRealtimeUi(true);setSyloraPresence('ready');syloraLiving()?.applyGesture('wave',{force:true,duration:1100})};dc.onmessage=e=>{try{const event=JSON.parse(e.data),type=event.type||'';if(type==='input_audio_buffer.speech_started')setSyloraPresence('listening');else if(type==='input_audio_buffer.speech_stopped'||type==='response.created')setSyloraPresence('thinking');else if(type.includes('output_audio')&&type.endsWith('.delta')){const living=syloraLiving();if(living)living.onAudioDelta();else setSyloraPresence('speaking')}else if(type==='response.done'||type==='response.cancelled')setSyloraPresence('ready');if(type==='conversation.item.input_audio_transcription.completed')persistRealtimeTranscript('user',event.transcript,event);if(type==='response.output_audio_transcript.done')persistRealtimeTranscript('assistant',event.transcript,event)}catch{}};
-    const offer=await pc.createOffer();await pc.setLocalDescription(offer);const response=await fetch('/api/ai/realtime',{method:'POST',headers:{authorization:`Bearer ${state.token}`,'content-type':'application/sdp'},body:offer.sdp});if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.error||'REALTIME_SESSION_FAILED')}await pc.setRemoteDescription({type:'answer',sdp:await response.text()});
+    const offer=await pc.createOffer();await pc.setLocalDescription(offer);const voicePref=localStorage.getItem('sylora_realtime_voice')||'';const response=await fetch('/api/ai/realtime',{method:'POST',headers:{authorization:`Bearer ${state.token}`,'content-type':'application/sdp',...(voicePref?{'x-sylora-voice':voicePref}:{})},body:offer.sdp});if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.error||'REALTIME_SESSION_FAILED')}await pc.setRemoteDescription({type:'answer',sdp:await response.text()});
   }catch(error){stopSyloraRealtime();toast(error.name==='NotAllowedError'?'Дозволь мікрофон для живої розмови':humanError(error.message))}
 }
 

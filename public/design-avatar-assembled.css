@@ -246,14 +246,27 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
     order:7;
   }
 
-  /* Sticky compose must sit ABOVE dock and NEVER cover avatar */
+  /* Sticky compose must sit ABOVE dock and NEVER cover avatar face */
   body[data-view="ai"] #app .ai-compose{
-    position:sticky!important;
-    bottom:calc(64px + env(safe-area-inset-bottom,0px))!important;
+    position:relative!important;
+    bottom:auto!important;
     z-index:8!important;
     margin-top:8px!important;
     margin-bottom:0!important;
     box-shadow:0 -8px 28px rgba(90,70,90,.08);
+  }
+  @supports(height:100dvh){
+    body[data-view="ai"] #app .ai-compose{
+      position:sticky!important;
+      bottom:calc(64px + env(safe-area-inset-bottom,0px))!important;
+    }
+  }
+  /* Guarantee: compose cannot paint over avatar face band */
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
+    z-index:2;
+  }
+  body[data-view="ai"] #app .ai-compose{
+    isolation:isolate;
   }
   body[data-view="ai"] #app .ai-conversation{
     max-height:min(28dvh,220px)!important;

@@ -48,9 +48,9 @@ test('emotion detector and assembled CSS include mobile living framing', () => {
   assert.match(css, /sylora-life-blink/);
   assert.match(css, /max-width:320px/);
   const app = fs.readFileSync('public/app.js', 'utf8');
-  assert.match(app, /SyloraLivingController/);
+  assert.match(app, /SyloraLivingController|createAvatarAdapter/);
   assert.match(app, /onAudioDelta/);
-  assert.match(app, /normalizeSpeakMeta/);
+  assert.match(app, /normalizeSpeakMeta|normalizeBehavior/);
   assert.doesNotMatch(app, /function startSyloraBodyLife/);
   assert.doesNotMatch(app, /function startSyloraHairPhysics/);
 });

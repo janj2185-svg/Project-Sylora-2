@@ -26,7 +26,8 @@ import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
 import { createPlatformEvent } from './platform-event-spine.mjs';
-import { resolveVoiceProvider, preferredRealtimeVoice } from './ecosystem/voice-provider.mjs';
+import { resolveVoiceProvider, preferredRealtimeVoice, resolveRealtimeVoiceId, voiceCatalogPayload } from './ecosystem/voice-provider.mjs';
+import { avatarArchitectureReport } from './ecosystem/avatar-digital-human.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -348,7 +349,10 @@ async function api(req, res, url) {
     const sdp=await textBody(req);if(!sdp.trim())return json(res,400,{error:'SDP_REQUIRED'});
     const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20)};
     const personality=ecosystem.personalityFor('ai', user);
-    const voiceId=preferredRealtimeVoice(process.env.OPENAI_REALTIME_VOICE_STYLE||'warm');
+    const voiceId=resolveRealtimeVoiceId({
+      voiceId:req.headers['x-sylora-voice']||'',
+      style:process.env.OPENAI_REALTIME_VOICE_STYLE||'warm'
+    });
     const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly — like a close companion on a call, not a scripted assistant. Avoid repeating the user's words, template openers, and saying your name unless asked. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:voiceId||openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
     try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
@@ -560,7 +564,11 @@ async function api(req, res, url) {
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
   if(req.method==='GET'&&p==='/api/ai/voices'){
     const user=await requireUser(req,res);if(!user)return;
-    return json(res,200,{provider:resolveVoiceProvider(),realtimeDefault:preferredRealtimeVoice('warm')});
+    return json(res,200,voiceCatalogPayload());
+  }
+  if(req.method==='GET'&&p==='/api/ai/avatar/architecture'){
+    const user=await requireUser(req,res);if(!user)return;
+    return json(res,200,avatarArchitectureReport(fs,path));
   }
   if(req.method==='POST'&&p==='/api/ai/chat'){
     const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
