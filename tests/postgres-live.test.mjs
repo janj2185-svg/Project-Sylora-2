@@ -11,7 +11,7 @@ test('PostgreSQL LIVE repository persists room lifecycle and chat',async()=>{
     CREATE TABLE live_rooms (id uuid PRIMARY KEY,host_id uuid NOT NULL REFERENCES users(id),title text NOT NULL,status text NOT NULL,created_at timestamptz NOT NULL,ended_at timestamptz);
     CREATE TABLE live_messages (id uuid PRIMARY KEY,live_id uuid NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,body text NOT NULL,created_at timestamptz NOT NULL);
     CREATE TABLE live_engagement(live_id uuid PRIMARY KEY REFERENCES live_rooms(id),likes bigint NOT NULL DEFAULT 0,resonance bigint NOT NULL DEFAULT 0,updated_at timestamptz NOT NULL DEFAULT now());
-    CREATE TABLE live_battles(id uuid PRIMARY KEY,host_live_id uuid NOT NULL REFERENCES live_rooms(id),opponent_live_id uuid NOT NULL REFERENCES live_rooms(id),status text NOT NULL DEFAULT 'live',host_score bigint NOT NULL DEFAULT 0,opponent_score bigint NOT NULL DEFAULT 0,started_at timestamptz NOT NULL,ends_at timestamptz NOT NULL,ended_at timestamptz);
+    CREATE TABLE live_battles(id uuid PRIMARY KEY,host_live_id uuid NOT NULL REFERENCES live_rooms(id),opponent_live_id uuid NOT NULL REFERENCES live_rooms(id),status text NOT NULL DEFAULT 'live',host_score bigint NOT NULL DEFAULT 0,opponent_score bigint NOT NULL DEFAULT 0,started_at timestamptz NOT NULL,ends_at timestamptz NOT NULL,ended_at timestamptz,overlay jsonb NOT NULL DEFAULT '{}');
   `);
   const adapter=memory.adapters.createPg(),pool=new adapter.Pool(),repo=new PostgresLiveRepository(pool),hostId=randomUUID(),viewerId=randomUUID(),liveId=randomUUID();
   await pool.query('INSERT INTO users(id,username) VALUES($1,$2),($3,$4)',[hostId,'host',viewerId,'viewer']);

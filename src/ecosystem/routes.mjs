@@ -79,7 +79,7 @@ export async function handleEcosystemRoutes(ctx) {
     const text = safeText(input.text || input.q || '', 2000);
     if (!text) return json(res, 400, { error: 'TEXT_REQUIRED' }), true;
     try {
-      return json(res, 200, ecosystem.universalCommand(user, text, {
+      return json(res, 200, await ecosystem.universalCommand(user, text, {
         locale: input.locale || user.locale,
         executeReads: input.executeReads !== false
       })), true;
@@ -88,7 +88,7 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/ai/ask') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 200, ecosystem.askAboutContext(user, {
+    return json(res, 200, await ecosystem.askAboutContext(user, {
       view: safeText(input.view || 'ai', 40),
       contentType: safeText(input.contentType || 'unknown', 40),
       contentId: input.contentId || null,
@@ -168,7 +168,7 @@ export async function handleEcosystemRoutes(ctx) {
   m = route('/api/actions/:id/confirm', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
-    const out = ecosystem.confirmEcosystemAction(user, m.id);
+    const out = await ecosystem.confirmEcosystemAction(user, m.id);
     return json(res, out.ok ? 200 : 404, out), true;
   }
 
@@ -256,7 +256,7 @@ export async function handleEcosystemRoutes(ctx) {
   m = route('/api/studio/ai/plan/:id/confirm', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
-    const out = ecosystem.confirmCreatorStudioPlan(user, m.id);
+    const out = await ecosystem.confirmCreatorStudioPlan(user, m.id);
     return json(res, out.ok ? 200 : 404, out), true;
   }
   if (req.method === 'POST' && p === '/api/studio/ai/content-pack') {
@@ -446,13 +446,13 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/search/ai') {
     const user = await requireUser(req, res); if (!user) return true;
     const prompt = safeText(url.searchParams.get('q') || '', 500);
-    return json(res, 200, ecosystem.aiSearch(prompt, user)), true;
+    return json(res, 200, await ecosystem.aiSearch(prompt, user)), true;
   }
   if (req.method === 'GET' && p === '/api/search/universal') {
     const user = await requireUser(req, res); if (!user) return true;
     const prompt = safeText(url.searchParams.get('q') || '', 500);
     if (prompt.length < 2) return json(res, 200, { query: prompt, structured: [], semantic: [] }), true;
-    return json(res, 200, ecosystem.universalSearch(user, prompt)), true;
+    return json(res, 200, await ecosystem.universalSearch(user, prompt)), true;
   }
 
   // —— Spaces / Events / Calendar / Projects ——
@@ -529,7 +529,7 @@ export async function handleEcosystemRoutes(ctx) {
   // —— Intelligence Layer / Personal OS ——
   if (req.method === 'GET' && p === '/api/daily-brief') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { brief: ecosystem.dailyBrief(user) }), true;
+    return json(res, 200, { brief: await ecosystem.dailyBrief(user) }), true;
   }
   if (req.method === 'PATCH' && p === '/api/daily-brief') {
     const user = await requireUser(req, res); if (!user) return true;
@@ -619,7 +619,7 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/dashboard') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { dashboard: ecosystem.personalDashboard(user) }), true;
+    return json(res, 200, { dashboard: await ecosystem.personalDashboard(user) }), true;
   }
   if (req.method === 'GET' && p === '/api/skills') {
     return json(res, 200, { skills: ecosystem.listSkills(), specialists: ['research', 'creator', 'business', 'translation', 'moderation', 'search', 'planning', 'learning'] }), true;
@@ -637,7 +637,7 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    const out = ecosystem.spaceAsk(user, m.id, safeText(input.question || input.text || '', 2000));
+    const out = await ecosystem.spaceAsk(user, m.id, safeText(input.question || input.text || '', 2000));
     return json(res, out.ok ? 200 : 404, out), true;
   }
   if (req.method === 'POST' && p === '/api/meetings/result') {
@@ -695,7 +695,7 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, { onboarding: ecosystem.onboarding(user) }), true;
   }
   if (req.method === 'GET' && p === '/api/guest/view') {
-    return json(res, 200, ecosystem.guestView({
+    return json(res, 200, await ecosystem.guestView({
       userId: url.searchParams.get('userId'),
       contentId: url.searchParams.get('contentId'),
       liveId: url.searchParams.get('liveId'),
@@ -709,7 +709,7 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, {
       profile: ecosystem.getPublicIdentity(user, 'public'),
       web: ecosystem.publicWebMeta(user.id),
-      guest: ecosystem.guestView({ userId: user.id, visibility: 'public' })
+      guest: await ecosystem.guestView({ userId: user.id, visibility: 'public' })
     }), true;
   }
 
@@ -744,7 +744,7 @@ export async function handleEcosystemRoutes(ctx) {
   m = route('/api/live/battles/:id/factor', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 200, ecosystem.battleFactor(user, m.id, await body(req))), true; }
+    try { return json(res, 200, await ecosystem.battleFactor(user, m.id, await body(req))), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/battles/:id/advance', p);

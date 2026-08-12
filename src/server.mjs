@@ -25,6 +25,7 @@ import { EcosystemService } from './ecosystem/service.mjs';
 import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
+import { createPlatformEvent } from './platform-event-spine.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -83,8 +84,36 @@ ecosystem.setHooks({
   listLiveMessages,
   liveEngagement,
   activeBattle,
-  createBattle:(payload)=>liveRepo.enabled?liveRepo.createBattle(payload):null
+  createBattle:(payload)=>liveRepo.enabled?liveRepo.createBattle(payload):null,
+  getBattlePlan:(id)=>liveRepo.enabled?liveRepo.getBattlePlan(id):null,
+  saveBattlePlan:(battle)=>liveRepo.enabled?liveRepo.saveBattlePlan(battle):null,
+  getBattlePlanByLiveId:(id)=>liveRepo.enabled?liveRepo.getBattlePlanByLiveId(id):null,
+  getStage:(id)=>liveRepo.enabled?liveRepo.getStage(id):null,
+  saveStage:(stage)=>liveRepo.enabled?liveRepo.saveStage(stage):null,
+  getRoomProfile:(id)=>liveRepo.enabled?liveRepo.getRoomProfile(id):null,
+  saveRoomProfile:(profile)=>liveRepo.enabled?liveRepo.saveRoomProfile(profile):null,
+  listRoomsForUser:(userId,limit)=>liveRepo.enabled?liveRepo.listRoomsForUser(userId,limit):null,
+  searchLive:(q,limit)=>liveRepo.enabled?liveRepo.searchLive(q,limit):null,
+  searchPosts:(q,limit)=>liveRepo.enabled?liveRepo.searchPosts(q,limit):null,
+  createClipJob:(job)=>liveRepo.enabled?liveRepo.createClipJob(job):null,
+  updateClipJob:(job)=>liveRepo.enabled?liveRepo.updateClipJob(job):null,
+  getClipJob:(id)=>liveRepo.enabled?liveRepo.getClipJob(id):null,
+  postgresLiveState:!!liveRepo.enabled,
+  aiComplete: openai ? async (prompt) => {
+    const response = await openai.responses.create({
+      model: openaiModel,
+      store: false,
+      reasoning: { effort: 'low' },
+      max_output_tokens: 400,
+      instructions: 'Return JSON only for Sylora LIVE reactions.',
+      input: prompt
+    });
+    return response.output_text || '';
+  } : null
 });
+function ingestLivePlatformEvent(event) {
+  try { ecosystem.ingestPlatformEvent(event); } catch (e) { console.error('[platform-ingest]', e?.message || e); }
+}
 
 function json(res, status, body) {
   const value = JSON.stringify(body);
@@ -286,7 +315,9 @@ async function api(req, res, url) {
   const p = url.pathname;
   if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',ecosystem:'personal-ai-identity-kg-agents-developers',ecosystemPersistence:ecosystemRepo.enabled?'postgres+json-cache':'json',dependencies})}
   if(req.method==='GET'&&p==='/api/integrations/status'){const {integrationStatus}=await import('./integrations.mjs');return json(res,200,{integrations:integrationStatus()})}
-  if(req.method==='GET'&&p==='/api/platform/capabilities'){const {capabilityRegistry}=await import('./platform-events.mjs');return json(res,200,{capabilities:capabilityRegistry()})}
+  if(req.method==='GET'&&p==='/api/platform/capabilities'){const {capabilityRegistry}=await import('./platform-events.mjs');return json(res,200,{capabilities:capabilityRegistry(),graph:ecosystem.platformCapabilityGraph()})}
+  if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction})}
+  if(req.method==='POST'&&p==='/api/sylora/director/propose'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);return json(res,200,ecosystem.directorPropose({...input,liveRoomId:input.liveId||null,viewerCount:input.viewerCount||0}))}
   if(req.method==='GET'&&p==='/api/ready'){const dependencies=await dependencyHealth();return json(res,dependencies.ready?200:503,{ready:dependencies.ready,dependencies})}
   if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
@@ -456,7 +487,7 @@ async function api(req, res, url) {
   m=route('/api/conferences/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['peer-join','offer','answer','ice','peer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='peer-join'){if(!await conferencePeerRegistry.claim(m.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else{if(await conferencePeerRegistry.owner(m.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId){const targetUserId=await conferencePeerRegistry.owner(m.id,toPeerId);if(!targetUserId||!participants.some(x=>x.id===targetUserId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitConference(m.id,'signal',signal);if(kind==='peer-left')await conferencePeerRegistry.release(m.id,fromPeerId,user.id);return json(res,202,{accepted:true})}
   m=route('/api/conferences/:id/ai',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const owned=[...(await listConferences(user.id,'science')),...(await listConferences(user.id,'business'))],room=owned.find(x=>x.id===m.id);if(!room)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});if(!room.syloraEnabled)return json(res,403,{error:'SYLORA_NOT_ENABLED'});const input=await body(req),text=safeText(input.text,4000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});try{const response=await openai.responses.create({model:openaiModel,store:false,reasoning:{effort:'low'},max_output_tokens:1800,instructions:`You are Sylora participating on demand inside a private ${room.kind} conference. Be concise, factual and useful. Reply in the language of the question. You are an AI assistant, not a human participant. Do not invent meeting facts that were not provided. Do not perform account writes or claim you changed platform data. Room: ${JSON.stringify({title:room.title,description:room.description,kind:room.kind,participants:participants.map(x=>({displayName:x.displayName,role:x.role}))})}`,input:[{role:'user',content:text}]});const answer=safeText(response.output_text,8000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});const event={id:store.id(),text:answer,question:text,askedBy:store.publicUser(user),createdAt:store.now()};emitConference(m.id,'sylora',event);return json(res,200,{message:answer,event})}catch(error){console.error('Conference Sylora request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'})}}
   m=route('/api/conference-invites/:id/accept',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const accepted=await acceptConference(m.id,user.id);if(!accepted)return json(res,404,{error:'INVITE_NOT_FOUND'});return json(res,200,{accepted})}
-  if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});emitLiveStartedEvents({live,host:user});return json(res,201,{live});}
+  if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});emitLiveStartedEvents({live,host:user});ingestLivePlatformEvent(createPlatformEvent({eventType:'live.started',liveRoomId:live.id,actor:{type:'user',id:user.id},payload:{hostId:user.id,title:live.title}}));return json(res,201,{live});}
   if(req.method==='GET'&&p==='/api/live/rtc-config'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{iceServers:liveIceServers,turnConfigured:hasTurnServer(liveIceServers)})}
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
   m=route('/api/live/:id/events',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const countsAsViewer=url.searchParams.get('control')!=='host';res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: presence\ndata: ${JSON.stringify({status:'connected'})}\n\n`);if(!liveStreams.has(live.id))liveStreams.set(live.id,new Set());const targets=liveStreams.get(live.id);targets.add(res);let viewerId=null,viewerHeartbeat=null,lastViewerCount=null;if(countsAsViewer){viewerId=store.id();if(!liveViewerLeases.has(live.id))liveViewerLeases.set(live.id,new Set());liveViewerLeases.get(live.id).add(viewerId);lastViewerCount=await touchLiveViewer(live.id,viewerId);emitLive(live.id,'viewers',{count:lastViewerCount});viewerHeartbeat=setInterval(async()=>{if(!targets.has(res))return;const count=await touchLiveViewer(live.id,viewerId);if(count!==lastViewerCount){lastViewerCount=count;emitLive(live.id,'viewers',{count})}},15_000)}const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25_000);req.on('close',()=>{clearInterval(heartbeat);if(viewerHeartbeat)clearInterval(viewerHeartbeat);targets.delete(res);if(!targets.size)liveStreams.delete(live.id);if(viewerId){const local=liveViewerLeases.get(live.id);local?.delete(viewerId);if(local&&!local.size)liveViewerLeases.delete(live.id);removeLiveViewer(live.id,viewerId).then(count=>emitLive(live.id,'viewers',{count})).catch(()=>{})}});return;}

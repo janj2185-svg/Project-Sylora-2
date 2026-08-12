@@ -10,8 +10,8 @@ import {
 
 test('platform event spine emits gift and world events', () => {
   const seen = [];
-  const off = onPlatformEvent('gift.interaction.requested', e => seen.push(e.type));
-  onPlatformEvent('world.state.changed', e => seen.push(e.type));
+  const off = onPlatformEvent('gift.interaction.requested', e => seen.push(e.eventType));
+  onPlatformEvent('world.state.changed', e => seen.push(e.eventType));
   emitGiftLifecycleEvents({
     gift: { id: 'cosmos' },
     liveId: 'live-1',

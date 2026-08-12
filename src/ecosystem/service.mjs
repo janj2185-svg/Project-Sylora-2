@@ -112,6 +112,11 @@ import {
   createResearchLibraryItem, createPaperReaderView, createCitation, createResearchProject,
   createDatasetWorkspace, languageTutorMode
 } from './learning-science.mjs';
+import { SyloraContextEngine, SyloraReactionEngine } from './living-sylora/index.mjs';
+import { AIDirectorEngine, directorStatus } from './ai-director.mjs';
+import { createClipJob, processClipJob } from './clip-jobs.mjs';
+import { capabilityDependencyGraph, nextImplementableCapability } from '../capability-graph.mjs';
+import { emitPlatformEvent } from '../platform-events.mjs';
 
 function ensureCollections(store) {
   const d = store.data;
@@ -243,8 +248,25 @@ export class EcosystemService {
       listLiveMessages: null,
       liveEngagement: null,
       activeBattle: null,
-      createBattle: null
+      createBattle: null,
+      getBattlePlan: null,
+      saveBattlePlan: null,
+      getBattlePlanByLiveId: null,
+      getStage: null,
+      saveStage: null,
+      getRoomProfile: null,
+      saveRoomProfile: null,
+      listRoomsForUser: null,
+      searchLive: null,
+      searchPosts: null,
+      createClipJob: null,
+      updateClipJob: null,
+      getClipJob: null,
+      aiComplete: null,
+      postgresLiveState: false
     };
+    this.livingSylora = new SyloraContextEngine();
+    this.aiDirector = new AIDirectorEngine();
     ensureCollections(store);
     this._catalogReady = null;
     this.seedCatalog();
@@ -288,6 +310,34 @@ export class EcosystemService {
 
   battlePlanById(battleId) {
     return (this.store.data.liveBattles || []).find(b => b.id === battleId) || null;
+  }
+
+  async resolveBattlePlan(battleId) {
+    if (this.hooks.postgresLiveState && typeof this.hooks.getBattlePlan === 'function') {
+      const pg = await this.hooks.getBattlePlan(battleId);
+      if (pg) return pg;
+    }
+    return this.battlePlanById(battleId);
+  }
+
+  async resolveBattlePlanByLiveId(liveId) {
+    if (this.hooks.postgresLiveState && typeof this.hooks.getBattlePlanByLiveId === 'function') {
+      const pg = await this.hooks.getBattlePlanByLiveId(liveId);
+      if (pg) return pg;
+    }
+    return (this.store.data.liveBattles || []).find(b =>
+      b.status === 'live' && (b.hostLiveId === liveId || b.opponentLiveId === liveId)) || null;
+  }
+
+  get liveStatePg() {
+    return !!this.hooks.postgresLiveState;
+  }
+
+  async resolveDashboardLives(user, limit = 20) {
+    if (this.hooks.postgresLiveState && typeof this.hooks.listRoomsForUser === 'function') {
+      return (await this.hooks.listRoomsForUser(user.id, limit)) || [];
+    }
+    return (this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, limit);
   }
 
   get pg() { return this.repo?.enabled ? this.repo : null; }
@@ -506,7 +556,7 @@ export class EcosystemService {
   }
 
   /** Execute a confirmed tool against store APIs (no raw DB for AI). */
-  executeTool(user, type, input = {}) {
+  async executeTool(user, type, input = {}) {
     ensureCollections(this.store);
     const budget = this.consumeBudget(user, 'aiRequests', 1);
     if (!budget.ok) return { ok: false, error: budget.error };
@@ -517,7 +567,7 @@ export class EcosystemService {
         const collections = this._searchCollections(user);
         const out = type === 'search_people'
           ? { ...structuredSearch(input.q || '', { users: collections.users }), filtered: 'people' }
-          : this.universalSearch(user, input.q || '');
+          : await this.universalSearch(user, input.q || '');
         return { ok: true, result: out };
       }
       case 'manage_notifications': {
@@ -601,18 +651,37 @@ export class EcosystemService {
         return { ok: true, result: { event } };
       }
       case 'create_clip': {
-        const clip = {
+        const job = createClipJob({
           id: this.store.id(),
           userId: user.id,
-          title: String(input.title || 'Clip').slice(0, 120),
           liveId: input.liveId || null,
-          status: 'draft',
-          createdAt: this.store.now(),
-          note: 'Clip job queued — media pipeline required for render'
-        };
+          mediaId: input.mediaId || null,
+          title: String(input.title || 'Clip').slice(0, 120)
+        });
+        if (typeof this.hooks.createClipJob === 'function') {
+          const persisted = await this.hooks.createClipJob(job);
+          processClipJob(persisted, {
+            mediaRoot: process.env.SYLORA_MEDIA_ROOT || null,
+            repo: { updateClipJob: (j) => this.hooks.updateClipJob(j) }
+          }).catch(() => {});
+          this.addProvenance(user, { contentId: persisted.id, contentType: 'clip', origin: 'human', creationMethod: 'clip_from_live', aiInvolved: true });
+          return {
+            ok: true,
+            result: {
+              clip: persisted,
+              honesty: honestyLabel({ configured: true, mock: false, note: persisted.status === 'failed' ? persisted.error : 'async_render' })
+            }
+          };
+        }
+        const clip = { ...job, status: 'queued', note: 'Clip job queued — awaiting media source' };
         this.store.data.videos.unshift(clip);
         this.addProvenance(user, { contentId: clip.id, contentType: 'clip', origin: 'human', creationMethod: 'clip_from_live', aiInvolved: true });
-        return { ok: true, result: { clip, honesty: honestyLabel({ configured: false, mock: true }) } };
+        processClipJob(clip, { mediaRoot: process.env.SYLORA_MEDIA_ROOT || null }).then(rendered => {
+          const idx = this.store.data.videos.findIndex(v => v.id === clip.id);
+          if (idx >= 0) this.store.data.videos[idx] = { ...this.store.data.videos[idx], ...rendered };
+          this.store.save();
+        }).catch(() => {});
+        return { ok: true, result: { clip, honesty: honestyLabel({ configured: false, mock: false, note: 'json_fallback_queue' }) } };
       }
       case 'send_message': {
         const text = String(input.text || '').slice(0, 2000);
@@ -659,7 +728,7 @@ export class EcosystemService {
     }
   }
 
-  confirmEcosystemAction(user, id) {
+  async confirmEcosystemAction(user, id) {
     const action = this.store.data.ecosystemActions.find(a => a.id === id && a.userId === user.id);
     if (!action) return { ok: false, error: 'ACTION_NOT_FOUND' };
     if (action.status === 'completed') return { ok: true, action, already: true };
@@ -675,7 +744,7 @@ export class EcosystemService {
       this.store.save();
       return { ok: false, error: gate.error, action, gate };
     }
-    const executed = this.executeTool(user, action.type, action.input || {});
+    const executed = await this.executeTool(user, action.type, action.input || {});
     if (!executed.ok) {
       Object.assign(action, markFailed(action, executed.error));
       this.store.save();
@@ -704,7 +773,7 @@ export class EcosystemService {
   }
 
   // —— Universal Command ——
-  universalCommand(user, text, { locale, executeReads = true, view } = {}) {
+  async universalCommand(user, text, { locale, executeReads = true, view } = {}) {
     const orchestration = orchestrateTask({ text });
     const osRoute = orchestration.routing;
     const plan = buildCommandPlan(text, { locale: locale || user.locale || 'uk' });
@@ -744,7 +813,7 @@ export class EcosystemService {
     }
 
     if ((!plan.requiresConfirmation || osTools.has(plan.tool)) && executeReads) {
-      const executed = this.executeTool(user, plan.tool, { ...(plan.slots || {}), raw: text, q: text });
+      const executed = await this.executeTool(user, plan.tool, { ...(plan.slots || {}), raw: text, q: text });
       return { plan, status: executed.ok ? 'executed' : 'failed', orchestration, ...executed };
     }
 
@@ -779,7 +848,7 @@ export class EcosystemService {
       businesses: this.store.data.businesses || [],
       organizations: this.listOrgs(user),
       agents: this.listAgents(),
-      lives: (this.store.data.liveRooms || []).filter(x => x.status === 'live' || x.status === 'scheduled'),
+      lives: this._cachedLivesForSearch || (this.store.data.liveRooms || []).filter(x => x.status === 'live' || x.status === 'scheduled'),
       videos: this.store.data.videos || [],
       messages: (this.store.data.messages || []).filter(m => myConvIds.has(m.conversationId)),
       documents: [
@@ -792,7 +861,42 @@ export class EcosystemService {
     };
   }
 
-  universalSearch(user, query) {
+  async refreshSearchLives(user) {
+    if (typeof this.hooks.listLiveRooms === 'function') {
+      this._cachedLivesForSearch = await this.hooks.listLiveRooms();
+    } else {
+      this._cachedLivesForSearch = (this.store.data.liveRooms || []).filter(x => x.status === 'live');
+    }
+    return this._cachedLivesForSearch;
+  }
+
+  async universalSearch(user, query) {
+    await this.refreshSearchLives(user);
+    const collections = this._searchCollections(user);
+    let pgLive = [];
+    let pgPosts = [];
+    if (this.hooks.postgresLiveState && typeof this.hooks.searchLive === 'function' && query.length >= 2) {
+      pgLive = await this.hooks.searchLive(query, 20);
+      collections.lives = [...pgLive, ...collections.lives.filter(l => !pgLive.some(p => p.id === l.id))];
+    }
+    if (this.hooks.postgresLiveState && typeof this.hooks.searchPosts === 'function' && query.length >= 2) {
+      pgPosts = await this.hooks.searchPosts(query, 30);
+      collections.posts = [...pgPosts, ...collections.posts.filter(p => !pgPosts.some(x => x.id === p.id))];
+    }
+    const structured = structuredSearch(query, collections);
+    const semantic = semanticSearchFallback(query, collections);
+    return {
+      query,
+      structured: structured.results,
+      semantic: semantic.results,
+      semanticHonesty: semantic.honesty,
+      postgres: { live: pgLive.length, posts: pgPosts.length },
+      plan: planAiSearch(query),
+      types: ['people', 'posts', 'videos', 'live', 'messages', 'communities', 'projects', 'companies', 'courses', 'research', 'files', 'events']
+    };
+  }
+
+  universalSearchSync(user, query) {
     const collections = this._searchCollections(user);
     const structured = structuredSearch(query, collections);
     const semantic = semanticSearchFallback(query, collections);
@@ -803,6 +907,40 @@ export class EcosystemService {
       semanticHonesty: semantic.honesty,
       plan: planAiSearch(query),
       types: ['people', 'posts', 'videos', 'live', 'messages', 'communities', 'projects', 'companies', 'courses', 'research', 'files', 'events']
+    };
+  }
+
+  ingestPlatformEvent(event) {
+    this.livingSylora.observe(event);
+    this.aiDirector.ingest(event);
+  }
+
+  async livingSyloraReact(event) {
+    const engine = new SyloraReactionEngine({
+      contextEngine: this.livingSylora,
+      aiComplete: typeof this.hooks.aiComplete === 'function' ? this.hooks.aiComplete : null
+    });
+    const reaction = await engine.react(event);
+    emitPlatformEvent('assistant.reaction.ready', reaction.payload, {
+      liveRoomId: reaction.liveRoomId,
+      correlationId: reaction.correlationId,
+      actor: reaction.actor
+    });
+    return reaction;
+  }
+
+  directorPropose(context = {}) {
+    const cue = this.aiDirector.propose(context);
+    emitPlatformEvent('director.cue.proposed', cue.payload, { liveRoomId: cue.liveRoomId, actor: cue.actor });
+    return { ...cue.payload, director: directorStatus() };
+  }
+
+  platformCapabilityGraph() {
+    return {
+      graph: capabilityDependencyGraph(),
+      next: nextImplementableCapability(),
+      livingSylora: { runtime: 'PARTIAL', engine: 'context+reaction' },
+      director: directorStatus()
     };
   }
 
@@ -1001,7 +1139,7 @@ export class EcosystemService {
     };
   }
 
-  askAboutContext(user, { view, contentType, contentId, question } = {}) {
+  async askAboutContext(user, { view, contentType, contentId, question } = {}) {
     const q = String(question || 'поясни').slice(0, 2000);
     const plan = buildCommandPlan(q, { locale: user.locale || 'uk' });
     const context = {
@@ -1024,7 +1162,7 @@ export class EcosystemService {
       excerpt = this.store.data.lessons.find(l => l.id === contentId)?.title
         || this.store.data.courses.find(c => c.id === contentId)?.title || '';
     }
-    const summary = this.executeTool(user, 'summarize_content', { text: `${q}\n\n${excerpt}` });
+    const summary = await this.executeTool(user, 'summarize_content', { text: `${q}\n\n${excerpt}` });
     this.recordActivity(user, {
       kind: 'ask_sylora_context',
       summary: `Ask Sylora about ${contentType || view}`,
@@ -1437,11 +1575,11 @@ export class EcosystemService {
     return structuredSearch(query, collections);
   }
 
-  aiSearch(prompt, user = null) {
+  async aiSearch(prompt, user = null) {
     const plan = planAiSearch(prompt);
     if (!user) return plan;
-    const uni = this.universalSearch(user, prompt);
-    return { ...plan, results: uni.semantic, structured: uni.structured, semanticHonesty: uni.semanticHonesty };
+    const uni = await this.universalSearch(user, prompt);
+    return { ...plan, results: uni.semantic, structured: uni.structured, semanticHonesty: uni.semanticHonesty, postgres: uni.postgres };
   }
 
   metricsSnapshot() {
@@ -1547,8 +1685,8 @@ export class EcosystemService {
     return { action, plan };
   }
 
-  confirmCreatorStudioPlan(user, actionId) {
-    const out = this.confirmEcosystemAction(user, actionId);
+  async confirmCreatorStudioPlan(user, actionId) {
+    const out = await this.confirmEcosystemAction(user, actionId);
     if (!out.ok) return out;
     const saved = this.store.data.studioAiPlans.find(p => p.id === actionId && p.userId === user.id);
     if (saved) saved.status = 'confirmed';
@@ -1766,7 +1904,7 @@ export class EcosystemService {
       calendar: this.listCalendar(user),
       projects: this.listProjects(user),
       orgs: this.listOrgs(user),
-      lives: (this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, 20),
+      lives: (this._cachedLivesForSearch || this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, 20),
       notifications: (this.store.data.notifications || []).filter(n => n.userId === user.id).slice(0, 40),
       conversations: (this.store.data.conversations || [])
         .filter(c => (c.memberIds || []).includes(user.id))
@@ -2054,7 +2192,7 @@ export class EcosystemService {
     return pref;
   }
 
-  dailyBrief(user) {
+  async dailyBrief(user) {
     ensureCollections(this.store);
     const pref = this.dailyBriefPrefs(user);
     const notifications = (this.store.data.notifications || []).filter(n => n.userId === user.id);
@@ -2065,11 +2203,12 @@ export class EcosystemService {
       const c = courses.find(x => x.id === e.courseId);
       return c ? { id: c.id, title: c.title, progress: e.progress } : null;
     }).filter(Boolean);
+    const lives = await this.resolveDashboardLives(user, 50);
     const brief = buildDailyBrief({
       enabled: pref.enabled,
       notifications,
       invites,
-      lives: this.store.data.liveRooms || [],
+      lives,
       calendar: this.listCalendar(user),
       projects: this.listProjects(user),
       tasks: this.listTasks(user),
@@ -2458,10 +2597,11 @@ export class EcosystemService {
     return orch;
   }
 
-  personalDashboard(user) {
-    const brief = this.dailyBrief(user);
+  async personalDashboard(user) {
+    const brief = await this.dailyBrief(user);
     const inbox = this.intelligentInbox(user);
     const role = user.role === 'admin' ? 'admin' : (this.listOrgs(user).length ? 'professional' : 'member');
+    const lives = await this.resolveDashboardLives(user, 6);
     return personalDashboardPayload({
       role,
       brief,
@@ -2469,7 +2609,7 @@ export class EcosystemService {
       goals: this.listGoals(user),
       inbox,
       continuity: this.continuityList(user),
-      lives: (this.store.data.liveRooms || []).filter(r => r.hostId === user.id || r.status === 'live').slice(0, 6),
+      lives,
       projects: this.listProjects(user),
       suggestions: [
         { text: brief.summary, view: 'home' },
@@ -2499,7 +2639,7 @@ export class EcosystemService {
     return this.store.data.canvasWorkspaces.filter(w => w.userId === user.id || (w.shared && w.spaceId));
   }
 
-  spaceAsk(user, spaceId, question) {
+  async spaceAsk(user, spaceId, question) {
     const space = getSpace(spaceId, this.store.data);
     if (!space) return { ok: false, error: 'SPACE_NOT_FOUND' };
     // Shared context only — never other users' personal memories
@@ -2514,7 +2654,7 @@ export class EcosystemService {
       decisions,
       tasks: this.listTasks(user).filter(t => t.spaceId === spaceId)
     });
-    const summary = this.executeTool(user, 'summarize_content', {
+    const summary = await this.executeTool(user, 'summarize_content', {
       text: `${question}\n\n${shared.map(m => `${m.label}: ${m.value}`).join('\n')}\n${decisions.map(d => d.decision).join('\n')}`
     });
     return {
@@ -2665,7 +2805,7 @@ export class EcosystemService {
     return wf;
   }
 
-  guestView(input = {}) {
+  async guestView(input = {}) {
     const profile = input.userId
       ? this.store.data.identities.find(i => i.userId === input.userId)
       : null;
@@ -2673,7 +2813,7 @@ export class EcosystemService {
       ? this.store.data.contentUnderstanding.find(c => c.contentId === input.contentId)
       : null;
     const live = input.liveId
-      ? this.store.data.liveRooms.find(r => r.id === input.liveId)
+      ? await this.resolveLiveRoom(input.liveId)
       : null;
     return guestPublicView({
       content: content ? { visibility: content.visibility } : { visibility: input.visibility || 'public' },
@@ -2749,21 +2889,39 @@ export class EcosystemService {
         hostLiveId: battle.hostLiveId,
         opponentLiveId: battle.opponentLiveId,
         startedAt: battle.startedAt || this.store.now(),
-        endsAt: battle.endsAt || new Date(Date.now() + (battle.durationSec || 180) * 1000).toISOString()
+        endsAt: battle.endsAt || new Date(Date.now() + (battle.durationSec || 180) * 1000).toISOString(),
+        overlay: battle
       });
       Object.assign(battle, persisted);
     }
-    this.store.data.liveBattles.push(battle);
-    this.store.save();
+    if (this.liveStatePg) {
+      if (typeof this.hooks.saveBattlePlan === 'function') {
+        await this.hooks.saveBattlePlan(battle);
+      }
+    } else {
+      this.store.data.liveBattles.push(battle);
+      this.store.save();
+    }
+    emitPlatformEvent('battle.started', { battleId: battle.id, hostLiveId: battle.hostLiveId }, { liveRoomId: battle.hostLiveId });
     return battle;
   }
 
-  battleFactor(user, battleId, { side = 'A', factor = 'likes', amount = 1 } = {}) {
-    const battle = (this.store.data.liveBattles || []).find(b => b.id === battleId);
+  async battleFactor(user, battleId, { side = 'A', factor = 'likes', amount = 1 } = {}) {
+    const battle = await this.resolveBattlePlan(battleId);
     if (!battle || battle.status !== 'live') throw new Error('BATTLE_NOT_FOUND');
     if (!battle.factors) throw new Error('LEGACY_BATTLE');
     applyBattleFactor(battle, side, factor, amount);
-    this.store.save();
+    if (this.liveStatePg && typeof this.hooks.saveBattlePlan === 'function') {
+      await this.hooks.saveBattlePlan(battle);
+    } else {
+      this.store.save();
+    }
+    emitPlatformEvent('battle.score.changed', {
+      battleId,
+      hostScore: battle.hostScore,
+      opponentScore: battle.opponentScore,
+      lead: battle.hostScore - battle.opponentScore
+    }, { liveRoomId: battle.hostLiveId });
     return {
       battle,
       world: resonanceWorldState({
@@ -2778,20 +2936,23 @@ export class EcosystemService {
   }
 
   async advanceBattle(user, battleId) {
-    const battle = this.battlePlanById(battleId);
+    const battle = await this.resolveBattlePlan(battleId);
     if (!battle) throw new Error('BATTLE_NOT_FOUND');
     const host = await this.resolveLiveRoom(battle.hostLiveId);
     if (!host || host.hostId !== user.id) throw new Error('HOST_ONLY');
     advanceBattleRound(battle);
-    this.store.save();
+    if (this.liveStatePg && typeof this.hooks.saveBattlePlan === 'function') {
+      await this.hooks.saveBattlePlan(battle);
+    } else {
+      this.store.save();
+    }
     return battle;
   }
 
   async resonanceWorld(liveId) {
     const eng = await this.resolveLiveEngagement(liveId);
+    const plan = await this.resolveBattlePlanByLiveId(liveId);
     const pgBattle = await this.resolveActiveBattle(liveId);
-    const plan = (this.store.data.liveBattles || []).find(b =>
-      b.status === 'live' && (b.hostLiveId === liveId || b.opponentLiveId === liveId));
     const active = plan || pgBattle;
     const comments = (await this.resolveLiveMessages(liveId, 500)).length;
     return resonanceWorldState({
@@ -2897,13 +3058,24 @@ export class EcosystemService {
     const live = await this.resolveLiveRoom(liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const profile = createLiveRoomProfile({ id: this.store.id(), liveId, kind, title, hostId: user.id });
+    if (typeof this.hooks.saveRoomProfile === 'function') {
+      return this.hooks.saveRoomProfile(profile);
+    }
     this.store.data.liveRoomProfiles = this.store.data.liveRoomProfiles.filter(p => p.liveId !== liveId);
     this.store.data.liveRoomProfiles.push(profile);
     this.store.save();
     return profile;
   }
 
-  ensureStage(liveId, hostId) {
+  async ensureStage(liveId, hostId) {
+    if (this.hooks.postgresLiveState && typeof this.hooks.getStage === 'function') {
+      let stage = await this.hooks.getStage(liveId);
+      if (!stage) {
+        stage = createStageState({ liveId, hostId });
+        if (typeof this.hooks.saveStage === 'function') stage = await this.hooks.saveStage(stage);
+      }
+      return stage;
+    }
     let stage = this.store.data.liveStages.find(s => s.liveId === liveId);
     if (!stage) {
       stage = createStageState({ liveId, hostId });
@@ -2916,7 +3088,7 @@ export class EcosystemService {
   async stageAction(user, liveId, action, targetUserId) {
     const live = await this.resolveLiveRoom(liveId);
     if (!live) throw new Error('LIVE_NOT_FOUND');
-    const stage = this.ensureStage(liveId, live.hostId);
+    const stage = await this.ensureStage(liveId, live.hostId);
     if (action === 'raise_hand') stageRaiseHand(stage, user.id);
     else if (action === 'invite') {
       if (user.id !== live.hostId) throw new Error('HOST_ONLY');
@@ -2933,6 +3105,9 @@ export class EcosystemService {
       if (user.id !== live.hostId) throw new Error('HOST_ONLY');
       stageRemove(stage, targetUserId, live.hostId);
     } else throw new Error('INVALID_STAGE_ACTION');
+    if (this.liveStatePg && typeof this.hooks.saveStage === 'function') {
+      return this.hooks.saveStage(stage);
+    }
     this.store.save();
     return stage;
   }

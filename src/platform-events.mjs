@@ -1,4 +1,5 @@
 import { PLATFORM_CAPABILITIES, PLATFORM_EVENT_TYPES } from './platform-vision.mjs';
+import { createPlatformEvent, validatePlatformEvent, platformEventTypes } from './platform-event-spine.mjs';
 
 /** Honest runtime status per capability — not inferred from file existence. */
 export const CAPABILITY_STATUS = Object.freeze({
@@ -12,7 +13,7 @@ export const CAPABILITY_STATUS = Object.freeze({
 
 const STATUS_BY_ID = Object.freeze({
   'living-world': CAPABILITY_STATUS.NOT_IMPLEMENTED,
-  'ai-director': CAPABILITY_STATUS.NOT_IMPLEMENTED,
+  'ai-director': CAPABILITY_STATUS.PARTIAL,
   'gift-interactions': CAPABILITY_STATUS.PARTIAL,
   'collective-gifts': CAPABILITY_STATUS.NOT_IMPLEMENTED,
   'gift-evolution': CAPABILITY_STATUS.NOT_IMPLEMENTED,
@@ -24,11 +25,11 @@ const STATUS_BY_ID = Object.freeze({
   'story-live': CAPABILITY_STATUS.NOT_IMPLEMENTED,
   'creator-economy': CAPABILITY_STATUS.MOCK,
   'ai-business-partner': CAPABILITY_STATUS.PARTIAL,
-  'sylora-moments': CAPABILITY_STATUS.MOCK
+  'sylora-moments': CAPABILITY_STATUS.PARTIAL
 });
 
 const listeners = new Map();
-for (const type of PLATFORM_EVENT_TYPES) listeners.set(type, new Set());
+for (const type of new Set([...PLATFORM_EVENT_TYPES, ...platformEventTypes()])) listeners.set(type, new Set());
 
 export function capabilityStatus(id) {
   return STATUS_BY_ID[id] || CAPABILITY_STATUS.NOT_IMPLEMENTED;
@@ -49,12 +50,22 @@ export function onPlatformEvent(type, handler) {
 
 export function emitPlatformEvent(type, payload = {}, meta = {}) {
   if (!listeners.has(type)) return false;
-  const event = Object.freeze({
-    type,
-    payload,
-    meta: Object.freeze({ ...meta, at: new Date().toISOString() }),
-    id: meta.id || `pev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-  });
+  let event;
+  try {
+    event = createPlatformEvent({
+      eventType: type,
+      payload,
+      liveRoomId: meta.liveRoomId || payload.liveId || null,
+      correlationId: meta.correlationId || null,
+      actor: meta.actor || null,
+      target: meta.target || null
+    });
+    const check = validatePlatformEvent(event);
+    if (!check.valid) throw new Error(check.errors.join(','));
+  } catch (e) {
+    console.error('[platform-event] validation failed', type, e?.message || e);
+    return false;
+  }
   for (const handler of listeners.get(type)) {
     try { handler(event); } catch (e) { console.error('[platform-event]', type, e?.message || e); }
   }

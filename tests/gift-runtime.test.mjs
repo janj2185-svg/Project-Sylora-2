@@ -12,5 +12,7 @@ test('canonical gift-runtime module exists and documents catalog', async () => {
   const src = fs.readFileSync(file, 'utf8');
   assert.match(src, /SyloraGiftRuntime/);
   assert.match(src, /resolveLiveSegmentationProvider/);
-  assert.match(src, /gift-catalog|GIFT_V2_CATALOG/);
+  assert.match(src, /GIFT_RUNTIME_MATRIX/);
+  assert.match(src, /GiftRuntimeTelemetry/);
+  assert.match(src, /GIFT_V2_CATALOG/);
 });
