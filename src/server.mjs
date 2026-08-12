@@ -76,7 +76,9 @@ function emitCall(callId,type,event){
 }
 ecosystem.setHooks({
   notifyUser:(userId,type,actorId,payload)=>notifyUser(userId,type,actorId,payload),
-  emitCall
+  emitCall,
+  findLiveRoom,
+  listLiveMessages
 });
 
 function json(res, status, body) {
@@ -514,12 +516,27 @@ async function api(req, res, url) {
   return json(res, 404, { error: 'NOT_FOUND' });
 }
 
+const SPA_SHELL_VIEWS = new Set([
+  'feed', 'live', 'studio', 'clips', 'videos', 'explore', 'messages', 'ai', 'profile', 'gifts',
+  'more', 'identity', 'agents', 'developer', 'security', 'dashboard', 'canvas', 'communities',
+  'learning', 'business', 'admin'
+]);
+
 function staticFile(req, res, url) {
   let file = url.pathname === '/' ? '/index.html' : url.pathname;
   const resolved = path.resolve(publicDir, `.${file}`);
-  if (!resolved.startsWith(publicDir) || !fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) { res.writeHead(404); return res.end('Not found'); }
-  const ext = path.extname(resolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml' };
-  res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream' }); fs.createReadStream(resolved).pipe(res);
+  const spaView = url.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
+  if ((!resolved.startsWith(publicDir) || !fs.existsSync(resolved) || fs.statSync(resolved).isDirectory())
+    && !path.extname(file) && SPA_SHELL_VIEWS.has(spaView)) {
+    file = '/index.html';
+  }
+  const finalResolved = path.resolve(publicDir, `.${file}`);
+  if (!finalResolved.startsWith(publicDir) || !fs.existsSync(finalResolved) || fs.statSync(finalResolved).isDirectory()) {
+    res.writeHead(404);
+    return res.end('Not found');
+  }
+  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml' };
+  res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream' }); fs.createReadStream(finalResolved).pipe(res);
 }
 
 export const server = http.createServer(async (req, res) => {

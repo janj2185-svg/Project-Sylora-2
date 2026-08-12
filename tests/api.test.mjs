@@ -175,6 +175,9 @@ test('auth → post → gift → ledger works end to end', async () => {
     assert.match(signalEvents, /event: signal/);
     assert.match(signalEvents, /viewer-ready/);
     assert.match(signalEvents, /viewer-test-1/);
+    const copilot = await call(`/api/live/${live.live.id}/copilot`, { headers: auth });
+    assert.equal(copilot.ok, true);
+    assert.equal(copilot.liveId, live.live.id);
     await call(`/api/live/${live.live.id}/signal`, { method: 'POST', headers: auth, body: JSON.stringify({ kind: 'host-ready', fromPeerId: 'host-test-1', data: { transport: 'p2p' } }) });
     const spoofedViewerPeer = await fetch(`${base}/api/live/${live.live.id}/signal`, { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'answer', fromPeerId: 'viewer-test-1', toPeerId: 'host-test-1', data: {} }) });
     assert.equal(spoofedViewerPeer.status, 403);
@@ -191,6 +194,25 @@ test('auth → post → gift → ledger works end to end', async () => {
     await call(`/api/users/${bob.user.id}/block`, { method: 'POST', headers: auth, body: '{}' });
     const filteredFeed = await call('/api/feed', { headers: auth });
     assert.equal(filteredFeed.posts.some(p => p.id === bobPost.post.id), false);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('SPA shell routes serve index.html for client views', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sylora-spa-'));
+  process.env.NODE_ENV = 'test';
+  process.env.SYLORA_DATA_FILE = path.join(dir, 'db.json');
+  const { server } = await import(`../src/server.mjs?spa=${Date.now()}`);
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const studio = await fetch(`${base}/studio`);
+    assert.equal(studio.status, 200);
+    assert.match(studio.headers.get('content-type'), /text\/html/);
+    assert.match(await studio.text(), /<title>SYLORA<\/title>/);
+    const missing = await fetch(`${base}/definitely-not-a-route`);
+    assert.equal(missing.status, 404);
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

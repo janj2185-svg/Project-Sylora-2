@@ -505,7 +505,7 @@ export async function handleEcosystemRoutes(ctx) {
   m = route('/api/live/:id/copilot', p);
   if (req.method === 'GET' && m) {
     const user = await requireUser(req, res); if (!user) return true;
-    const out = ecosystem.liveCopilotBundle(user, m.id);
+    const out = await ecosystem.liveCopilotBundle(user, m.id);
     return json(res, out.ok ? 200 : (out.error === 'LIVE_HOST_REQUIRED' ? 403 : 404), out), true;
   }
   if (req.method === 'GET' && p === '/api/notifications/smart') {
@@ -800,7 +800,9 @@ export async function handleEcosystemRoutes(ctx) {
   }
   m = route('/api/live/:id/stage', p);
   if (req.method === 'GET' && m) {
-    const live = store.data.liveRooms.find(r => r.id === m.id);
+    const live = typeof ecosystem.hooks?.findLiveRoom === 'function'
+      ? await ecosystem.hooks.findLiveRoom(m.id)
+      : store.data.liveRooms.find(r => r.id === m.id);
     if (!live) return json(res, 404, { error: 'LIVE_NOT_FOUND' }), true;
     return json(res, 200, { stage: ecosystem.ensureStage(m.id, live.hostId) }), true;
   }

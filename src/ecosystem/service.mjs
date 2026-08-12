@@ -235,7 +235,7 @@ export class EcosystemService {
     this.repo = repo;
     this.metrics = createMetricsRegistry();
     /** Optional realtime hooks from server (notifyUser, emitCall). */
-    this.hooks = { notifyUser: null, emitCall: null };
+    this.hooks = { notifyUser: null, emitCall: null, findLiveRoom: null, listLiveMessages: null };
     ensureCollections(store);
     this._catalogReady = null;
     this.seedCatalog();
@@ -996,11 +996,15 @@ export class EcosystemService {
     };
   }
 
-  liveCopilotBundle(user, liveId) {
-    const room = this.store.data.liveRooms.find(r => r.id === liveId);
+  async liveCopilotBundle(user, liveId) {
+    const room = typeof this.hooks.findLiveRoom === 'function'
+      ? await this.hooks.findLiveRoom(liveId)
+      : this.store.data.liveRooms.find(r => r.id === liveId);
     if (!room) return { ok: false, error: 'LIVE_NOT_FOUND' };
     if (room.hostId !== user.id) return { ok: false, error: 'LIVE_HOST_REQUIRED' };
-    const chat = (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-80);
+    const chat = typeof this.hooks.listLiveMessages === 'function'
+      ? (await this.hooks.listLiveMessages(liveId)).slice(-80)
+      : (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-80);
     const questions = chat.filter(m => /\?|як|what|how|чому/i.test(m.text || '')).slice(-10);
     return {
       ok: true,

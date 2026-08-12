@@ -8,6 +8,9 @@ const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0;
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
 const STUDIO_P2P_PEER_LIMIT=6;
+const SPA_SHELL_VIEWS=new Set(['feed','live','studio','clips','videos','explore','messages','ai','profile','gifts','more','identity','agents','developer','security','dashboard','canvas','communities','learning','business','admin']);
+function viewFromPathname(pathname=location.pathname){const seg=String(pathname||'/').replace(/^\/+|\/+$/g,'').split('/')[0];return seg&&SPA_SHELL_VIEWS.has(seg)?seg:'feed'}
+function syncPathForView(view){const next=view==='feed'?'/':`/${view}`;if(location.pathname!==next)history.replaceState({view},'',next)}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function launchCreateHub(){openCreateHub({t,esc,authed:!!state.me,onAuth:renderAuth,onComposer:()=>{nav('feed');requestAnimationFrame(()=>document.querySelector('#composer textarea')?.focus())},onNavigate:(view,opts={})=>{state.intent=opts.intent||null;nav(view)}})}
 function launchCommandPalette(){openCommandPalette({t,esc,api,onNavigate:v=>nav(v),onCreate:launchCreateHub,onAiSearch:q=>{state.intent=q;nav('ai')}})}
@@ -32,6 +35,7 @@ async function initGiftEngine(){
   }catch(error){reportClientIssue('gift-runtime',error)}
 }
 async function bootstrap(){
+  state.view=viewFromPathname();
   if(state.token){
     try{const session=await api('/api/me');state.me=session.user;state.wallet=session.wallet||null;if(!localStorage.getItem('sylora_locale'))setLocale(state.me.locale)}
     catch(error){reportClientIssue('session',error);state.token='';localStorage.removeItem('sylora_token')}
@@ -85,13 +89,14 @@ function showIncomingCallBanner(){
     state.incomingCall=null;el.remove();
   };
 }
-function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
+function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;syncPathForView(view);document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
 document.querySelectorAll('.nav').forEach(x=>x.onclick=()=>nav(x.dataset.view));
 document.querySelector('#globalSearch')?.addEventListener('click',launchCommandPalette);
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();launchCommandPalette()}});
 document.querySelectorAll('[data-create-hub]').forEach(b=>b.addEventListener('click',launchCreateHub));
 document.querySelector('.brand')?.addEventListener('click',e=>{e.preventDefault();nav('feed')});
 document.querySelectorAll('[data-rail-view]').forEach(x=>x.onclick=()=>nav(x.dataset.railView));
+addEventListener('popstate',()=>{state.view=viewFromPathname();document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===state.view));render()});
 async function render(){document.body.dataset.view=state.view;if(state.view==='gifts')return renderGifts();if(state.view==='profile')return state.me?renderProfile():renderAuth();if(state.view==='clips')return renderClips();if(state.view==='videos')return renderVideos();if(state.view==='explore')return renderExplore();if(state.view==='live')return renderLive();if(state.view==='studio')return state.me?renderStudio():renderAuth();if(state.view==='messages')return state.me?renderMessages():renderAuth();if(state.view==='ai')return state.me?renderAI():renderAuth();if(state.view==='more')return renderMore();if(state.view==='identity')return state.me?renderIdentity():renderAuth();if(state.view==='agents')return state.me?renderAgents():renderAuth();if(state.view==='developer')return state.me?renderDeveloper():renderAuth();if(state.view==='security')return state.me?renderSecurityCenter():renderAuth();if(state.view==='dashboard')return state.me?renderPersonalDashboard():renderAuth();if(state.view==='canvas')return state.me?renderCanvas():renderAuth();if(state.view==='admin')return state.me?.role==='admin'?renderAdmin():nav('more');if(state.view==='communities')return renderCommunities();if(state.view==='learning')return renderLearning();if(state.view==='business')return renderBusiness();return renderFeed()}
 async function renderFeed(){
   let posts=[],rooms=[],users=[],communities=[],courses=[],businesses=[],hub=null;
