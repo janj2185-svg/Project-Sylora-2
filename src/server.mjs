@@ -38,8 +38,18 @@ if (process.env.NODE_ENV !== 'test' && fs.existsSync(localEnvFile)) process.load
 const publicDir = path.resolve(__dirname, '../public');
 const dataFile = process.env.SYLORA_DATA_FILE || path.resolve(__dirname, '../data/sylora.json');
 const mediaDir = path.resolve(path.dirname(dataFile), 'media');
-const store = new Store(dataFile).load();
-fs.mkdirSync(mediaDir, { recursive: true });
+let store;
+try {
+  store = new Store(dataFile).load();
+  fs.mkdirSync(mediaDir, { recursive: true });
+} catch (err) {
+  if (err && (err.code === 'EACCES' || err.code === 'DATA_DIR_NOT_WRITABLE')) {
+    console.error('[SYLORA] FATAL: cannot write persistent data dir', path.dirname(dataFile), err.code);
+    console.error('[SYLORA] Entrypoint must chown /app/data to user sylora before start (never world-writable).');
+    process.exit(1);
+  }
+  throw err;
+}
 const giftStreams = new Set();
 const liveStreams = new Map();
 const conferenceStreams = new Map();

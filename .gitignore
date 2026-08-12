@@ -15,3 +15,6 @@ artifacts/screenshots/home-living-bg-data.json
 .deploy-backup-*/
 .deploy-backup-latest.txt
 .deploy-backup-latest-HEAD.txt
+.deploy-diag-*/
+.deploy-diag-latest.txt
+.compose-interp.env

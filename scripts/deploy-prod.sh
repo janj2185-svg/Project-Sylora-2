@@ -2,11 +2,12 @@
 # Safe production deploy helper for getsylora.com (/opt/sylora).
 #
 # Modes:
-#   backup   — full safe backup: metadata + Postgres dump + /app/data (no secrets printed)
+#   backup   — full safe backup: metadata + Postgres + /app/data (no secrets printed)
 #   dry-run  — validate compose + local /api/ready (requires Docker)
-#   deploy   — on-server: clean-tree check → backup → fetch → checkout REF → compose up → smoke
+#   deploy   — clean-tree → backup → fetch → checkout REF → compose up → smoke
 #   remote   — SSH to VPS and run deploy there (requires PROD_SSH_* secrets)
 #   smoke    — hit https://getsylora.com (or SMOKE_BASE) readiness checks
+#   diag     — write container diagnostics under .deploy-diag-<stamp>/ (no secrets)
 #
 # NEVER: git reset --hard, force-push, drop volumes, docker compose down -v, or delete production data.
 # NEVER: invent or print PROD_SSH_PRIVATE_KEY / .env.local secrets.
@@ -19,7 +20,7 @@ MODE="${2:-deploy}"
 REF="${SYLORA_DEPLOY_REF:-cursor/sylora-live-ecosystem-34a2}"
 SMOKE_BASE="${SMOKE_BASE:-https://getsylora.com}"
 EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260812}"
-MIN_COMMIT="${SYLORA_MIN_COMMIT:-644ad1f4de1b9e6bc5df068b9405ee18028f6a91}"
+MIN_COMMIT="${SYLORA_MIN_COMMIT:-ddd576c4125643c1527582790a369b9faf566774}"
 
 cd "$ROOT"
 ROOT="$(pwd)"
@@ -27,12 +28,30 @@ ROOT="$(pwd)"
 log() { printf '%s\n' "$*"; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
-# Use .env.local for compose ${VAR} interpolation so production POSTGRES_PASSWORD /
-# DATABASE_URL are not silently replaced by the compose-default sylora_dev_only.
-# Never prints secret values.
+# Build a filtered compose env file from .env.local containing ONLY interpolation keys.
+# Avoids leaking COMPOSE_FILE / unrelated vars that can make `docker compose config` empty.
+COMPOSE_ENV_FILE=""
+prepare_compose_env() {
+  COMPOSE_ENV_FILE=""
+  [ -f .env.local ] || return 0
+  COMPOSE_ENV_FILE="${ROOT}/.compose-interp.env"
+  umask 077
+  : >"$COMPOSE_ENV_FILE"
+  chmod 600 "$COMPOSE_ENV_FILE"
+  # shellcheck disable=SC2013
+  for key in POSTGRES_PASSWORD DATABASE_URL REDIS_URL; do
+    line="$(grep -E "^${key}=" .env.local 2>/dev/null | tail -n 1 || true)"
+    if [ -n "$line" ]; then
+      printf '%s\n' "$line" >>"$COMPOSE_ENV_FILE"
+    fi
+  done
+  keys="$(grep -cE '^(POSTGRES_PASSWORD|DATABASE_URL|REDIS_URL)=' "$COMPOSE_ENV_FILE" 2>/dev/null || echo 0)"
+  log "[compose] interpolation env ready ($keys keys from .env.local; secrets not printed)"
+}
+
 compose() {
-  if [ -f .env.local ]; then
-    docker compose --env-file .env.local "$@"
+  if [ -n "${COMPOSE_ENV_FILE:-}" ] && [ -f "$COMPOSE_ENV_FILE" ]; then
+    docker compose --env-file "$COMPOSE_ENV_FILE" "$@"
   else
     docker compose "$@"
   fi
@@ -56,9 +75,13 @@ refuse_main_ref() {
   esac
 }
 
+volume_by_suffix() {
+  suffix="$1"
+  docker volume ls -q 2>/dev/null | grep -E "${suffix}$" | head -1 || true
+}
+
 # Resolve the Docker volume name mounted at /app/data (read-only backup target).
 sylora_data_volume() {
-  # Prefer the volume actually used by a sylora container
   cid="$(compose ps -q sylora 2>/dev/null || true)"
   if [ -n "$cid" ]; then
     vol="$(docker inspect "$cid" --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
@@ -67,13 +90,56 @@ sylora_data_volume() {
       return 0
     fi
   fi
-  # Fallback: compose project volume named sylora-data
-  docker volume ls -q 2>/dev/null | grep -E 'sylora-data$' | head -1 || true
+  volume_by_suffix 'sylora-data'
 }
 
-# Full production backup: metadata + Postgres dump + persistent /app/data.
-# Read-only against live data (pg_dump; tar from :ro volume). Never copies .env.local.
-# Does not chown/chmod live volumes. Does not wipe or mutate production data.
+postgres_data_volume() {
+  cid="$(compose ps -q postgres 2>/dev/null || true)"
+  if [ -n "$cid" ]; then
+    vol="$(docker inspect "$cid" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
+    if [ -n "$vol" ]; then
+      printf '%s\n' "$vol"
+      return 0
+    fi
+  fi
+  volume_by_suffix 'sylora-postgres'
+}
+
+tar_volume_ro() {
+  vol="$1"
+  dest="$2"
+  docker run --rm -v "$vol:/data:ro" alpine:3.21 tar -C /data -cf - . >"$dest"
+}
+
+capture_deploy_diagnostics() {
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  diag_dir="${ROOT}/.deploy-diag-${stamp}"
+  mkdir -p "$diag_dir"
+  chmod 700 "$diag_dir" 2>/dev/null || true
+  log "[diag] writing $diag_dir (no .env.local)"
+  compose ps -a >"$diag_dir/compose-ps.txt" 2>&1 || true
+  docker ps -a >"$diag_dir/docker-ps.txt" 2>&1 || true
+  docker volume ls >"$diag_dir/docker-volumes.txt" 2>&1 || true
+  compose logs --no-color --tail=400 sylora >"$diag_dir/sylora.log" 2>&1 || true
+  compose logs --no-color --tail=100 postgres >"$diag_dir/postgres.log" 2>&1 || true
+  compose logs --no-color --tail=50 redis >"$diag_dir/redis.log" 2>&1 || true
+  # Redacted highlight of failure lines (never dump env secrets)
+  grep -E 'EACCES|DATA_DIR_NOT_WRITABLE|permission denied|FATAL|production env validation failed|Error:|DEFAULT_POSTGRES' \
+    "$diag_dir/sylora.log" >"$diag_dir/sylora.errors.txt" 2>/dev/null || true
+  if [ -s "$diag_dir/sylora.errors.txt" ]; then
+    log "[diag] sylora error lines:"
+    cat "$diag_dir/sylora.errors.txt" >&2 || true
+  else
+    log "[diag] no EACCES/FATAL lines matched in last sylora logs; see $diag_dir/sylora.log"
+  fi
+  printf '%s\n' "$diag_dir" >"${ROOT}/.deploy-diag-latest.txt"
+  log "[diag] done → $diag_dir"
+}
+
+# Full production backup: metadata + Postgres + persistent /app/data.
+# Read-only against live data. Never copies .env.local. Never mutates volumes.
+# When containers are down but volumes exist: physical :ro volume tarballs.
+# When nothing exists: EMPTY_STACK recovery marker (allows bring-up without false hard-fail).
 backup_production() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   backup_dir="${ROOT}/.deploy-backup-${stamp}"
@@ -86,48 +152,61 @@ backup_production() {
     git rev-parse --abbrev-ref HEAD >"$backup_dir/branch.txt" 2>/dev/null || true
   fi
   if [ -f .env.local ]; then
-    # size + mtime only — never copy or print secret contents
     wc -c .env.local >"$backup_dir/env.local.size.txt"
     ls -l .env.local | awk '{print $5,$6,$7,$8,$9}' >"$backup_dir/env.local.meta.txt" 2>/dev/null || true
   fi
   if command -v docker >/dev/null 2>&1; then
-    compose ps >"$backup_dir/compose-ps.txt" 2>/dev/null || true
+    compose ps -a >"$backup_dir/compose-ps.txt" 2>/dev/null || true
+    docker volume ls >"$backup_dir/docker-volumes.txt" 2>/dev/null || true
   fi
   date -u +%Y-%m-%dT%H:%M:%SZ >"$backup_dir/created_at.txt"
   printf '%s\n' "$backup_dir" >"${ROOT}/.deploy-backup-latest.txt"
 
-  # --- PostgreSQL dump (read-only) ---
   pg_ok=0
+  pg_mode=none
+  data_ok=0
+
+  # --- PostgreSQL: prefer logical dump; else physical volume tar ---
   if command -v docker >/dev/null 2>&1 && [ -f compose.yaml ]; then
-    if compose ps --status running -q postgres >/dev/null 2>&1 \
-      || [ -n "$(compose ps -q postgres 2>/dev/null || true)" ]; then
-      log "[backup] dumping PostgreSQL (custom format, no secret echo)"
-      if compose exec -T postgres pg_dump -U sylora -d sylora --no-owner --format=custom >"$backup_dir/postgres.dump" 2>"$backup_dir/postgres.dump.err"; then
+    pg_cid="$(compose ps -q postgres 2>/dev/null || true)"
+    if [ -n "$pg_cid" ] && docker inspect -f '{{.State.Running}}' "$pg_cid" 2>/dev/null | grep -q true; then
+      log "[backup] dumping PostgreSQL via pg_dump (no secret echo)"
+      if compose exec -T postgres pg_dump -U sylora -d sylora --no-owner --format=custom \
+        >"$backup_dir/postgres.dump" 2>"$backup_dir/postgres.dump.err"; then
         if [ -s "$backup_dir/postgres.dump" ]; then
           wc -c "$backup_dir/postgres.dump" >"$backup_dir/postgres.dump.size.txt"
-          # scrub any accidental connection strings from stderr capture
           if [ -f "$backup_dir/postgres.dump.err" ]; then
             scrubbed="$(sed 's/:[^:@/]*@/:***@/g' "$backup_dir/postgres.dump.err" 2>/dev/null || true)"
             printf '%s\n' "$scrubbed" >"$backup_dir/postgres.dump.err"
           fi
           pg_ok=1
+          pg_mode=pg_dump
           log "[backup] postgres.dump OK ($(wc -c <"$backup_dir/postgres.dump") bytes)"
         fi
       fi
     fi
-  fi
-  if [ "$pg_ok" -ne 1 ]; then
-    die "[backup] PostgreSQL dump FAILED — refusing to continue without a DB backup. See $backup_dir/postgres.dump.err if present."
+    if [ "$pg_ok" -ne 1 ]; then
+      pgvol="$(postgres_data_volume || true)"
+      if [ -n "$pgvol" ]; then
+        log "[backup] postgres not dumpable — archiving volume $pgvol → postgres-data.tar (:ro)"
+        if tar_volume_ro "$pgvol" "$backup_dir/postgres-data.tar" 2>"$backup_dir/postgres-data.tar.err"; then
+          if [ -s "$backup_dir/postgres-data.tar" ]; then
+            wc -c "$backup_dir/postgres-data.tar" >"$backup_dir/postgres-data.tar.size.txt"
+            pg_ok=1
+            pg_mode=volume_tar
+            log "[backup] postgres-data.tar OK ($(wc -c <"$backup_dir/postgres-data.tar") bytes)"
+          fi
+        fi
+      fi
+    fi
   fi
 
-  # --- Persistent SYLORA data (/app/data) via read-only volume mount ---
-  data_ok=0
+  # --- Persistent SYLORA /app/data ---
   if command -v docker >/dev/null 2>&1; then
     vol="$(sylora_data_volume || true)"
     if [ -n "$vol" ]; then
-      log "[backup] archiving persistent volume $vol → sylora-data.tar (read-only mount)"
-      if docker run --rm -v "$vol:/data:ro" alpine:3.21 \
-        tar -C /data -cf - . >"$backup_dir/sylora-data.tar" 2>"$backup_dir/sylora-data.tar.err"; then
+      log "[backup] archiving persistent volume $vol → sylora-data.tar (:ro)"
+      if tar_volume_ro "$vol" "$backup_dir/sylora-data.tar" 2>"$backup_dir/sylora-data.tar.err"; then
         if [ -s "$backup_dir/sylora-data.tar" ]; then
           wc -c "$backup_dir/sylora-data.tar" >"$backup_dir/sylora-data.tar.size.txt"
           data_ok=1
@@ -135,11 +214,11 @@ backup_production() {
         fi
       fi
     else
-      # Fallback: tar from running/stopped service mount without :ro if volume name unknown
-      log "[backup] volume name not resolved — trying compose exec/run tar of /app/data"
+      # Fallback when volume name unknown but container exists
       if compose exec -T sylora tar -C /app/data -cf - . >"$backup_dir/sylora-data.tar" 2>"$backup_dir/sylora-data.tar.err"; then
         :
-      else
+      fi
+      if [ ! -s "$backup_dir/sylora-data.tar" ]; then
         compose run --rm --no-deps --user root --entrypoint tar sylora -C /app/data -cf - . \
           >"$backup_dir/sylora-data.tar" 2>"$backup_dir/sylora-data.tar.err" || true
       fi
@@ -150,24 +229,42 @@ backup_production() {
       fi
     fi
   fi
-  if [ "$data_ok" -ne 1 ]; then
-    die "[backup] persistent /app/data archive FAILED — refusing to continue. See $backup_dir/sylora-data.tar.err if present."
+
+  pg_vol_present="$(postgres_data_volume || true)"
+  data_vol_present="$(sylora_data_volume || true)"
+
+  if [ "$pg_ok" -ne 1 ] && [ -n "$pg_vol_present" ]; then
+    die "[backup] PostgreSQL backup FAILED but volume exists ($pg_vol_present). Refusing deploy. See $backup_dir"
+  fi
+  if [ "$data_ok" -ne 1 ] && [ -n "$data_vol_present" ]; then
+    die "[backup] /app/data backup FAILED but volume exists ($data_vol_present). Refusing deploy. See $backup_dir"
   fi
 
-  # Manifest (no secrets)
+  if [ "$pg_ok" -ne 1 ] && [ "$data_ok" -ne 1 ]; then
+    log "[backup] WARN: no postgres dump/volume and no sylora-data volume — EMPTY_STACK recovery mode"
+    echo "empty_stack=1" >"$backup_dir/EMPTY_STACK.txt"
+    echo "note=containers/volumes not found; metadata-only backup; deploy may recreate empty volumes" >>"$backup_dir/EMPTY_STACK.txt"
+  fi
+
   {
     echo "created_at=$(cat "$backup_dir/created_at.txt")"
     echo "head=$(cat "$backup_dir/HEAD.txt" 2>/dev/null || echo unknown)"
     echo "branch=$(cat "$backup_dir/branch.txt" 2>/dev/null || echo unknown)"
-    echo "postgres_dump_bytes=$(wc -c <"$backup_dir/postgres.dump")"
-    echo "sylora_data_tar_bytes=$(wc -c <"$backup_dir/sylora-data.tar")"
+    echo "postgres_mode=$pg_mode"
+    echo "postgres_ok=$pg_ok"
+    echo "sylora_data_ok=$data_ok"
+    echo "postgres_volume=${pg_vol_present:-none}"
+    echo "sylora_data_volume=${data_vol_present:-none}"
+    if [ -f "$backup_dir/postgres.dump" ]; then echo "postgres_dump_bytes=$(wc -c <"$backup_dir/postgres.dump")"; fi
+    if [ -f "$backup_dir/postgres-data.tar" ]; then echo "postgres_data_tar_bytes=$(wc -c <"$backup_dir/postgres-data.tar")"; fi
+    if [ -f "$backup_dir/sylora-data.tar" ]; then echo "sylora_data_tar_bytes=$(wc -c <"$backup_dir/sylora-data.tar")"; fi
     echo "env_local_copied=no"
   } >"$backup_dir/MANIFEST.txt"
 
-  log "[backup] wrote $backup_dir (postgres.dump + sylora-data.tar + metadata; .env.local NOT copied)"
+  log "[backup] wrote $backup_dir (manifest OK; .env.local NOT copied)"
+  cat "$backup_dir/MANIFEST.txt"
 }
 
-# Backward-compatible name used by tests / older docs
 backup_tree() {
   backup_production
 }
@@ -175,7 +272,7 @@ backup_tree() {
 wait_ready() {
   url="$1"
   i=0
-  while [ "$i" -lt 40 ]; do
+  while [ "$i" -lt 60 ]; do
     if curl -fsS "$url" >/dev/null 2>&1; then
       log "[ready] $url OK"
       return 0
@@ -202,18 +299,19 @@ smoke_public() {
       printf '%s\n' "$html" | sed -n 's/.*\(?v=[0-9A-Za-z.-]*\).*/\1/p' | head -5
       ;;
   esac
-  # New platform markers (must exist after this deploy)
   for path in /api/sylora-live/capabilities /api/studio/companion-boundary /live-studio.js; do
     c="$(curl -sS -o /dev/null -w '%{http_code}' "$base$path")"
     [ "$c" = "200" ] || die "[smoke] $path HTTP $c (deploy ref too old or not applied)"
     log "[smoke] $path OK"
   done
-  # Key-gated endpoints must fail closed honestly (not fake Connected)
   g="$(curl -sS -o /tmp/sylora-google.json -w '%{http_code}' "$base/api/auth/google")"
   if [ "$g" = "503" ] || [ "$g" = "200" ]; then
     log "[smoke] /api/auth/google HTTP $g (fail-closed or configured)"
   else
     die "[smoke] /api/auth/google unexpected HTTP $g"
+  fi
+  if [ -x ./scripts/prod-smoke.sh ]; then
+    ./scripts/prod-smoke.sh "$base" || die "[smoke] prod-smoke.sh FAIL"
   fi
   log "[smoke] PASS"
 }
@@ -235,9 +333,7 @@ ensure_persistent_data_permissions() {
   command -v docker >/dev/null 2>&1 || return 0
   [ -f compose.yaml ] || return 0
   log "[deploy] ensuring sylora-data volume ownership for app user (owner rw only)"
-  # Create volume if missing (does not start app)
-  compose create sylora >/dev/null 2>&1 || docker volume create "$(compose config --volumes 2>/dev/null | head -1 | tr -d '\r' || echo sylora_sylora-data)" >/dev/null 2>&1 || true
-  # One-shot as root against the same volume mount; image entrypoint is bypassed.
+  compose create sylora >/dev/null 2>&1 || true
   if compose run --rm --no-deps --user root --entrypoint sh sylora -c '
       set -eu
       mkdir -p /app/data /app/data/media
@@ -247,6 +343,8 @@ ensure_persistent_data_permissions() {
         find /app/data -maxdepth 1 -type f \( -name "sylora.json" -o -name "sylora.json.tmp" -o -name "sylora-*.json" \) -exec chown sylora:sylora {} \; -exec chmod 600 {} \; 2>/dev/null || true
         echo "[deploy] /app/data ready for user sylora"
         ls -la /app/data | head -20
+        touch /app/data/.write-test && rm -f /app/data/.write-test
+        echo "[deploy] write-test OK as root before drop (volume writable)"
       else
         echo "[deploy] WARN: user sylora missing in image — rebuild required" >&2
         exit 1
@@ -264,8 +362,14 @@ deploy_on_server() {
   [ -f compose.yaml ] || die "compose.yaml missing in $ROOT — is this /opt/sylora?"
 
   refuse_main_ref
-  # Fail-safe BEFORE any checkout / tree mutation
   require_clean_worktree
+  prepare_compose_env
+
+  # Prove compose still sees services (guards against env-file pollution)
+  svc="$(compose config --services 2>/dev/null | tr '\n' ' ')"
+  log "[deploy] compose services: $svc"
+  echo "$svc" | grep -q sylora || die "[deploy] compose config has no sylora service — check compose.yaml / interpolation env"
+  echo "$svc" | grep -q postgres || die "[deploy] compose config has no postgres service"
 
   backup_production
   prev_head="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -273,11 +377,8 @@ deploy_on_server() {
 
   log "[deploy] fetching origin / ref=$REF (prev=$prev_head)"
   git fetch origin "$REF" || git fetch origin
-
-  # Re-check after fetch (should still be clean; abort if not)
   require_clean_worktree
 
-  # Prefer remote branch tip; fall back to tag/sha
   if git show-ref --verify --quiet "refs/remotes/origin/$REF"; then
     git checkout -B "$REF" "origin/$REF"
   elif git show-ref --verify --quiet "refs/tags/$REF"; then
@@ -296,10 +397,13 @@ deploy_on_server() {
       || die "[deploy] HEAD does not contain required commit $MIN_COMMIT"
   fi
 
+  # Re-prepare after checkout (script/env may have changed)
+  prepare_compose_env
+
   log "[deploy] HEAD=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
 
-  # Build image first so entrypoint + sylora user exist for volume prepare
   if ! compose build sylora; then
+    capture_deploy_diagnostics || true
     log "[deploy] build failed — attempting rollback"
     rollback_to "$prev_head" || die "[deploy] build failed and rollback failed"
     die "[deploy] build failed; rolled back to $prev_head"
@@ -307,13 +411,14 @@ deploy_on_server() {
 
   ensure_persistent_data_permissions
 
-  if ! compose up -d --build; then
+  # Never down -v. Bring stack up in place; keeps named volumes.
+  if ! compose up -d --build --remove-orphans; then
+    capture_deploy_diagnostics || true
     log "[deploy] compose failed — attempting rollback"
     rollback_to "$prev_head" || die "[deploy] compose failed and rollback failed"
     die "[deploy] compose failed; rolled back to $prev_head"
   fi
 
-  # Non-destructive migrations (compose command also runs migrate before server)
   if [ -f scripts/migrate.mjs ]; then
     log "[deploy] verifying migrations via sylora service"
     compose exec -T sylora node scripts/migrate.mjs 2>/dev/null \
@@ -321,21 +426,30 @@ deploy_on_server() {
   fi
 
   if ! wait_ready "http://127.0.0.1:8787/api/ready"; then
-    log "[deploy] ready check failed — attempting rollback"
-    rollback_to "$prev_head" || die "[deploy] ready failed and rollback failed"
-    die "[deploy] ready failed; rolled back to $prev_head"
+    capture_deploy_diagnostics || true
+    log "[deploy] ready check failed — attempting rollback AFTER diagnostics"
+    rollback_to "$prev_head" || die "[deploy] ready failed and rollback failed (see .deploy-diag-latest.txt)"
+    die "[deploy] ready failed; rolled back to $prev_head (see .deploy-diag-latest.txt)"
   fi
   curl -fsS "http://127.0.0.1:8787/api/ready"; echo
   curl -fsS "http://127.0.0.1:8787/api/health"; echo
+  compose ps
   log "[deploy] local ready OK — verifying public domain if reachable"
   if curl -fsS "$SMOKE_BASE/api/ready" >/dev/null 2>&1; then
     if ! smoke_public "$SMOKE_BASE"; then
+      capture_deploy_diagnostics || true
       log "[deploy] public smoke FAIL — attempting rollback"
       rollback_to "$prev_head" || die "[deploy] smoke failed and rollback failed"
       die "[deploy] public smoke failed; rolled back to $prev_head"
     fi
   else
-    log "[deploy] public $SMOKE_BASE not reachable from this host yet; local container healthy"
+    log "[deploy] public $SMOKE_BASE not reachable from this host yet; running local smoke against 127.0.0.1:8787"
+    if [ -x ./scripts/prod-smoke.sh ]; then
+      ./scripts/prod-smoke.sh "http://127.0.0.1:8787" || {
+        capture_deploy_diagnostics || true
+        die "[deploy] local prod-smoke failed"
+      }
+    fi
   fi
   log "[deploy] complete. Hard-refresh browsers. Expected frontend cache ≥ $EXPECTED_CACHE_HINT"
 }
@@ -365,12 +479,15 @@ remote_deploy() {
   # shellcheck disable=SC2086
   ssh -p "$port" $key_args -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
     "$user@$host" \
-    "set -eu; cd '$path'; SYLORA_DEPLOY_REF='$REF' SMOKE_BASE='$SMOKE_BASE' EXPECTED_CACHE_HINT='$EXPECTED_CACHE_HINT' ./scripts/deploy-prod.sh '$path' deploy"
+    "set -eu; cd '$path'; SYLORA_DEPLOY_REF='$REF' SYLORA_MIN_COMMIT='$MIN_COMMIT' SMOKE_BASE='$SMOKE_BASE' EXPECTED_CACHE_HINT='$EXPECTED_CACHE_HINT' ./scripts/deploy-prod.sh '$path' deploy"
   smoke_public "$SMOKE_BASE"
 }
 
+prepare_compose_env
+
 case "$MODE" in
   backup) backup_production ;;
+  diag) capture_deploy_diagnostics ;;
   dry-run)
     command -v docker >/dev/null 2>&1 || die "docker required for dry-run"
     compose config >/dev/null
@@ -380,5 +497,5 @@ case "$MODE" in
   deploy) deploy_on_server ;;
   remote) remote_deploy ;;
   smoke) smoke_public "$SMOKE_BASE" ;;
-  *) die "Unknown mode: $MODE (backup|dry-run|deploy|remote|smoke)" ;;
+  *) die "Unknown mode: $MODE (backup|diag|dry-run|deploy|remote|smoke)" ;;
 esac
