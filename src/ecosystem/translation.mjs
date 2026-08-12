@@ -46,7 +46,9 @@ export function localTranslateStub(text, targetLang) {
     text: String(text || ''),
     targetLang,
     provider: 'local-passthrough',
-    note: 'Production MT/STT/TTS requires provider configuration. Original text returned with metadata.',
+    available: false,
+    status: 'BLOCKED_EXTERNAL',
+    note: 'Translation unavailable — configure SYLORA_TRANSLATE_API_KEY or OPENAI_API_KEY. Original text preserved.',
     synthetic: false,
     originalPreserved: true
   };

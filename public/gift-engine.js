@@ -10,8 +10,42 @@ const rgba=(rgb,a)=>`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
 
 export class GiftEngine{
   constructor(stage){this.stage=stage;this.audio=null;this.recent=new Map();this.gpu=new GiftGpuEngine(stage);this.v2Phoenix=null;this.v2PhoenixTimer=0}
-  async play(event){if(!this.stage||!event?.gift)return;if(event.id){const now=Date.now();for(const [id,expires] of this.recent)if(expires<=now)this.recent.delete(id);if(this.recent.has(event.id))return;this.recent.set(event.id,now+5*60_000)}if(event.gift.id==='cosmos'&&await this.playPhoenixV2(event))return;const tier=event.gift.tier||'basic',cfg={basic:[3600,78],premium:[4600,132],epic:[5600,210],legendary:[6800,340]}[tier]||[4200,96];this.gpu?.play(event);this.sound(tier,event.gift.id).catch(()=>{});this.haptic(tier,event.gift.id);const canvas=document.createElement('canvas');canvas.style.cssText='position:absolute;z-index:1;inset:0;width:100%;height:100%;pointer-events:none';this.stage.append(canvas);const artifact=this.artifact(event.gift.id,tier,event.gift.color,cfg[0]),combo=this.combo(event,cfg[0]);if(artifact)this.stage.append(artifact);if(combo)this.stage.append(combo);const ctx=canvas.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2);let w=innerWidth,h=innerHeight;const resize=()=>{w=innerWidth;h=innerHeight;canvas.width=w*dpr;canvas.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)};resize();const rgb=hexToRgb(event.gift.color),particles=Array.from({length:cfg[1]},(_,i)=>this.particle(w,h,rgb,i,tier)),start=performance.now();const frame=now=>{const t=now-start,p=Math.min(1,t/cfg[0]);ctx.clearRect(0,0,w,h);this.backdrop(ctx,w,h,rgb,p,tier);this.scene(ctx,w,h,rgb,p,now,event.gift.id,tier);this.story(ctx,w,h,rgb,p,now,event.gift.id,tier);this.shockwaves(ctx,w,h,rgb,p,tier);for(const x of particles)this.drawParticle(ctx,x,t,p,tier);if(event.gift.id==='cosmos')this.phoenix(ctx,w,h,rgb,p,now);else this.core(ctx,w,h,rgb,p,tier);this.signature(ctx,w,h,rgb,p,now,event.gift.id);this.title(ctx,w,h,event,p,tier);if(p<1)requestAnimationFrame(frame);else{canvas.remove();if(artifact?._flapTimer)clearInterval(artifact._flapTimer);artifact?.remove();combo?.remove()}};requestAnimationFrame(frame)}
-  async playPhoenixV2(){try{const Audio=window.AudioContext||window.webkitAudioContext,audioContext=Audio?new Audio():null;if(audioContext?.state==='suspended')audioContext.resume().catch(()=>{});const capabilities=detectGiftCapabilities({audioContext}),profile=choosePlaybackProfile(capabilities);if(profile.mode!=='v2'){audioContext?.close?.();return false}if(this.v2Phoenix?.running){audioContext?.close?.();return true}this.v2Phoenix?.dispose?.();clearTimeout(this.v2PhoenixTimer);const liveVideo=document.querySelector('#liveVideo')||null,controller=new GiftPlaybackController(this.stage,{video:liveVideo,audioContext,presenter:createPhoenixRebirthPresenter(),targetFps:120,reducedMotion:profile.reducedMotion});this.v2Phoenix=controller;controller.load(PHOENIX_REBIRTH_V2);await controller.prepare();controller.play();this.v2PhoenixTimer=setTimeout(()=>{if(this.v2Phoenix===controller){controller.dispose();audioContext?.close?.();this.v2Phoenix=null}},(PHOENIX_REBIRTH_DURATION+1)*1000);return true}catch{this.v2Phoenix?.dispose?.();this.v2Phoenix=null;return false}}
+  async play(event, options = {}) {
+    if (!this.stage || !event?.gift) return;
+    if (event.id) {
+      const now = Date.now();
+      for (const [id, expires] of this.recent) if (expires <= now) this.recent.delete(id);
+      if (this.recent.has(event.id)) return;
+      this.recent.set(event.id, now + 5 * 60_000);
+    }
+    if (event.gift.id === 'cosmos' && await this.playPhoenixV2(event, options)) return;const tier=event.gift.tier||'basic',cfg={basic:[3600,78],premium:[4600,132],epic:[5600,210],legendary:[6800,340]}[tier]||[4200,96];this.gpu?.play(event);this.sound(tier,event.gift.id).catch(()=>{});this.haptic(tier,event.gift.id);const canvas=document.createElement('canvas');canvas.style.cssText='position:absolute;z-index:1;inset:0;width:100%;height:100%;pointer-events:none';this.stage.append(canvas);const artifact=this.artifact(event.gift.id,tier,event.gift.color,cfg[0]),combo=this.combo(event,cfg[0]);if(artifact)this.stage.append(artifact);if(combo)this.stage.append(combo);const ctx=canvas.getContext('2d'),dpr=Math.min(devicePixelRatio||1,2);let w=innerWidth,h=innerHeight;const resize=()=>{w=innerWidth;h=innerHeight;canvas.width=w*dpr;canvas.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)};resize();const rgb=hexToRgb(event.gift.color),particles=Array.from({length:cfg[1]},(_,i)=>this.particle(w,h,rgb,i,tier)),start=performance.now();const frame=now=>{const t=now-start,p=Math.min(1,t/cfg[0]);ctx.clearRect(0,0,w,h);this.backdrop(ctx,w,h,rgb,p,tier);this.scene(ctx,w,h,rgb,p,now,event.gift.id,tier);this.story(ctx,w,h,rgb,p,now,event.gift.id,tier);this.shockwaves(ctx,w,h,rgb,p,tier);for(const x of particles)this.drawParticle(ctx,x,t,p,tier);if(event.gift.id==='cosmos')this.phoenix(ctx,w,h,rgb,p,now);else this.core(ctx,w,h,rgb,p,tier);this.signature(ctx,w,h,rgb,p,now,event.gift.id);this.title(ctx,w,h,event,p,tier);if(p<1)requestAnimationFrame(frame);else{canvas.remove();if(artifact?._flapTimer)clearInterval(artifact._flapTimer);artifact?.remove();combo?.remove()}};requestAnimationFrame(frame)}
+  async playPhoenixV2(event, options = {}) {
+    try {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      const audioContext = Audio ? new Audio() : null;
+      if (audioContext?.state === 'suspended') audioContext.resume().catch(() => {});
+      const segmentationProvider = options.segmentationProvider ?? null;
+      const capabilities = detectGiftCapabilities({ audioContext, segmentationProvider });
+      const profile = choosePlaybackProfile(capabilities);
+      if (profile.mode !== 'v2') {
+        audioContext?.close?.();
+        return false;
+      }
+      if (this.v2Phoenix?.running) {
+        audioContext?.close?.();
+        return true;
+      }
+      this.v2Phoenix?.dispose?.();
+      clearTimeout(this.v2PhoenixTimer);
+      const liveVideo = options.video || document.querySelector('#liveVideo') || null;
+      const controller = new GiftPlaybackController(this.stage, {
+        video: liveVideo,
+        audioContext,
+        segmentationProvider,
+        presenter: createPhoenixRebirthPresenter(),
+        targetFps: 120,
+        reducedMotion: profile.reducedMotion
+      });this.v2Phoenix=controller;controller.load(PHOENIX_REBIRTH_V2);await controller.prepare();controller.play();this.v2PhoenixTimer=setTimeout(()=>{if(this.v2Phoenix===controller){controller.dispose();audioContext?.close?.();this.v2Phoenix=null}},(PHOENIX_REBIRTH_DURATION+1)*1000);return true}catch{this.v2Phoenix?.dispose?.();this.v2Phoenix=null;return false}}
   haptic(tier,id){if(!navigator.vibrate)return;const patterns={spark:[12,28,18],pulse:[32,55,44,55,72],['lumen-bloom']:[18,70,20],nova:[16,30,22,30,72],['dream-orbit']:[20,45,20,45,20],aurora:[30,70,56],['celestial-wing']:[22,50,80],['time-gate']:[18,32,18,32,96],cosmos:[24,45,28,55,140],['infinite-sylora']:[18,38,18,38,18,38,90]};navigator.vibrate(patterns[id]||(tier==='legendary'?[30,50,120]:[24]))}
   artifact(id,tier,color,duration){const order=['spark','pulse','lumen-bloom','nova','dream-orbit','aurora','celestial-wing','time-gate','cosmos','infinite-sylora'],index=order.indexOf(id);if(index<0)return null;const col=index%5,row=Math.floor(index/5),size=tier==='legendary'?'min(58vw,560px)':tier==='epic'?'min(44vw,390px)':'min(34vw,285px)',el=document.createElement('div');el.setAttribute('aria-hidden','true');el.style.cssText=`position:absolute;z-index:2;left:50%;top:48%;width:${size};aspect-ratio:1;pointer-events:none;border-radius:28%;background-image:url('/assets/sylora-gift-atlas-v1.png');background-size:500% 200%;background-repeat:no-repeat;background-position:${col*25}% ${row*100}%;box-shadow:0 0 75px ${color}35;filter:saturate(.98) brightness(1.035);opacity:0;transform:translate(-50%,-50%) scale(.18);will-change:transform,opacity,filter;`;
     if(id==='cosmos'){el.style.background='none';el.style.boxShadow='none';el.style.overflow='visible';const img=document.createElement('img'),frames=['/assets/phoenix-flight/up.png','/assets/phoenix-flight/mid.png','/assets/phoenix-flight/down.png','/assets/phoenix-flight/mid.png'];let i=0;img.src=frames[0];img.alt='';img.draggable=false;img.style.cssText='width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 24px rgba(250,191,143,.5)) drop-shadow(0 0 54px rgba(189,146,244,.32));transform-origin:50% 45%';el.append(img);el._flapTimer=setInterval(()=>{i=(i+1)%frames.length;img.src=frames[i]},128)}
