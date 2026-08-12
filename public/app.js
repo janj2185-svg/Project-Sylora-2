@@ -1,7 +1,8 @@
 import { t, setLocale, getLocale, humanError } from './i18n.js';
 import { openCreateHub } from './create-hub.js';
 import { openCommandPalette } from './command-palette.js';
-import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';
+import { SyloraMotionRig } from './sylora-motion.js';
+import { SyloraLivingController, GESTURE_CATALOG, detectEmotionFromText } from './sylora-living.js';
 import { ObsWebSocketClient, normalizeObsUrl } from './obs-client.js';
 import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client.js';
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null;const studioPeers=new Map();
@@ -565,18 +566,65 @@ async function renderCanvas(){
   document.querySelector('#canvasAsk').onsubmit=async e=>{e.preventDefault();const q=new FormData(e.currentTarget).get('q');const out=await api('/api/ai/command',{method:'POST',body:JSON.stringify({text:q,view:'canvas'})});const pre=document.querySelector('#canvasAskOut');pre.hidden=false;pre.textContent=JSON.stringify(out.result||out.plan||out,null,2).slice(0,1800)};
 }
 function syloraSpeechLocale(){return({uk:'uk-UA',pl:'pl-PL',en:'en-US'})[getLocale()]||'uk-UA'}
+function syloraLiving(){return document.querySelector('.sylora-ai-hero')?._syloraLiving||null}
 function setSyloraPresence(mode='ready'){
-  const hero=document.querySelector('.sylora-ai-hero'),label=document.querySelector('#aiPresenceStatus');if(hero)hero.dataset.presence=mode;
-  hero?._syloraMotionRig?.setPresence(mode);
-  if(hero&&mode!=='speaking')hero._syloraHairVoice=0;
+  const hero=document.querySelector('.sylora-ai-hero'),label=document.querySelector('#aiPresenceStatus');
+  const living=syloraLiving();
+  if(living)living.setPresence(mode);
+  else if(hero){hero.dataset.presence=mode;hero._syloraMotionRig?.setPresence(mode)}
   if(label)label.textContent=mode==='listening'?'СЛУХАЮ':mode==='thinking'?'ДУМАЮ':mode==='speaking'?'ГОВОРЮ':mode==='muted'?'МІКРОФОН ВИМКНЕНО':'Я ПОРУЧ';
-  if(mode==='thinking')setSyloraGesture('thinking');else if(mode==='speaking')setSyloraGesture('explain');else if(mode==='listening'||mode==='muted')setSyloraGesture('neutral');else if(hero?.dataset.emotion==='neutral'||!hero?.dataset.emotion)setSyloraGesture('neutral');
 }
 function stopSyloraVoice(){syloraRecognition?.stop?.();syloraRecognition=null;window.speechSynthesis?.cancel();setSyloraPresence('ready')}
-function speakSylora(text){
-  if(!syloraVoiceEnabled||!text||!('speechSynthesis'in window))return;setSyloraEmotion(detectSyloraEmotion(text),5200);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);utterance.lang=syloraSpeechLocale();utterance.rate=.98;utterance.pitch=1.03;
-  const voices=window.speechSynthesis.getVoices(),exact=voices.find(v=>v.lang?.toLowerCase()===utterance.lang.toLowerCase()),family=voices.find(v=>v.lang?.toLowerCase().startsWith(utterance.lang.slice(0,2).toLowerCase()));if(exact||family)utterance.voice=exact||family;
-  utterance.onstart=()=>setSyloraPresence('speaking');utterance.onend=()=>setSyloraPresence('ready');utterance.onerror=()=>setSyloraPresence('ready');window.speechSynthesis.speak(utterance);
+function pickBrowserVoice(utterance){
+  const voices=window.speechSynthesis.getVoices();
+  const lang=utterance.lang.toLowerCase();
+  const pref=localStorage.getItem('sylora_tts_voice')||'';
+  if(pref){const named=voices.find(v=>v.name===pref||v.voiceURI===pref);if(named)return named}
+  // Prefer female / soft names when available for UA/PL/EN
+  const scored=voices.map(v=>{
+    const l=(v.lang||'').toLowerCase();
+    let score=0;
+    if(l===lang)score+=10;
+    else if(l.startsWith(lang.slice(0,2)))score+=6;
+    if(/female|zira|samantha|olga|lesya|natal|anna|victoria|marina|ukrain/i.test(v.name))score+=3;
+    if(/ukrain|україн/i.test(v.name))score+=5;
+    return {v,score};
+  }).sort((a,b)=>b.score-a.score);
+  return scored[0]?.v||null;
+}
+function normalizeSpeakMeta(meta={}){
+  const b=(meta&&typeof meta==='object'&&meta.behavior&&typeof meta.behavior==='object')?meta.behavior:meta;
+  return {
+    emotion:b.emotion||null,
+    intensity:b.intensity??0.4,
+    voiceStyle:b.voiceStyle||'warm',
+    facialExpression:b.facialExpression||b.emotion||null,
+    gestureIntent:b.gestureIntent||null,
+    gazeIntent:b.gazeIntent||null,
+    animationCue:b.animationCue||null
+  };
+}
+function speakSylora(text,meta={}){
+  if(!syloraVoiceEnabled||!text||!('speechSynthesis'in window))return;
+  const cues=normalizeSpeakMeta(meta);
+  const emotion=cues.emotion||detectEmotionFromText(text);
+  const living=syloraLiving();
+  if(living){
+    living.intensity=cues.intensity;
+    living.setEmotion(emotion,{duration:5200,cue:cues.animationCue||null});
+    if(cues.gestureIntent&&GESTURE_CATALOG[cues.gestureIntent])living.applyGesture(cues.gestureIntent,{force:true,duration:1600});
+  }else setSyloraEmotion(emotion,5200);
+  window.speechSynthesis.cancel();
+  const utterance=new SpeechSynthesisUtterance(text);
+  utterance.lang=syloraSpeechLocale();
+  const style=cues.voiceStyle||'warm';
+  utterance.rate=style==='energetic'?1.05:style==='calm'?0.94:style==='gentle'?0.95:0.97;
+  utterance.pitch=style==='bright'?1.08:style==='deep'?0.95:1.02;
+  const voice=pickBrowserVoice(utterance);if(voice)utterance.voice=voice;
+  utterance.onstart=()=>setSyloraPresence('speaking');
+  utterance.onend=()=>setSyloraPresence('ready');
+  utterance.onerror=()=>setSyloraPresence('ready');
+  window.speechSynthesis.speak(utterance);
 }
 function startSyloraListening(){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition,input=document.querySelector('#aiForm textarea');if(!Recognition||!input)return toast('Голосове введення не підтримується цим браузером');
@@ -588,28 +636,23 @@ function setRealtimeButton(active,label){const button=document.querySelector('#a
 function realtimeClock(){const elapsed=Math.max(0,Date.now()-syloraCallStartedAt),minutes=String(Math.floor(elapsed/60000)).padStart(2,'0'),seconds=String(Math.floor(elapsed/1000)%60).padStart(2,'0'),el=document.querySelector('#realtimeTimer');if(el)el.textContent=`${minutes}:${seconds}`}
 function setRealtimeUi(active){const hero=document.querySelector('.sylora-ai-hero'),deck=document.querySelector('#realtimeDeck');hero?.classList.toggle('realtime-live',active);if(deck)deck.hidden=!active;if(active){syloraCallStartedAt=Date.now();clearInterval(syloraCallTimer);syloraCallTimer=setInterval(realtimeClock,1000);realtimeClock()}else{clearInterval(syloraCallTimer);syloraCallTimer=null}}
 function toggleSyloraRealtimeMute(){const track=syloraRealtimeStream?.getAudioTracks?.()[0],button=document.querySelector('#aiMute');if(!track)return;track.enabled=!track.enabled;if(button){button.classList.toggle('muted',!track.enabled);button.textContent=track.enabled?'Мікрофон':'Мікрофон вимкнено'}setSyloraPresence(track.enabled?'ready':'muted')}
-function scheduleSyloraLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;const blink=hero.querySelector('.sylora-avatar-blink');const doBlink=()=>{if(!hero.isConnected||!blink)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),105);if(Math.random()<.14)setTimeout(()=>{if(!hero.isConnected)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),95)},210)};const nextBlink=()=>setTimeout(()=>{if(!hero.isConnected)return;doBlink();nextBlink()},2500+Math.random()*4100);const nextSaccade=()=>setTimeout(()=>{if(!hero.isConnected)return;hero.style.setProperty('--saccade-x',`${((Math.random()-.5)*.9).toFixed(2)}px`);hero.style.setProperty('--saccade-y',`${((Math.random()-.5)*.5).toFixed(2)}px`);setTimeout(()=>{if(hero.isConnected){hero.style.setProperty('--saccade-x','0px');hero.style.setProperty('--saccade-y','0px')}},110+Math.random()*90);nextSaccade()},1500+Math.random()*2600);nextBlink();nextSaccade()}
-function startSyloraHairPhysics(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let x=0,y=0,vx=0,vy=0,rot=0,vrot=0,last=performance.now();const tick=now=>{if(!hero.isConnected)return;const dt=Math.min(2,(now-last)/16.667||1);last=now;const idle=Math.sin(now/3100)*.14,tx=(hero._syloraHairTargetX||0)+idle,ty=(hero._syloraHairTargetY||0)+(hero._syloraHairVoice||0),tr=-tx*.16,spring=.085*dt,damping=Math.pow(.82,dt);vx=(vx+(tx-x)*spring)*damping;vy=(vy+(ty-y)*spring)*damping;vrot=(vrot+(tr-rot)*spring*.8)*damping;x+=vx*dt;y+=vy*dt;rot+=vrot*dt;hero.style.setProperty('--hair-x',`${x.toFixed(3)}px`);hero.style.setProperty('--hair-y',`${y.toFixed(3)}px`);hero.style.setProperty('--hair-rot',`${rot.toFixed(3)}deg`);hero.style.setProperty('--hair-skew',`${(rot*.42).toFixed(3)}deg`);hero._syloraHairRaf=requestAnimationFrame(tick)};hero._syloraHairRaf=requestAnimationFrame(tick)}
-function startSyloraBodyLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let cycleStart=performance.now(),duration=6200,amplitude=.0036,lean=0;const nextCycle=now=>{const mode=hero.dataset.presence||'ready',range=mode==='speaking'?[4100,5600]:mode==='listening'?[4500,6200]:mode==='thinking'?[5400,7600]:[5600,7900];duration=range[0]+Math.random()*(range[1]-range[0]);amplitude=(mode==='speaking'?.0026:mode==='listening'?.0032:mode==='thinking'?.0038:.0034)*(0.86+Math.random()*.28);lean=(Math.random()-.5)*.12;cycleStart=now};nextCycle(cycleStart);const tick=now=>{if(!hero.isConnected)return;let phase=(now-cycleStart)/duration;if(phase>=1){nextCycle(now);phase=0}const breath=(1-Math.cos(phase*Math.PI*2))/2,eased=breath*breath*(3-2*breath),scale=1+eased*amplitude,y=-eased*.9,rot=lean*Math.sin(phase*Math.PI);hero.style.setProperty('--body-scale',scale.toFixed(5));hero.style.setProperty('--body-y',`${y.toFixed(3)}px`);hero.style.setProperty('--body-rot',`${rot.toFixed(3)}deg`);hero._syloraBodyRaf=requestAnimationFrame(tick)};hero._syloraBodyRaf=requestAnimationFrame(tick)}
-const SYLORA_GESTURE_SRC={
-  neutral:'/assets/gestures/sylora-gesture-neutral.png',
-  explain:'/assets/gestures/sylora-gesture-explain.png',
-  empathy:'/assets/gestures/sylora-gesture-empathy.png',
-  welcome:'/assets/gestures/sylora-gesture-welcome.png',
-  emphasis:'/assets/gestures/sylora-gesture-emphasis.png',
-  wave:'/assets/gestures/sylora-gesture-wave.png',
-  thinking:'/assets/gestures/sylora-gesture-thinking.png',
-  positive:'/assets/gestures/sylora-gesture-positive.png'
-};
 function syloraGestureSrc(name='neutral'){return SYLORA_GESTURE_SRC[name]||SYLORA_GESTURE_SRC.neutral}
 function mountSyloraAvatarLayers(){
   const hero=document.querySelector('.sylora-ai-hero');
-  if(!hero||hero.querySelector('.sylora-avatar-motion'))return;
+  if(!hero)return;
+  if(hero.querySelector('.sylora-avatar-motion'))return;
+  // Dispose any orphaned living controller from a previous hero instance
+  if(hero._syloraLiving){try{hero._syloraLiving.dispose()}catch{}}
+  if(hero._syloraMotionDetach){try{hero._syloraMotionDetach()}catch{}}
   hero.classList.add('sylora-assembled');
+  // Mobile-first framing class based on viewport aspect
+  const w=window.innerWidth||390;
+  const h=window.innerHeight||800;
+  const portrait=h>=w;
+  hero.dataset.frame=w<=430?(portrait?'mobile-portrait':'mobile-landscape'):w<=820?'tablet':'desktop';
   const motion=document.createElement('div');
   motion.className='sylora-avatar-motion';
   motion.setAttribute('aria-hidden','true');
-  // Single coherent portrait images — never sprite grids / arm tubes / clipped face layers.
   const body=document.createElement('img');
   body.className='sylora-avatar-body';
   body.src='/assets/sylora-avatar-v2-base.png';
@@ -635,37 +678,90 @@ function mountSyloraAvatarLayers(){
     rig.setPresence(hero.dataset.presence||'ready');
     hero._syloraMotionDetach=rig.attach(hero);
   }
-  setSyloraGesture(hero.dataset.gesture||'neutral');
+  const living=new SyloraLivingController(hero,{motionRig:hero._syloraMotionRig||null});
+  living.layer=0;
+  living.mountOverlays();
+  hero._syloraLiving=living;
+  living.applyGesture(hero.dataset.gesture||'neutral',{force:true});
 }
-function detectSyloraEmotion(text=''){const s=String(text).toLowerCase();if(/[!]{2,}|\b(wow|вау|ого|wow)\b/.test(s))return'surprised';if(/😂|🤣|😄|\b(ха-?ха|haha|żart|жарт)/.test(s))return'playful';if(/\b(дякую|спасибі|thanks|thank you|dziękuję|dziekuje)\b/.test(s))return'grateful';if(/\b(болить|погано|сумно|проблем|важко|sorry|sad|problem|martwi|smutn)/.test(s))return'concerned';if(/❤️|❤|\b(чудово|супер|класно|рада|радий|great|good|love|świetnie|dobrze)\b/.test(s))return'happy';return'neutral'}
+function detectSyloraEmotion(text=''){return detectEmotionFromText(text)}
 function setSyloraGesture(name='neutral',duration=0){
+  const living=syloraLiving();
+  if(living)return living.applyGesture(name,{force:true,duration});
+  // Fallback if controller not mounted yet
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
   const gestureName=SYLORA_GESTURE_SRC[name]?name:'neutral';
   const layers=[...hero.querySelectorAll('.sylora-avatar-gesture')];
   clearTimeout(hero._syloraGestureTimer);
   hero.dataset.gesture=gestureName;
-  hero.dataset.handPose=handPoseForGesture(gestureName);
   hero._syloraMotionRig?.setGesture(gestureName);
-  hero.classList.toggle('gesture-active',gestureName!=='neutral');
   if(!layers.length)return;
   let next=layers.length===1?0:(hero._syloraGestureLayer===0?1:0);
-  if(hero._syloraGestureLayer==null||hero._syloraGestureLayer<0)next=0;
-  const incoming=layers[next];
-  const outgoing=layers[hero._syloraGestureLayer];
-  incoming.src=syloraGestureSrc(gestureName);
+  const incoming=layers[next],outgoing=layers[hero._syloraGestureLayer];
+  if(incoming.getAttribute('src')!==syloraGestureSrc(gestureName))incoming.src=syloraGestureSrc(gestureName);
   incoming.classList.add('gesture-shown');
   if(outgoing&&outgoing!==incoming)outgoing.classList.remove('gesture-shown');
   hero._syloraGestureLayer=next;
-  if(duration)hero._syloraGestureTimer=setTimeout(()=>{
-    if(hero.isConnected)setSyloraGesture(hero.dataset.presence==='thinking'?'thinking':hero.dataset.presence==='speaking'?'explain':'neutral');
-  },duration);
+  if(duration)hero._syloraGestureTimer=setTimeout(()=>{if(hero.isConnected)setSyloraGesture('neutral')},duration);
 }
-function updateSyloraSpeakingGesture(level=0){const hero=document.querySelector('.sylora-ai-hero');if(!hero||hero.dataset.presence!=='speaking'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;hero._syloraMotionRig?.setVoiceEnergy(level);if(!hero._syloraMotionRig){hero.style.setProperty('--gesture-lift',`${(-Math.min(1,level)*2.2).toFixed(2)}px`);hero._syloraHairVoice=-Math.min(1,level)*.32}const now=performance.now();if(level>.48&&now>(hero._syloraNextEmphasis||0)){hero._syloraNextEmphasis=now+1900+Math.random()*1200;setSyloraGesture('emphasis',620)}}
-function setSyloraEmotion(emotion='neutral',duration=0){const hero=document.querySelector('.sylora-ai-hero');if(!hero)return;hero.dataset.emotion=emotion;clearTimeout(hero._syloraEmotionTimer);const gesture={happy:'positive',grateful:'empathy',concerned:'empathy',playful:'wave',surprised:'welcome'}[emotion];if(gesture)setSyloraGesture(gesture,duration);if(duration)hero._syloraEmotionTimer=setTimeout(()=>{if(hero.isConnected){hero.dataset.emotion='neutral';if(hero.dataset.presence==='ready')setSyloraGesture('neutral')}},duration)}
-function setSyloraViseme(level=0,bands=null){const hero=document.querySelector('.sylora-ai-hero');if(!hero)return;const now=performance.now();let frame=0;if(level>=.075){const low=bands?.low||0,mid=bands?.mid||0,high=bands?.high||0;if(high>mid*1.08&&high>low*.92)frame=6;else if(low>mid*1.22)frame=4;else if(mid>low*1.12&&level>.34)frame=3;else if(high>low*.78)frame=7;else frame=2}if(frame!==0&&now-(hero._syloraVisemeAt||0)<72)return;hero._syloraVisemeAt=now;hero._syloraVisemeFrame=frame;hero.style.setProperty('--viseme-x',`${(frame%4)*33.333}%`);hero.style.setProperty('--viseme-y',frame>3?'100%':'0%');hero.classList.toggle('avatar-speaking',frame!==0)}
+function updateSyloraSpeakingGesture(level=0){
+  const hero=document.querySelector('.sylora-ai-hero');
+  if(!hero||hero.dataset.presence!=='speaking'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const living=syloraLiving();
+  living?.setVoiceEnergy(level);
+  hero._syloraMotionRig?.setVoiceEnergy(level);
+  // Rare emphasis only — long cooldown to stop hand thrash
+  const now=performance.now();
+  if(level>.62&&now>(hero._syloraNextEmphasis||0)){
+    hero._syloraNextEmphasis=now+3200+Math.random()*1800;
+    living?.applyGesture('emphasis',{force:true,duration:520});
+  }
+}
+function setSyloraEmotion(emotion='neutral',duration=0){
+  const living=syloraLiving();
+  if(living)return living.setEmotion(emotion,{duration});
+  const hero=document.querySelector('.sylora-ai-hero');
+  if(!hero)return;
+  hero.dataset.emotion=emotion;
+  const gesture={happy:'positive',grateful:'empathy',concerned:'empathy',playful:'welcome',surprised:'welcome'}[emotion];
+  if(gesture)setSyloraGesture(gesture,duration);
+}
+function setSyloraViseme(level=0,bands=null){
+  // Amplitude cue only — current PNG model has no mouth blendshapes (NOT_SUPPORTED).
+  const hero=document.querySelector('.sylora-ai-hero');
+  if(!hero)return;
+  const now=performance.now();
+  if(now-(hero._syloraVisemeAt||0)<90)return;
+  hero._syloraVisemeAt=now;
+  hero.style.setProperty('--voice-mouth',Math.min(1,level*1.2).toFixed(3));
+  hero.classList.toggle('avatar-speaking',level>=.08);
+}
 function startSyloraAudioReactive(stream){
-  try{cancelAnimationFrame(syloraAudioRaf);syloraAudioContext?.close?.();const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)return;const ctx=new AudioCtx(),analyser=ctx.createAnalyser(),source=ctx.createMediaStreamSource(stream),wave=new Uint8Array(128),freq=new Uint8Array(128);analyser.fftSize=256;analyser.smoothingTimeConstant=.68;source.connect(analyser);syloraAudioContext=ctx;ctx.resume?.().catch(()=>{});const avg=(from,to)=>{let sum=0;for(let i=from;i<to;i++)sum+=freq[i]||0;return sum/Math.max(1,to-from)/255};const tick=()=>{if(!syloraRealtimePeer||ctx.state==='closed')return;analyser.getByteTimeDomainData(wave);analyser.getByteFrequencyData(freq);let energy=0;for(const value of wave)energy+=Math.abs(value-128);const level=Math.min(1,energy/wave.length/24),bands={low:avg(1,12),mid:avg(12,40),high:avg(40,88)},hero=document.querySelector('.sylora-ai-hero');if(hero){hero.style.setProperty('--voice-scale',(1+level*.008).toFixed(4));hero.style.setProperty('--voice-glow',`${Math.round(12+level*30)}px`);setSyloraViseme(level,bands);updateSyloraSpeakingGesture(level)}syloraAudioRaf=requestAnimationFrame(tick)};tick()}catch{}
+  try{
+    cancelAnimationFrame(syloraAudioRaf);
+    syloraAudioContext?.close?.();
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return;
+    const ctx=new AudioCtx(),analyser=ctx.createAnalyser(),source=ctx.createMediaStreamSource(stream),wave=new Uint8Array(128),freq=new Uint8Array(128);
+    analyser.fftSize=256;analyser.smoothingTimeConstant=.78;source.connect(analyser);syloraAudioContext=ctx;ctx.resume?.().catch(()=>{});
+    const tick=()=>{
+      if(!syloraRealtimePeer||ctx.state==='closed')return;
+      analyser.getByteTimeDomainData(wave);
+      analyser.getByteFrequencyData(freq);
+      let energy=0;for(const value of wave)energy+=Math.abs(value-128);
+      const level=Math.min(1,energy/wave.length/28);
+      const hero=document.querySelector('.sylora-ai-hero');
+      if(hero){
+        hero.style.setProperty('--voice-scale',(1+level*.004).toFixed(4));
+        hero.style.setProperty('--voice-glow',`${Math.round(8+level*18)}px`);
+        setSyloraViseme(level);
+        updateSyloraSpeakingGesture(level);
+      }
+      syloraAudioRaf=requestAnimationFrame(tick);
+    };
+    tick();
+  }catch{}
 }
 function appendRealtimeTranscript(role,text){const clean=String(text||'').trim();if(!clean)return;const caption=document.querySelector('#realtimeCaption');if(caption)caption.textContent=`${role==='assistant'?'Sylora':'Ти'}: ${clean}`;const list=document.querySelector('#aiMessages');if(!list)return;list.querySelector('.ai-first-message')?.remove();const item=document.createElement('div');item.className=`item ${role==='assistant'?'ai-answer':'ai-user-message'} realtime-transcript`;const label=document.createElement('span');label.className='eyebrow';label.textContent=role==='assistant'?'SYLORA · VOICE':'ТИ · VOICE';const p=document.createElement('p');p.textContent=clean;item.append(label,p);list.append(item);list.scrollTop=list.scrollHeight}
 function persistRealtimeTranscript(role,text,event){const clean=String(text||'').trim();if(!clean)return;const sourceEventId=String(event?.event_id||`${event?.type||'realtime'}:${event?.item_id||event?.response_id||crypto.randomUUID()}:${event?.content_index??0}`);setSyloraEmotion(detectSyloraEmotion(clean),role==='assistant'?5200:3600);appendRealtimeTranscript(role,clean);api('/api/ai/realtime/transcript',{method:'POST',body:JSON.stringify({role,text:clean,sourceEventId})}).catch(()=>{})}
@@ -679,23 +775,48 @@ async function startSyloraRealtime(){
   try{
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}),pc=new RTCPeerConnection();syloraRealtimeStream=stream;syloraRealtimePeer=pc;
     const audio=document.createElement('audio');audio.autoplay=true;audio.setAttribute('playsinline','');audio.hidden=true;document.body.append(audio);syloraRealtimeAudio=audio;pc.ontrack=e=>{audio.srcObject=e.streams[0];startSyloraAudioReactive(e.streams[0])};pc.onconnectionstatechange=()=>{if(['failed','disconnected','closed'].includes(pc.connectionState))stopSyloraRealtime()};pc.addTrack(stream.getAudioTracks()[0],stream);
-    const dc=pc.createDataChannel('oai-events');syloraRealtimeChannel=dc;dc.onopen=()=>{setRealtimeButton(true,'Завершити LIVE');setRealtimeUi(true);setSyloraPresence('ready');setSyloraGesture('wave',1350)};dc.onmessage=e=>{try{const event=JSON.parse(e.data),type=event.type||'';if(type==='input_audio_buffer.speech_started')setSyloraPresence('listening');else if(type==='input_audio_buffer.speech_stopped'||type==='response.created')setSyloraPresence('thinking');else if(type.includes('output_audio')&&type.endsWith('.delta'))setSyloraPresence('speaking');else if(type==='response.done'||type==='response.cancelled')setSyloraPresence('ready');if(type==='conversation.item.input_audio_transcription.completed')persistRealtimeTranscript('user',event.transcript,event);if(type==='response.output_audio_transcript.done')persistRealtimeTranscript('assistant',event.transcript,event)}catch{}};
+    const dc=pc.createDataChannel('oai-events');syloraRealtimeChannel=dc;dc.onopen=()=>{setRealtimeButton(true,'Завершити LIVE');setRealtimeUi(true);setSyloraPresence('ready');syloraLiving()?.applyGesture('wave',{force:true,duration:1100})};dc.onmessage=e=>{try{const event=JSON.parse(e.data),type=event.type||'';if(type==='input_audio_buffer.speech_started')setSyloraPresence('listening');else if(type==='input_audio_buffer.speech_stopped'||type==='response.created')setSyloraPresence('thinking');else if(type.includes('output_audio')&&type.endsWith('.delta')){const living=syloraLiving();if(living)living.onAudioDelta();else setSyloraPresence('speaking')}else if(type==='response.done'||type==='response.cancelled')setSyloraPresence('ready');if(type==='conversation.item.input_audio_transcription.completed')persistRealtimeTranscript('user',event.transcript,event);if(type==='response.output_audio_transcript.done')persistRealtimeTranscript('assistant',event.transcript,event)}catch{}};
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);const response=await fetch('/api/ai/realtime',{method:'POST',headers:{authorization:`Bearer ${state.token}`,'content-type':'application/sdp'},body:offer.sdp});if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.error||'REALTIME_SESSION_FAILED')}await pc.setRemoteDescription({type:'answer',sdp:await response.text()});
   }catch(error){stopSyloraRealtime();toast(error.name==='NotAllowedError'?'Дозволь мікрофон для живої розмови':humanError(error.message))}
 }
 
-async function renderAI(speakText=''){
+async function renderAI(speakText='',speakMeta=null){
   const [{messages,memories,pendingActions,model,configured},dashboard]=await Promise.all([api('/api/ai/history'),api('/api/ai/dashboard')]);
   const actionPreview=a=>a.type==='publish_post'?`Опублікувати пост: “${esc(a.payload?.text||'')}”`:`Запам’ятати ${esc(a.payload?.label||'')}: ${esc(a.payload?.value||'')}`;
-  app.innerHTML=`<div class="card hero sylora-ai-hero ${syloraRealtimePeer?'realtime-live':''}" data-presence="ready"><span class="eyebrow">SYLORA · ${esc(model)}</span><h1>Я поруч.</h1><p>${configured?'Говори зі мною природно. Я бачу лише дозволений тобою контекст, а важливі дії завжди залишаю під твоїм контролем.':esc(t('syloraUnavailable'))}</p><div class="ai-human-presence"><span><i></i> <span id="aiPresenceStatus">Я ПОРУЧ</span></span><b>Sylora</b><small>голос · текст · пам’ять</small><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div id="realtimeDeck" class="realtime-call-deck" ${syloraRealtimePeer?'':'hidden'}><div><span class="live-call-dot"></span><small>SYLORA LIVE VOICE</small><strong id="realtimeTimer">00:00</strong></div><p id="realtimeCaption">Говори природно. Можеш перебити мене у будь-який момент.</p><div class="realtime-controls"><button id="aiMute" type="button">Мікрофон</button><button id="aiEndCall" class="end-call" type="button">Завершити</button></div></div></div>${pendingActions.length?`<section class="card"><span class="eyebrow">ПОТРІБНЕ ТВОЄ РІШЕННЯ</span><h3>Дії SYLORA AI</h3><div class="stack">${pendingActions.map(a=>`<div class="item"><p>${actionPreview(a)}</p><div class="row"><button class="primary ai-confirm" data-id="${a.id}">Підтвердити</button><button class="ghost ai-cancel" data-id="${a.id}">Скасувати</button></div></div>`).join('')}</div></section>`:''}${`<section class="card"><span class="eyebrow">ЩО SYLORA ЗНАЄ І МОЖЕ</span><h3>Прозорість Personal AI</h3><p class="muted">Один асистент · один граф пам’яті · різні контексти.</p><div class="stack"><div class="item"><b>Знає</b><p>${(dashboard.knows||[]).slice(-5).map(m=>esc(m.label)).join(' · ')||'Поки порожньо'}</p></div><div class="item"><b>Доступ</b><p>${Object.entries(dashboard.access||{}).filter(([,v])=>v).map(([k])=>esc(k)).slice(0,8).join(' · ')||'—'}</p></div><div class="item"><b>Останні дії</b><p>${(dashboard.did||[]).slice(-3).map(a=>esc(a.summary)).join(' · ')||'Ще немає дій'}</p></div></div><div class="row"><button class="ghost" type="button" id="aiPermLive">LIVE assist</button><button class="ghost" type="button" id="aiExportMem">Експорт пам’яті</button></div></section>`}<div id="aiMessages" class="card stack ai-conversation">${messages.map(m=>`<div class="item ${m.role==='assistant'?'ai-answer':'ai-user-message'}"><span class="eyebrow">${m.role==='assistant'?'SYLORA':'ТИ'}${m.source==='realtime_voice'?' · VOICE':''}</span><p>${esc(m.text)}</p></div>`).join('')||'<div class="ai-first-message"><span>✦</span><b>Я слухаю.</b><p class="muted">Напиши або натисни «Жива розмова» і говори природно.</p></div>'}</div><form id="aiForm" class="card ai-compose"><div class="voice-toolbar"><label class="voice-hint" style="display:flex;align-items:center;gap:6px">Контекст <select id="aiContextView"><option value="command_center">Command Center</option><option value="live">LIVE</option><option value="studio">Studio</option><option value="business">Business</option><option value="learning">Learning</option><option value="messages">Messages</option></select></label><button id="aiRealtime" class="voice-action realtime-action ${syloraRealtimePeer?'active':''}" type="button">◉ <span>${syloraRealtimePeer?'Завершити LIVE':'Жива розмова'}</span></button><button id="aiMic" class="voice-action" type="button" aria-label="Говорити з Sylora">● <span>Диктувати</span></button><button id="aiVoiceToggle" class="voice-action ${syloraVoiceEnabled?'active':''}" type="button">◖)) <span>Озвучення ${syloraVoiceEnabled?'увімкнено':'вимкнено'}</span></button><span class="voice-hint">REALTIME · UA · PL · EN</span></div><div class="ai-input-row"><textarea name="text" maxlength="6000" placeholder="Поговорити з Sylora…" required></textarea><button class="primary ai-send" ${configured?'':'disabled'} aria-label="Надіслати">↑</button></div><p id="aiStatus" class="muted"></p></form><section class="card ai-memory"><span class="eyebrow">КЕРОВАНА ПАМ’ЯТЬ</span><h3>${esc(t('memoryTitle'))}</h3><div class="row" style="margin-bottom:10px"><label>Proactive <select id="aiProactive"><option value="OFF">OFF</option><option value="IMPORTANT_ONLY">IMPORTANT ONLY</option><option value="NORMAL">NORMAL</option><option value="PROACTIVE">PROACTIVE</option></select></label></div><div class="stack">${memories.map(m=>`<div class="item row"><div><b>${esc(m.label)}</b><p class="muted">${esc(m.value)}</p></div><button class="ghost delete-memory" data-id="${m.id}">Забути</button></div>`).join('')||'<p class="muted">Постійних спогадів поки немає.</p>'}</div><form id="memoryForm" class="fields"><input name="label" maxlength="80" placeholder="Напр. Мова" required><input name="value" maxlength="1000" placeholder="Що запам’ятати" required><button class="ghost">Додати вручну</button></form></section>`;
+  app.innerHTML=`<div class="card hero sylora-ai-hero ${syloraRealtimePeer?'realtime-live':''}" data-presence="ready"><span class="eyebrow">SYLORA · ${esc(model)}</span><h1>Я поруч.</h1><p>${configured?'Говори зі мною природно. Я бачу лише дозволений тобою контекст, а важливі дії завжди залишаю під твоїм контролем.':esc(t('syloraUnavailable'))}</p><div class="ai-human-presence"><span><i></i> <span id="aiPresenceStatus">Я ПОРУЧ</span></span><b>Sylora</b><small>голос · текст · пам’ять</small><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div><div id="realtimeDeck" class="realtime-call-deck" ${syloraRealtimePeer?'':'hidden'}><div><span class="live-call-dot"></span><small>SYLORA LIVE VOICE</small><strong id="realtimeTimer">00:00</strong></div><p id="realtimeCaption">Говори природно. Можеш перебити мене у будь-який момент.</p><div class="realtime-controls"><button id="aiMute" type="button">Мікрофон</button><button id="aiEndCall" class="end-call" type="button">Завершити</button></div></div></div>${pendingActions.length?`<section class="card"><span class="eyebrow">ПОТРІБНЕ ТВОЄ РІШЕННЯ</span><h3>Дії SYLORA AI</h3><div class="stack">${pendingActions.map(a=>`<div class="item"><p>${actionPreview(a)}</p><div class="row"><button class="primary ai-confirm" data-id="${a.id}">Підтвердити</button><button class="ghost ai-cancel" data-id="${a.id}">Скасувати</button></div></div>`).join('')}</div></section>`:''}${`<section class="card"><span class="eyebrow">ЩО SYLORA ЗНАЄ І МОЖЕ</span><h3>Прозорість Personal AI</h3><p class="muted">Один асистент · один граф пам’яті · різні контексти.</p><div class="stack"><div class="item"><b>Знає</b><p>${(dashboard.knows||[]).slice(-5).map(m=>esc(m.label)).join(' · ')||'Поки порожньо'}</p></div><div class="item"><b>Доступ</b><p>${Object.entries(dashboard.access||{}).filter(([,v])=>v).map(([k])=>esc(k)).slice(0,8).join(' · ')||'—'}</p></div><div class="item"><b>Останні дії</b><p>${(dashboard.did||[]).slice(-3).map(a=>esc(a.summary)).join(' · ')||'Ще немає дій'}</p></div></div><div class="row"><button class="ghost" type="button" id="aiPermLive">LIVE assist</button><button class="ghost" type="button" id="aiExportMem">Експорт пам’яті</button></div></section>`}<div id="aiMessages" class="card stack ai-conversation">${messages.map(m=>`<div class="item ${m.role==='assistant'?'ai-answer':'ai-user-message'}"><span class="eyebrow">${m.role==='assistant'?'SYLORA':'ТИ'}${m.source==='realtime_voice'?' · VOICE':''}</span><p>${esc(m.text)}</p></div>`).join('')||'<div class="ai-first-message"><span>✦</span><b>Я слухаю.</b><p class="muted">Напиши або натисни «Жива розмова» і говори природно.</p></div>'}</div><form id="aiForm" class="card ai-compose"><div class="voice-toolbar"><label class="voice-hint" style="display:flex;align-items:center;gap:6px">Контекст <select id="aiContextView"><option value="command_center">Command Center</option><option value="live">LIVE</option><option value="studio">Studio</option><option value="business">Business</option><option value="learning">Learning</option><option value="messages">Messages</option></select></label><button id="aiRealtime" class="voice-action realtime-action ${syloraRealtimePeer?'active':''}" type="button">◉ <span>${syloraRealtimePeer?'Завершити LIVE':'Жива розмова'}</span></button><button id="aiMic" class="voice-action" type="button" aria-label="Говорити з Sylora">● <span>Диктувати</span></button><button id="aiVoiceToggle" class="voice-action ${syloraVoiceEnabled?'active':''}" type="button">◖)) <span>Озвучення ${syloraVoiceEnabled?'увімкнено':'вимкнено'}</span></button><label class="voice-hint" style="display:flex;align-items:center;gap:6px">Голос <select id="aiVoicePick"><option value="">Авто</option></select></label><span class="voice-hint" id="aiVoiceHint">REALTIME · UA · PL · EN</span></div><div class="ai-input-row"><textarea name="text" maxlength="6000" placeholder="Поговорити з Sylora…" required></textarea><button class="primary ai-send" ${configured?'':'disabled'} aria-label="Надіслати">↑</button></div><p id="aiStatus" class="muted"></p></form><section class="card ai-memory"><span class="eyebrow">КЕРОВАНА ПАМ’ЯТЬ</span><h3>${esc(t('memoryTitle'))}</h3><div class="row" style="margin-bottom:10px"><label>Proactive <select id="aiProactive"><option value="OFF">OFF</option><option value="IMPORTANT_ONLY">IMPORTANT ONLY</option><option value="NORMAL">NORMAL</option><option value="PROACTIVE">PROACTIVE</option></select></label></div><div class="stack">${memories.map(m=>`<div class="item row"><div><b>${esc(m.label)}</b><p class="muted">${esc(m.value)}</p></div><button class="ghost delete-memory" data-id="${m.id}">Забути</button></div>`).join('')||'<p class="muted">Постійних спогадів поки немає.</p>'}</div><form id="memoryForm" class="fields"><input name="label" maxlength="80" placeholder="Напр. Мова" required><input name="value" maxlength="1000" placeholder="Що запам’ятати" required><button class="ghost">Додати вручну</button></form></section>`;
   document.querySelector('.sylora-ai-hero>p')?.insertAdjacentHTML('afterend',`<div class="scene-readout ai-readout"><span><small>РОЗМОВИ</small><b>${messages.length}</b></span><span><small>ПАМ’ЯТЬ</small><b>${memories.length}</b></span><span><small>РЕЖИМ</small><b>${syloraRealtimePeer?'VOICE LIVE':'READY'}</b></span></div>`);
   mountSyloraAvatarLayers();
   document.querySelector('#aiPermLive')?.addEventListener('click',async()=>{await api('/api/ai/permissions',{method:'PATCH',body:JSON.stringify({permissions:{live_assist:!(dashboard.access||{}).live_assist}})});toast('Дозволи оновлено');renderAI()});
   document.querySelector('#aiExportMem')?.addEventListener('click',async()=>{const out=await api('/api/ai/memory/export');const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sylora-ai-memory.json';a.click()});
 api('/api/ai/intelligence').then(intel=>{const sel=document.querySelector('#aiProactive');if(!sel)return;sel.value=intel.proactive||intel.agent?.proactiveLevel||'IMPORTANT_ONLY';sel.onchange=async()=>{await api('/api/ai/proactive',{method:'PATCH',body:JSON.stringify({level:sel.value})});toast('OK')}}).catch(()=>{});
   const form=document.querySelector('#aiForm');document.querySelector('#aiRealtime')?.addEventListener('click',startSyloraRealtime);document.querySelector('#aiMute')?.addEventListener('click',toggleSyloraRealtimeMute);document.querySelector('#aiEndCall')?.addEventListener('click',stopSyloraRealtime);document.querySelector('#aiMic')?.addEventListener('click',startSyloraListening);document.querySelector('#aiVoiceToggle')?.addEventListener('click',()=>{syloraVoiceEnabled=!syloraVoiceEnabled;localStorage.setItem('sylora_voice',syloraVoiceEnabled?'1':'0');if(!syloraVoiceEnabled)stopSyloraVoice();renderAI()});if(syloraRealtimePeer){clearInterval(syloraCallTimer);syloraCallTimer=setInterval(realtimeClock,1000);realtimeClock()}
-  form?.addEventListener('submit',async e=>{e.preventDefault();const data=new FormData(form),button=form.querySelector('.ai-send'),status=document.querySelector('#aiStatus');button.disabled=true;status.textContent='Sylora думає…';setSyloraPresence('thinking');try{const view=document.querySelector('#aiContextView')?.value||'command_center';const out=await api('/api/ai/chat',{method:'POST',body:JSON.stringify({text:data.get('text'),view})});await renderAI(out.message)}catch(err){setSyloraPresence('ready');status.textContent=humanError(err.message||err.data?.error);button.disabled=false}});
-  if(speakText)requestAnimationFrame(()=>speakSylora(speakText));
+  form?.addEventListener('submit',async e=>{e.preventDefault();const data=new FormData(form),button=form.querySelector('.ai-send'),status=document.querySelector('#aiStatus');button.disabled=true;status.textContent='Sylora думає…';setSyloraPresence('thinking');try{const view=document.querySelector('#aiContextView')?.value||'command_center';const out=await api('/api/ai/chat',{method:'POST',body:JSON.stringify({text:data.get('text'),view})});await renderAI(out.message,{behavior:out.behavior||null})}catch(err){setSyloraPresence('ready');status.textContent=humanError(err.message||err.data?.error);button.disabled=false}});
+  if(speakText)requestAnimationFrame(()=>{
+    const meta=typeof speakMeta==='object'&&speakMeta?speakMeta:{};
+    const cues=normalizeSpeakMeta(meta);
+    speakSylora(speakText,cues);
+    if(cues.animationCue)syloraLiving()?.applyCue(cues.animationCue);
+  });
+  // Voice picker — browser voices + preferred Realtime style (no paid provider without credentials)
+  const voiceSel=document.querySelector('#aiVoicePick');
+  if(voiceSel&&'speechSynthesis'in window){
+    const fill=()=>{
+      const voices=window.speechSynthesis.getVoices();
+      const pref=localStorage.getItem('sylora_tts_voice')||'';
+      const locale=syloraSpeechLocale().toLowerCase();
+      const ranked=[...voices].sort((a,b)=>{
+        const score=v=>{const l=(v.lang||'').toLowerCase();let s=0;if(l===locale)s+=10;else if(l.startsWith(locale.slice(0,2)))s+=6;if(/ukrain|україн|lesya|olga|natal/i.test(v.name))s+=5;return s};
+        return score(b)-score(a);
+      });
+      voiceSel.innerHTML=`<option value="">Авто · найкращий для ${esc(locale)}</option>`+ranked.slice(0,24).map(v=>`<option value="${esc(v.name)}" ${pref===v.name?'selected':''}>${esc(v.name)} · ${esc(v.lang)}</option>`).join('');
+    };
+    fill();window.speechSynthesis.onvoiceschanged=fill;
+    voiceSel.onchange=()=>{localStorage.setItem('sylora_tts_voice',voiceSel.value||'');toast(voiceSel.value?'Голос збережено':'Авто-голос')};
+  }
+  api('/api/ai/voices').then(v=>{
+    const hint=document.querySelector('#aiVoiceHint');
+    if(hint&&v?.provider)hint.textContent=`LIVE: ${v.provider.realtimeDefault||v.provider.defaultVoice||'marin'} · ${v.provider.status||''}`;
+  }).catch(()=>{});
   document.querySelector('#memoryForm')?.addEventListener('submit',async e=>{e.preventDefault();await api('/api/ai/memory',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.currentTarget)))});toast('Пам’ять додано');await renderAI()});
   document.querySelectorAll('.delete-memory').forEach(b=>b.onclick=async()=>{await api(`/api/ai/memory/${b.dataset.id}`,{method:'DELETE'});toast('SYLORA AI забув цей запис');await renderAI()});
   document.querySelectorAll('.ai-confirm').forEach(b=>b.onclick=async()=>{const out=await api(`/api/ai/actions/${b.dataset.id}/confirm`,{method:'POST',body:'{}'});toast(out.action.type==='publish_post'?'Пост опубліковано':'Пам’ять підтверджено');await renderAI()});

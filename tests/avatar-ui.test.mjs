@@ -16,10 +16,11 @@ test('assembled avatar mounts whole-character images and final CSS loads last', 
 
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /createElement\('img'\)/);
-  assert.match(app, /\/assets\/gestures\/sylora-gesture-/);
+  assert.match(app, /GESTURE_CATALOG|sylora-living/);
+  assert.match(fs.readFileSync('public/sylora-living.js', 'utf8'), /\/assets\/gestures\/sylora-gesture-/);
   assert.match(app, /\/api\/kg/);
   assert.match(app, /type:'knowledge'/);
-  const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
+  const mount = app.split('function mountSyloraAvatarLayers')[1].split('function detectSyloraEmotion')[0];
   assert.doesNotMatch(mount, /sylora-rig-arm/);
   assert.doesNotMatch(mount, /createElement\('i'\)/);
 

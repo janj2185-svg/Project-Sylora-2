@@ -26,6 +26,7 @@ import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
 import { createPlatformEvent } from './platform-event-spine.mjs';
+import { resolveVoiceProvider, preferredRealtimeVoice } from './ecosystem/voice-provider.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -113,6 +114,26 @@ ecosystem.setHooks({
 });
 function ingestLivePlatformEvent(event) {
   try { ecosystem.ingestPlatformEvent(event); } catch (e) { console.error('[platform-ingest]', e?.message || e); }
+}
+function inferAssistantBehavior(answer = '', userText = '') {
+  const s = `${answer} ${userText}`.toLowerCase();
+  let emotion = 'neutral';
+  // Unicode-aware boundaries — \b fails on Cyrillic
+  if (/[!]{2,}|(^|[^\p{L}])(ого|вау|wow)(?=[^\p{L}]|$)/u.test(s)) emotion = 'surprised';
+  else if (/(вибач|жаль|сумно|важко|болить|sorry|sad)/i.test(s)) emotion = 'concerned';
+  else if (/(дякую|рада|чудово|супер|класно|thanks|great)/i.test(s)) emotion = 'happy';
+  else if (/(серйозн|важлив|serious)/i.test(s)) emotion = 'serious';
+  const short = String(answer || '').length < 120;
+  return {
+    text: String(answer || '').slice(0, 240),
+    emotion,
+    intensity: emotion === 'neutral' ? 0.35 : 0.55,
+    voiceStyle: emotion === 'happy' ? 'bright' : emotion === 'concerned' ? 'calm' : 'warm',
+    facialExpression: emotion,
+    gestureIntent: emotion === 'happy' ? 'positive' : emotion === 'concerned' ? 'empathy' : short ? 'neutral' : 'explain',
+    gazeIntent: emotion === 'concerned' ? 'soft' : 'user',
+    animationCue: emotion === 'happy' ? 'celebrate' : emotion === 'concerned' ? 'nod' : 'none'
+  };
 }
 
 function json(res, status, body) {
@@ -327,7 +348,8 @@ async function api(req, res, url) {
     const sdp=await textBody(req);if(!sdp.trim())return json(res,400,{error:'SDP_REQUIRED'});
     const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20)};
     const personality=ecosystem.personalityFor('ai', user);
-    const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:openaiRealtimeVoice}}};
+    const voiceId=preferredRealtimeVoice(process.env.OPENAI_REALTIME_VOICE_STYLE||'warm');
+    const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly — like a close companion on a call, not a scripted assistant. Avoid repeating the user's words, template openers, and saying your name unless asked. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:voiceId||openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
     try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
   }
@@ -536,6 +558,10 @@ async function api(req, res, url) {
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
+  if(req.method==='GET'&&p==='/api/ai/voices'){
+    const user=await requireUser(req,res);if(!user)return;
+    return json(res,200,{provider:resolveVoiceProvider(),realtimeDefault:preferredRealtimeVoice('warm')});
+  }
   if(req.method==='POST'&&p==='/api/ai/chat'){
     const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     const input=await body(req),text=safeText(input.text,6000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
@@ -548,7 +574,8 @@ async function api(req, res, url) {
       ecosystem.ensurePersonalAgent(user);
       ecosystem.recordActivity(user,{kind:'chat',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
       ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat'});
-      return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
+      const behavior=inferAssistantBehavior(answer,text);
+      return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role},behavior});
     }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'});}
   }
   return json(res, 404, { error: 'NOT_FOUND' });

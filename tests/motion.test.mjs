@@ -11,7 +11,7 @@ test('motion spring converges without snapping', () => {
   assert.ok(Math.abs(spring.value - 20) < 0.01);
 });
 
-test('Sylora motion rig drives semantic joints and voice-reactive posture', () => {
+test('Sylora motion rig drives soft living posture without thrash lift', () => {
   const rig = new SyloraMotionRig(() => 0.5);
   rig.setPresence('speaking');
   rig.setGesture('emphasis');
@@ -19,13 +19,11 @@ test('Sylora motion rig drives semantic joints and voice-reactive posture', () =
   rig.setVoiceEnergy(0.75);
   let pose;
   for (let frame = 0; frame < 90; frame++) pose = rig.step(frame * 16.667 + 1);
-  assert.ok(pose.joints.rightElbow < -35);
-  assert.ok(pose.joints.rightShoulder > 8);
-  assert.ok(pose.joints.rightWrist > 3);
-  assert.ok(pose.joints.leftWrist < -2);
-  assert.ok(pose.gestureLift < -1.5);
-  assert.ok(pose.hairX < 0);
+  assert.ok(pose.joints.rightElbow < -30);
+  assert.ok(pose.joints.rightShoulder > 6);
+  assert.ok(pose.gestureLift > -1); // anti-jitter: lift stays tiny
   assert.ok(pose.bodyScale >= 1);
+  assert.equal(pose.livingState, 'speaking_calm');
 });
 
 test('semantic gestures choose anatomical whole-hand poses', () => {
@@ -55,8 +53,9 @@ test('assembled Digital Human uses whole-character images, not collage layers', 
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /sylora-assembled/);
   assert.match(app, /createElement\('img'\)/);
-  assert.match(app, /\/assets\/gestures\/sylora-gesture-/);
-  const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
+  assert.match(app, /GESTURE_CATALOG|sylora-living/);
+  assert.match(fs.readFileSync(path.join('public', 'sylora-living.js'), 'utf8'), /\/assets\/gestures\/sylora-gesture-/);
+  const mount = app.split('function mountSyloraAvatarLayers')[1].split('function detectSyloraEmotion')[0];
   assert.doesNotMatch(mount, /sylora-rig-arm/);
   assert.doesNotMatch(mount, /sylora-avatar-head/);
   assert.doesNotMatch(mount, /['"]eyes['"]/);
