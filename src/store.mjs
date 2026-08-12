@@ -40,9 +40,35 @@ export class Store {
     return this;
   }
   save() {
+    const dir = path.dirname(this.file);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      if (err && err.code === 'EACCES') {
+        throw Object.assign(new Error('DATA_DIR_NOT_WRITABLE'), {
+          code: 'DATA_DIR_NOT_WRITABLE',
+          path: dir,
+          cause: err
+        });
+      }
+      throw err;
+    }
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
-    fs.renameSync(tmp, this.file);
+    try {
+      // Atomic write: temp file in same directory then rename
+      fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
+      fs.renameSync(tmp, this.file);
+    } catch (err) {
+      try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch { /* ignore cleanup */ }
+      if (err && err.code === 'EACCES') {
+        throw Object.assign(new Error('DATA_DIR_NOT_WRITABLE'), {
+          code: 'DATA_DIR_NOT_WRITABLE',
+          path: dir,
+          cause: err
+        });
+      }
+      throw err;
+    }
   }
   id() { return randomUUID(); }
   now() { return new Date().toISOString(); }

@@ -25,6 +25,17 @@ ROOT="$(pwd)"
 log() { printf '%s\n' "$*"; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
 
+# Use .env.local for compose ${VAR} interpolation so production POSTGRES_PASSWORD /
+# DATABASE_URL are not silently replaced by the compose-default sylora_dev_only.
+# Never prints secret values.
+compose() {
+  if [ -f .env.local ]; then
+    docker compose --env-file .env.local "$@"
+  else
+    docker compose "$@"
+  fi
+}
+
 backup_tree() {
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   backup_dir="${ROOT}/.deploy-backup-${stamp}"
@@ -39,7 +50,7 @@ backup_tree() {
     wc -c .env.local >"$backup_dir/env.local.size.txt"
   fi
   if command -v docker >/dev/null 2>&1; then
-    docker compose ps >"$backup_dir/compose-ps.txt" 2>/dev/null || true
+    compose ps >"$backup_dir/compose-ps.txt" 2>/dev/null || true
   fi
   date -u +%Y-%m-%dT%H:%M:%SZ >"$backup_dir/created_at.txt"
   log "[backup] wrote $backup_dir (no secrets printed)"
@@ -96,9 +107,39 @@ rollback_to() {
   [ -n "$prev" ] || return 1
   log "[rollback] restoring $prev"
   git checkout --force "$prev" || return 1
-  docker compose up -d --build || return 1
+  ensure_persistent_data_permissions || true
+  compose up -d --build || return 1
   wait_ready "http://127.0.0.1:8787/api/ready"
   log "[rollback] ready after restore"
+}
+
+# Prepare named volume /app/data so non-root user sylora can write sylora.json atomically.
+# Never make the tree world-writable. Never wipe volume contents.
+ensure_persistent_data_permissions() {
+  command -v docker >/dev/null 2>&1 || return 0
+  [ -f compose.yaml ] || return 0
+  log "[deploy] ensuring sylora-data volume ownership for app user (owner rw only)"
+  # Create volume if missing (does not start app)
+  compose create sylora >/dev/null 2>&1 || docker volume create "$(compose config --volumes 2>/dev/null | head -1 | tr -d '\r' || echo sylora_sylora-data)" >/dev/null 2>&1 || true
+  # One-shot as root against the same volume mount; image entrypoint is bypassed.
+  if compose run --rm --no-deps --user root --entrypoint sh sylora -c '
+      set -eu
+      mkdir -p /app/data /app/data/media
+      if id sylora >/dev/null 2>&1; then
+        chown -R sylora:sylora /app/data
+        chmod 755 /app/data
+        find /app/data -maxdepth 1 -type f \( -name "sylora.json" -o -name "sylora.json.tmp" -o -name "sylora-*.json" \) -exec chown sylora:sylora {} \; -exec chmod 600 {} \; 2>/dev/null || true
+        echo "[deploy] /app/data ready for user sylora"
+        ls -la /app/data | head -20
+      else
+        echo "[deploy] WARN: user sylora missing in image — rebuild required" >&2
+        exit 1
+      fi
+    '; then
+    log "[deploy] persistent data permissions OK"
+  else
+    log "[deploy] WARN: could not pre-chown volume (image may need rebuild); runtime entrypoint will retry as root"
+  fi
 }
 
 deploy_on_server() {
@@ -123,20 +164,27 @@ deploy_on_server() {
   fi
 
   log "[deploy] HEAD=$(git rev-parse --short HEAD) branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
-  if ! docker compose up -d --build; then
+
+  # Build image first so entrypoint + sylora user exist for volume prepare
+  if ! compose build sylora; then
+    log "[deploy] build failed — attempting rollback"
+    rollback_to "$prev_head" || die "[deploy] build failed and rollback failed"
+    die "[deploy] build failed; rolled back to $prev_head"
+  fi
+
+  ensure_persistent_data_permissions
+
+  if ! compose up -d --build; then
     log "[deploy] compose failed — attempting rollback"
     rollback_to "$prev_head" || die "[deploy] compose failed and rollback failed"
     die "[deploy] compose failed; rolled back to $prev_head"
   fi
 
-  # Non-destructive migrations (compose entrypoint may also run these)
+  # Non-destructive migrations (compose command also runs migrate before server)
   if [ -f scripts/migrate.mjs ]; then
-    log "[deploy] running migrations"
-    if command -v docker >/dev/null 2>&1; then
-      docker compose exec -T app node scripts/migrate.mjs 2>/dev/null \
-        || docker compose run --rm app node scripts/migrate.mjs 2>/dev/null \
-        || log "[deploy] migrate skipped/failed non-fatally — check container logs"
-    fi
+    log "[deploy] verifying migrations via sylora service"
+    compose exec -T sylora node scripts/migrate.mjs 2>/dev/null \
+      || log "[deploy] migrate exec skipped/failed non-fatally — check container logs (startup command may have migrated)"
   fi
 
   if ! wait_ready "http://127.0.0.1:8787/api/ready"; then
@@ -145,6 +193,7 @@ deploy_on_server() {
     die "[deploy] ready failed; rolled back to $prev_head"
   fi
   curl -fsS "http://127.0.0.1:8787/api/ready"; echo
+  curl -fsS "http://127.0.0.1:8787/api/health"; echo
   log "[deploy] local ready OK — verifying public domain if reachable"
   if curl -fsS "$SMOKE_BASE/api/ready" >/dev/null 2>&1; then
     if ! smoke_public "$SMOKE_BASE"; then
@@ -191,8 +240,8 @@ case "$MODE" in
   backup) backup_tree ;;
   dry-run)
     command -v docker >/dev/null 2>&1 || die "docker required for dry-run"
-    docker compose config >/dev/null
-    docker compose up -d --build
+    compose config >/dev/null
+    compose up -d --build
     wait_ready "http://127.0.0.1:8787/api/ready" || die "dry-run ready failed"
     ;;
   deploy) deploy_on_server ;;

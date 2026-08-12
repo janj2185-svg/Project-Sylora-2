@@ -30,6 +30,7 @@ import { EcosystemService } from './ecosystem/service.mjs';
 import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { createSyloraLiveService, handleSyloraLiveRoutes } from './live/index.mjs';
+import { validateProductionEnv } from './production-env.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -58,16 +59,9 @@ const openaiRealtimeModel=String(process.env.OPENAI_REALTIME_MODEL||'gpt-realtim
 const openaiRealtimeVoice=String(process.env.OPENAI_REALTIME_VOICE||'marin');
 const liveIceServers=parseIceServers(process.env.SYLORA_ICE_SERVERS_JSON);
 const openai=process.env.OPENAI_API_KEY?new OpenAI({apiKey:process.env.OPENAI_API_KEY,...(process.env.OPENAI_BASE_URL?{baseURL:process.env.OPENAI_BASE_URL}:{})}):null;
-function validateProductionEnv(){
-  if(process.env.NODE_ENV!=='production')return {ok:true,warnings:[]};
-  const warnings=[];
-  if(!process.env.DATABASE_URL)warnings.push('DATABASE_URL_MISSING');
-  if(!process.env.REDIS_URL)warnings.push('REDIS_URL_MISSING');
-  if((process.env.POSTGRES_PASSWORD||'')==='sylora_dev_only')warnings.push('DEFAULT_POSTGRES_PASSWORD');
-  return {ok:warnings.length===0,warnings};
-}
-const productionEnv=validateProductionEnv();
+const productionEnv=validateProductionEnv(process.env);
 if(process.env.NODE_ENV==='production'&&!productionEnv.ok){
+  // Warning codes only — never print passwords or DATABASE_URL
   console.error('[SYLORA] production env validation failed',productionEnv.warnings.join(','));
 }
 

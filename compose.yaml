@@ -8,9 +8,15 @@ services:
     environment:
       PORT: 8787
       NODE_ENV: production
+      SYLORA_DATA_DIR: /app/data
       SYLORA_DATA_FILE: /app/data/sylora.json
-      DATABASE_URL: postgresql://sylora:${POSTGRES_PASSWORD:-sylora_dev_only}@postgres:5432/sylora
-      REDIS_URL: redis://redis:6379
+      # Interpolated from project env (.env or `docker compose --env-file .env.local`).
+      # Production deploy MUST pass --env-file .env.local so a real POSTGRES_PASSWORD wins.
+      # Prefer explicit DATABASE_URL from that file when set; otherwise build from password.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sylora_dev_only}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://sylora:${POSTGRES_PASSWORD:-sylora_dev_only}@postgres:5432/sylora}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    # Entrypoint chowns /app/data then drops to user sylora before this command.
     command: ["sh", "-c", "node scripts/migrate.mjs && node src/server.mjs"]
     depends_on:
       postgres:
@@ -24,7 +30,7 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-      start_period: 15s
+      start_period: 25s
   postgres:
     image: postgres:17-alpine
     environment:
