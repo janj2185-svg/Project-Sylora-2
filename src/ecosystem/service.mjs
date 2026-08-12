@@ -235,7 +235,16 @@ export class EcosystemService {
     this.repo = repo;
     this.metrics = createMetricsRegistry();
     /** Optional realtime hooks from server (notifyUser, emitCall). */
-    this.hooks = { notifyUser: null, emitCall: null, findLiveRoom: null, listLiveMessages: null };
+    this.hooks = {
+      notifyUser: null,
+      emitCall: null,
+      findLiveRoom: null,
+      listLiveRooms: null,
+      listLiveMessages: null,
+      liveEngagement: null,
+      activeBattle: null,
+      createBattle: null
+    };
     ensureCollections(store);
     this._catalogReady = null;
     this.seedCatalog();
@@ -243,6 +252,42 @@ export class EcosystemService {
 
   setHooks(hooks = {}) {
     this.hooks = { ...this.hooks, ...hooks };
+  }
+
+  /** Postgres-aware LIVE room lookup (hooks from server.mjs in production). */
+  async resolveLiveRoom(liveId) {
+    if (typeof this.hooks.findLiveRoom === 'function') return this.hooks.findLiveRoom(liveId);
+    return (this.store.data.liveRooms || []).find(r => r.id === liveId && r.status === 'live') || null;
+  }
+
+  async resolveLiveRooms({ limit = 100 } = {}) {
+    if (typeof this.hooks.listLiveRooms === 'function') {
+      return (await this.hooks.listLiveRooms()).slice(0, limit);
+    }
+    return (this.store.data.liveRooms || []).filter(r => r.status === 'live').slice(0, limit);
+  }
+
+  async resolveLiveMessages(liveId, limit = 200) {
+    if (typeof this.hooks.listLiveMessages === 'function') {
+      return (await this.hooks.listLiveMessages(liveId)).slice(-limit);
+    }
+    return (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-limit);
+  }
+
+  async resolveLiveEngagement(liveId) {
+    if (typeof this.hooks.liveEngagement === 'function') return this.hooks.liveEngagement(liveId);
+    const row = (this.store.data.liveEngagement || []).find(e => e.liveId === liveId);
+    return { likes: row?.likes || 0, resonance: row?.resonance || 0 };
+  }
+
+  async resolveActiveBattle(liveId) {
+    if (typeof this.hooks.activeBattle === 'function') return this.hooks.activeBattle(liveId);
+    return (this.store.data.liveBattles || []).find(b =>
+      b.status === 'live' && (b.hostLiveId === liveId || b.opponentLiveId === liveId)) || null;
+  }
+
+  battlePlanById(battleId) {
+    return (this.store.data.liveBattles || []).find(b => b.id === battleId) || null;
   }
 
   get pg() { return this.repo?.enabled ? this.repo : null; }
@@ -997,14 +1042,10 @@ export class EcosystemService {
   }
 
   async liveCopilotBundle(user, liveId) {
-    const room = typeof this.hooks.findLiveRoom === 'function'
-      ? await this.hooks.findLiveRoom(liveId)
-      : this.store.data.liveRooms.find(r => r.id === liveId);
+    const room = await this.resolveLiveRoom(liveId);
     if (!room) return { ok: false, error: 'LIVE_NOT_FOUND' };
     if (room.hostId !== user.id) return { ok: false, error: 'LIVE_HOST_REQUIRED' };
-    const chat = typeof this.hooks.listLiveMessages === 'function'
-      ? (await this.hooks.listLiveMessages(liveId)).slice(-80)
-      : (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).slice(-80);
+    const chat = await this.resolveLiveMessages(liveId, 80);
     const questions = chat.filter(m => /\?|як|what|how|чому/i.test(m.text || '')).slice(-10);
     return {
       ok: true,
@@ -2681,23 +2722,37 @@ export class EcosystemService {
     };
   }
 
-  startResonanceBattle(user, input = {}) {
+  async startResonanceBattle(user, input = {}) {
     const hostLiveId = String(input.hostLiveId || input.liveId || '');
-    const host = (this.store.data.liveRooms || []).find(r => r.id === hostLiveId);
+    const host = await this.resolveLiveRoom(hostLiveId);
     if (!host || host.hostId !== user.id) throw new Error('HOST_ONLY');
-    const active = (this.store.data.liveBattles || []).find(b =>
-      b.status === 'live' && (b.hostLiveId === hostLiveId || b.opponentLiveId === hostLiveId));
-    if (active) throw new Error('RESONANCE_ALREADY_ACTIVE');
+    if (await this.resolveActiveBattle(hostLiveId)) throw new Error('RESONANCE_ALREADY_ACTIVE');
+    const opponentLiveId = input.opponentLiveId || null;
+    if (opponentLiveId) {
+      const opponent = await this.resolveLiveRoom(opponentLiveId);
+      if (!opponent || opponent.id === host.id || opponent.hostId === user.id) throw new Error('INVALID_OPPONENT');
+      if (await this.resolveActiveBattle(opponentLiveId)) throw new Error('RESONANCE_ALREADY_ACTIVE');
+    }
     const battle = createBattlePlan({
       id: this.store.id(),
       hostLiveId,
-      opponentLiveId: input.opponentLiveId || null,
+      opponentLiveId,
       mode: input.mode || '1v1',
       teamA: input.teamA || [user.id],
       teamB: input.teamB || [],
       rounds: input.rounds || null,
       durationSec: Number(input.durationSec) || 180
     });
+    if (typeof this.hooks.createBattle === 'function' && opponentLiveId) {
+      const persisted = await this.hooks.createBattle({
+        id: battle.id,
+        hostLiveId: battle.hostLiveId,
+        opponentLiveId: battle.opponentLiveId,
+        startedAt: battle.startedAt || this.store.now(),
+        endsAt: battle.endsAt || new Date(Date.now() + (battle.durationSec || 180) * 1000).toISOString()
+      });
+      Object.assign(battle, persisted);
+    }
     this.store.data.liveBattles.push(battle);
     this.store.save();
     return battle;
@@ -2722,33 +2777,35 @@ export class EcosystemService {
     };
   }
 
-  advanceBattle(user, battleId) {
-    const battle = (this.store.data.liveBattles || []).find(b => b.id === battleId);
+  async advanceBattle(user, battleId) {
+    const battle = this.battlePlanById(battleId);
     if (!battle) throw new Error('BATTLE_NOT_FOUND');
-    const host = (this.store.data.liveRooms || []).find(r => r.id === battle.hostLiveId);
+    const host = await this.resolveLiveRoom(battle.hostLiveId);
     if (!host || host.hostId !== user.id) throw new Error('HOST_ONLY');
     advanceBattleRound(battle);
     this.store.save();
     return battle;
   }
 
-  resonanceWorld(liveId) {
-    const eng = (this.store.data.liveEngagement || []).find(e => e.liveId === liveId) || { likes: 0, resonance: 0 };
-    const battle = (this.store.data.liveBattles || []).find(b =>
+  async resonanceWorld(liveId) {
+    const eng = await this.resolveLiveEngagement(liveId);
+    const pgBattle = await this.resolveActiveBattle(liveId);
+    const plan = (this.store.data.liveBattles || []).find(b =>
       b.status === 'live' && (b.hostLiveId === liveId || b.opponentLiveId === liveId));
-    const comments = (this.store.data.liveMessages || []).filter(m => m.liveId === liveId).length;
+    const active = plan || pgBattle;
+    const comments = (await this.resolveLiveMessages(liveId, 500)).length;
     return resonanceWorldState({
       likes: eng.likes || 0,
       comments,
       gifts: eng.resonance || 0,
-      battleLead: battle ? (battle.hostScore - battle.opponentScore) : 0,
-      comeback: !!(battle?.comebackEvents || []).length,
-      victory: battle?.status === 'ended'
+      battleLead: active ? (Number(active.hostScore || 0) - Number(active.opponentScore || 0)) : 0,
+      comeback: !!(plan?.comebackEvents || []).length,
+      victory: active?.status === 'ended'
     });
   }
 
-  startLiveChallenge(user, input = {}) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+  async startLiveChallenge(user, input = {}) {
+    const live = await this.resolveLiveRoom(input.liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const challenge = createLiveChallenge({
       id: this.store.id(),
@@ -2765,8 +2822,8 @@ export class EcosystemService {
     return challenge;
   }
 
-  startLiveQuiz(user, input = {}) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+  async startLiveQuiz(user, input = {}) {
+    const live = await this.resolveLiveRoom(input.liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const quiz = createLiveQuiz({
       id: this.store.id(),
@@ -2800,8 +2857,8 @@ export class EcosystemService {
     return { correct, leaderboard: quizLeaderboard(quiz) };
   }
 
-  startMiniGame(user, input = {}) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+  async startMiniGame(user, input = {}) {
+    const live = await this.resolveLiveRoom(input.liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const session = createMiniGameSession({
       id: this.store.id(),
@@ -2815,8 +2872,8 @@ export class EcosystemService {
     return session;
   }
 
-  startAudienceVsSylora(user, input = {}) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === input.liveId);
+  async startAudienceVsSylora(user, input = {}) {
+    const live = await this.resolveLiveRoom(input.liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const session = createAudienceVsSylora({
       id: this.store.id(),
@@ -2830,14 +2887,14 @@ export class EcosystemService {
     return session;
   }
 
-  setCoHostAutonomy(user, liveId, autonomy) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+  async setCoHostAutonomy(user, liveId, autonomy) {
+    const live = await this.resolveLiveRoom(liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     return createCoHostControl({ liveId, hostId: user.id, autonomy });
   }
 
-  setLiveRoomKind(user, liveId, kind, title = '') {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+  async setLiveRoomKind(user, liveId, kind, title = '') {
+    const live = await this.resolveLiveRoom(liveId);
     if (!live || live.hostId !== user.id) throw new Error('HOST_ONLY');
     const profile = createLiveRoomProfile({ id: this.store.id(), liveId, kind, title, hostId: user.id });
     this.store.data.liveRoomProfiles = this.store.data.liveRoomProfiles.filter(p => p.liveId !== liveId);
@@ -2856,8 +2913,8 @@ export class EcosystemService {
     return stage;
   }
 
-  stageAction(user, liveId, action, targetUserId) {
-    const live = (this.store.data.liveRooms || []).find(r => r.id === liveId);
+  async stageAction(user, liveId, action, targetUserId) {
+    const live = await this.resolveLiveRoom(liveId);
     if (!live) throw new Error('LIVE_NOT_FOUND');
     const stage = this.ensureStage(liveId, live.hostId);
     if (action === 'raise_hand') stageRaiseHand(stage, user.id);

@@ -292,11 +292,11 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/home/hub') {
     const user = await requireUser(req, res); if (!user) return true;
-    const roomsSource = (store.data.liveRooms || []).filter(r => r.status === 'live');
-    const rooms = roomsSource.slice(0, 12).map(r => {
+    const roomsSource = await ecosystem.resolveLiveRooms({ limit: 12 });
+    const rooms = await Promise.all(roomsSource.map(async r => {
       const host = store.data.users.find(u => u.id === r.hostId);
       return { ...r, host: store.publicUser(host), viewerCount: r.viewerCount || 0 };
-    });
+    }));
     const conversations = (store.data.conversations || [])
       .filter(c => (c.memberIds || []).includes(user.id) || (c.members || []).some(m => m.id === user.id))
       .slice(0, 8);
@@ -738,7 +738,7 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'POST' && p === '/api/live/battles') {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 201, { battle: ecosystem.startResonanceBattle(user, await body(req)) }), true; }
+    try { return json(res, 201, { battle: await ecosystem.startResonanceBattle(user, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/battles/:id/factor', p);
@@ -750,21 +750,21 @@ export async function handleEcosystemRoutes(ctx) {
   m = route('/api/live/battles/:id/advance', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 200, { battle: ecosystem.advanceBattle(user, m.id) }), true; }
+    try { return json(res, 200, { battle: await ecosystem.advanceBattle(user, m.id) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/:id/world', p);
   if (req.method === 'GET' && m) {
-    return json(res, 200, { world: ecosystem.resonanceWorld(m.id) }), true;
+    return json(res, 200, { world: await ecosystem.resonanceWorld(m.id) }), true;
   }
   if (req.method === 'POST' && p === '/api/live/challenges') {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 201, { challenge: ecosystem.startLiveChallenge(user, await body(req)) }), true; }
+    try { return json(res, 201, { challenge: await ecosystem.startLiveChallenge(user, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   if (req.method === 'POST' && p === '/api/live/quizzes') {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 201, { quiz: ecosystem.startLiveQuiz(user, await body(req)) }), true; }
+    try { return json(res, 201, { quiz: await ecosystem.startLiveQuiz(user, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/quizzes/:id/answer', p);
@@ -776,40 +776,38 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'POST' && p === '/api/live/minigames') {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 201, { session: ecosystem.startMiniGame(user, await body(req)) }), true; }
+    try { return json(res, 201, { session: await ecosystem.startMiniGame(user, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   if (req.method === 'POST' && p === '/api/live/audience-vs-sylora') {
     const user = await requireUser(req, res); if (!user) return true;
-    try { return json(res, 201, { session: ecosystem.startAudienceVsSylora(user, await body(req)) }), true; }
+    try { return json(res, 201, { session: await ecosystem.startAudienceVsSylora(user, await body(req)) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/:id/cohost', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    try { return json(res, 200, { cohost: ecosystem.setCoHostAutonomy(user, m.id, input.autonomy) }), true; }
+    try { return json(res, 200, { cohost: await ecosystem.setCoHostAutonomy(user, m.id, input.autonomy) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/:id/room-kind', p);
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    try { return json(res, 200, { profile: ecosystem.setLiveRoomKind(user, m.id, input.kind, input.title) }), true; }
+    try { return json(res, 200, { profile: await ecosystem.setLiveRoomKind(user, m.id, input.kind, input.title) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   m = route('/api/live/:id/stage', p);
   if (req.method === 'GET' && m) {
-    const live = typeof ecosystem.hooks?.findLiveRoom === 'function'
-      ? await ecosystem.hooks.findLiveRoom(m.id)
-      : store.data.liveRooms.find(r => r.id === m.id);
+    const live = await ecosystem.resolveLiveRoom(m.id);
     if (!live) return json(res, 404, { error: 'LIVE_NOT_FOUND' }), true;
     return json(res, 200, { stage: ecosystem.ensureStage(m.id, live.hostId) }), true;
   }
   if (req.method === 'POST' && m) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    try { return json(res, 200, { stage: ecosystem.stageAction(user, m.id, input.action, input.userId) }), true; }
+    try { return json(res, 200, { stage: await ecosystem.stageAction(user, m.id, input.action, input.userId) }), true; }
     catch (e) { return json(res, 400, { error: e.message }), true; }
   }
   if (req.method === 'POST' && p === '/api/timers') {

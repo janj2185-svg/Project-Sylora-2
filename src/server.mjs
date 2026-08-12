@@ -78,7 +78,11 @@ ecosystem.setHooks({
   notifyUser:(userId,type,actorId,payload)=>notifyUser(userId,type,actorId,payload),
   emitCall,
   findLiveRoom,
-  listLiveMessages
+  listLiveRooms,
+  listLiveMessages,
+  liveEngagement,
+  activeBattle,
+  createBattle:(payload)=>liveRepo.enabled?liveRepo.createBattle(payload):null
 });
 
 function json(res, status, body) {
