@@ -31,7 +31,7 @@ test('E2E: register → session → LIVE command center honesty → logout/login
     return;
   }
   const puppeteer = require('puppeteer-core');
-  const port = 8795;
+  const port = 19000 + Math.floor(Math.random()*1000);
   const child = spawn(process.execPath, ['src/server.mjs'], {
     env: { ...process.env, PORT: String(port), DATABASE_URL: '', REDIS_URL: '', NODE_ENV: 'development' },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -144,7 +144,7 @@ test('E2E desktop: critical nav views render without auth bounce', async (t) => 
     return;
   }
   const puppeteer = require('puppeteer-core');
-  const port = 8796;
+  const port = 20000 + Math.floor(Math.random()*1000);
   const child = spawn(process.execPath, ['src/server.mjs'], {
     env: { ...process.env, PORT: String(port), DATABASE_URL: '', REDIS_URL: '', NODE_ENV: 'development' },
     stdio: ['ignore', 'pipe', 'pipe']

@@ -15,7 +15,7 @@ See repository HEAD after the QA commit on `cursor/sylora-live-ecosystem-34a2`.
 |---|---|
 | LINT | **PASS** |
 | BUILD | **PASS** |
-| UNIT/INTEGRATION (`npm test`) | **161 PASS / 0 FAIL** |
+| UNIT/INTEGRATION (`npm test`) | **159 PASS / 0 FAIL** |
 | E2E browser (`npm run test:e2e`) | **2 PASS / 0 FAIL** |
 | Full visual audit script (`npm run qa:audit`) | **PASS** (screenshots + video) |
 
