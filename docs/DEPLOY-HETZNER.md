@@ -36,8 +36,10 @@ Equivalent: `SYLORA_DEPLOY_REF=cursor/sylora-live-ecosystem-34a2 ./scripts/deplo
 ## Prerequisites on VPS
 
 - Docker + Compose
-- `.env.local` with a **non-default** `POSTGRES_PASSWORD` and matching `DATABASE_URL` (never commit; never use `sylora_dev_only` in production). Deploy uses `docker compose --env-file .env.local` so interpolation does not fall back to the insecure compose default.
-- Persistent Docker volume `sylora-data` for `/app/data` — `deploy-prod.sh` + image entrypoint `chown` to user `sylora` (mode `755` / files `600`; never world-writable)
+- `.env.local` with a **non-default** `POSTGRES_PASSWORD` and matching `DATABASE_URL` (never commit; never use `sylora_dev_only` in production). Deploy uses `docker compose --env-file .env.local` so interpolation does not fall back to the insecure compose default. Deploy never copies or prints `.env.local`.
+- Clean git worktree required (`git status --porcelain` empty) or deploy aborts before checkout.
+- Pre-deploy backup under `.deploy-backup-<UTC>/`: Postgres `pg_dump` + read-only `sylora-data.tar` + metadata (gitignored).
+- Persistent Docker volume `sylora-data` for `/app/data` — `deploy-prod.sh` + image entrypoint `chown` to user `sylora` (mode `755` / files `600`; never world-writable). Never `down -v` / volume wipe.
 - Optional keys later: `OPENAI_API_KEY`, Google/TikTok/… — leave empty; UI/API stay fail-closed
 - TLS at nginx (`infra/nginx/sylora.conf.example`)
 - Optional: `SYLORA_ENABLE_HSTS=1` only after HTTPS verified

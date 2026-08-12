@@ -96,4 +96,12 @@ test('docker entrypoint and Dockerfile drop privileges without world-writable mo
   assert.doesNotMatch(stripComments(deploy), /\bchmod\s+(-R\s+)?0?777\b/);
   assert.match(deploy, /chown -R sylora:sylora/);
   assert.match(deploy, /--env-file \.env\.local/);
+  assert.match(deploy, /require_clean_worktree/);
+  assert.match(deploy, /git status --porcelain/);
+  assert.match(deploy, /backup_production/);
+  assert.match(deploy, /pg_dump/);
+  assert.match(deploy, /sylora-data\.tar/);
+  assert.match(deploy, /:ro/);
+  assert.doesNotMatch(stripComments(deploy), /down\s+-v/);
+  assert.doesNotMatch(stripComments(deploy), /\brm\s+-rf\s+.*\/app\/data/);
 });

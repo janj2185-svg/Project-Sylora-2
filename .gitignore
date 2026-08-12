@@ -11,5 +11,7 @@ artifacts/screenshots/home-living-bg/frames/
 
 artifacts/screenshots/home-living-bg-data.json
 
-# Local/on-server deploy metadata backups (never commit)
+# Local/on-server deploy backups (never commit; may contain DB dumps)
 .deploy-backup-*/
+.deploy-backup-latest.txt
+.deploy-backup-latest-HEAD.txt
