@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 export SYLORA_DEPLOY_REF="${SYLORA_DEPLOY_REF:-cursor/sylora-live-ecosystem-34a2}"
-export SYLORA_MIN_COMMIT="${SYLORA_MIN_COMMIT:-ddd576c4125643c1527582790a369b9faf566774}"
+export SYLORA_MIN_COMMIT="${SYLORA_MIN_COMMIT:-2a01140e32fd2a5f8a337b12d41ce3e651e1071d}"
 export SMOKE_BASE="${SMOKE_BASE:-https://getsylora.com}"
 export EXPECTED_CACHE_HINT="${EXPECTED_CACHE_HINT:-20260812}"
 case "$SYLORA_DEPLOY_REF" in main|master) echo "REFUSING main/master"; exit 2 ;; esac
