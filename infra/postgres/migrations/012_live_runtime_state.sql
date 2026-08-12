@@ -44,10 +44,8 @@ ALTER TABLE posts ADD COLUMN IF NOT EXISTS search_vector tsvector;
 CREATE INDEX IF NOT EXISTS posts_search_vector_idx ON posts USING gin(search_vector);
 
 UPDATE posts SET search_vector = to_tsvector('simple',
-  coalesce(body,'') || ' ' || coalesce((
-    SELECT username FROM users WHERE users.id = posts.user_id
-  ),''))
-) WHERE search_vector IS NULL;
+  coalesce(body,'') || ' ' || coalesce((SELECT username FROM users WHERE users.id = posts.user_id), ''))
+WHERE search_vector IS NULL;
 
 CREATE OR REPLACE FUNCTION posts_search_vector_trigger() RETURNS trigger AS $$
 BEGIN
