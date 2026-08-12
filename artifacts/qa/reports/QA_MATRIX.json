@@ -1,0 +1,657 @@
+{
+  "branch": "cursor/sylora-live-ecosystem-34a2",
+  "base": "http://127.0.0.1:8787",
+  "user": {
+    "email": "qa1786541451761@sylora-qa.test",
+    "username": "qa1451761"
+  },
+  "counts": {
+    "WORKING": 33,
+    "BLOCKED_EXTERNAL": 10
+  },
+  "matrix": [
+    {
+      "id": "auth.register",
+      "status": "WORKING",
+      "note": "qa1786541451761@sylora-qa.test",
+      "evidence": []
+    },
+    {
+      "id": "api.ready",
+      "status": "WORKING",
+      "note": "{\"ready\":true,\"dependencies\":{\"ready\":true,\"postgres\":{\"configured\":false,\"ok\":true},\"redis\":{\"configured\":false,\"ok\":tr",
+      "evidence": []
+    },
+    {
+      "id": "api.me",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "api.posts.create",
+      "status": "WORKING",
+      "note": "status=201",
+      "evidence": []
+    },
+    {
+      "id": "api.wallet",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "api.live",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "live.commandCenter.api",
+      "status": "WORKING",
+      "note": "ai=AI_CONFIGURATION_REQUIRED; fakeConnected=0",
+      "evidence": []
+    },
+    {
+      "id": "live.aiCohost",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "aiState=AI_CONFIGURATION_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.tiktok",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.youtube",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.twitch",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.facebook",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.instagram",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=UNAVAILABLE",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.kick",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.discord",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=AUTH_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.platform.custom_rtmp",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "state=CONFIGURATION_REQUIRED",
+      "evidence": []
+    },
+    {
+      "id": "live.capabilities",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "live.unifiedChat",
+      "status": "WORKING",
+      "note": "msgs=0",
+      "evidence": []
+    },
+    {
+      "id": "auth.google",
+      "status": "BLOCKED_EXTERNAL",
+      "note": "status=503",
+      "evidence": []
+    },
+    {
+      "id": "api.gifts",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "auth.login",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "auth.logout",
+      "status": "WORKING",
+      "note": "logout endpoint called",
+      "evidence": []
+    },
+    {
+      "id": "auth.relogin",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "social.follow",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "profile.edit",
+      "status": "WORKING",
+      "note": "status=200",
+      "evidence": []
+    },
+    {
+      "id": "ui.desktop.profile",
+      "status": "WORKING",
+      "note": "Q\nMY SYLORA · PERSONAL ORBIT\nQA Auditor ★\n\n@qa1451761 · Full QA pass\n\n✧ ORBIT 1\n",
+      "evidence": [
+        "screenshots/desktop/05-profile.png"
+      ]
+    },
+    {
+      "id": "ui.desktop.messages",
+      "status": "WORKING",
+      "note": "SYLORA · INBOX\nInbox\n\nПовідомлення · Сповіщення · Запрошення · Дзвінки\n\nПовідомл",
+      "evidence": [
+        "screenshots/desktop/06-messages.png"
+      ]
+    },
+    {
+      "id": "ui.desktop.studio",
+      "status": "WORKING",
+      "note": "SYLORA CREATOR STUDIO\nТвоя сцена.\n\nScenes, sources, audio, recording, WebRTC і O",
+      "evidence": [
+        "screenshots/desktop/08-live-studio.png"
+      ]
+    },
+    {
+      "id": "ui.desktop.liveStudio",
+      "status": "WORKING",
+      "note": "SYLORA LIVE · COMMAND CENTER\nЦентр керування ефіром\n\nUnified platforms · honest ",
+      "evidence": [
+        "screenshots/desktop/09-live-command-center.png"
+      ]
+    },
+    {
+      "id": "ui.desktop.wallet",
+      "status": "WORKING",
+      "note": "SYLORA WALLET · TEST LUMEN\nБаланс і заробіток\n\nLUMEN balances are TEST/DEMO econ",
+      "evidence": [
+        "screenshots/desktop/13-wallet.png"
+      ]
+    },
+    {
+      "id": "ui.desktop.ai",
+      "status": "WORKING",
+      "note": "SYLORA · gpt-5.6\nЯ поруч.\n\nSylora тимчасово недоступна. Спробуй трохи пізніше.\n\n",
+      "evidence": [
+        "screenshots/desktop/16-ai.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.ai",
+      "status": "WORKING",
+      "note": "SYLORA · gpt-5.6\nЯ поруч.\n\nSylora тимчасово недоступна. Спробуй трохи пізніше.\n\n",
+      "evidence": [
+        "screenshots/mobile/03-ai.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.messages",
+      "status": "WORKING",
+      "note": "SYLORA · INBOX\nInbox\n\nПовідомлення · Сповіщення · Запрошення · Дзвінки\n\nПовідомл",
+      "evidence": [
+        "screenshots/mobile/04-messages.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.profile",
+      "status": "WORKING",
+      "note": "Q\nMY SYLORA · PERSONAL ORBIT\nQA Auditor ★\n\n@qa1451761 · Full QA pass\n\n✧ ORBIT 1\n",
+      "evidence": [
+        "screenshots/mobile/05-profile.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.liveStudio",
+      "status": "WORKING",
+      "note": "SYLORA LIVE · COMMAND CENTER\nЦентр керування ефіром\n\nUnified platforms · honest ",
+      "evidence": [
+        "screenshots/mobile/06-live-command-center.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.studio",
+      "status": "WORKING",
+      "note": "SYLORA CREATOR STUDIO\nТвоя сцена.\n\nScenes, sources, audio, recording, WebRTC і O",
+      "evidence": [
+        "screenshots/mobile/07-live-studio.png"
+      ]
+    },
+    {
+      "id": "ui.mobile.wallet",
+      "status": "WORKING",
+      "note": "SYLORA WALLET · TEST LUMEN\nБаланс і заробіток\n\nLUMEN balances are TEST/DEMO econ",
+      "evidence": [
+        "screenshots/mobile/08-wallet.png"
+      ]
+    },
+    {
+      "id": "ui.tablet.liveStudio",
+      "status": "WORKING",
+      "note": "SYLORA LIVE · COMMAND CENTER\nЦентр керування ефіром\n\nUnified platforms · honest ",
+      "evidence": [
+        "screenshots/tablet/03-live-command-center.png"
+      ]
+    },
+    {
+      "id": "ui.tablet.profile",
+      "status": "WORKING",
+      "note": "Q\nMY SYLORA · PERSONAL ORBIT\nQA Auditor ★\n\n@qa1451761 · Full QA pass\n\n✧ ORBIT 1\n",
+      "evidence": [
+        "screenshots/tablet/04-profile.png"
+      ]
+    },
+    {
+      "id": "ui.tablet.messages",
+      "status": "WORKING",
+      "note": "SYLORA · INBOX\nInbox\n\nПовідомлення · Сповіщення · Запрошення · Дзвінки\n\nПовідомл",
+      "evidence": [
+        "screenshots/tablet/05-messages.png"
+      ]
+    },
+    {
+      "id": "ui.tablet.ai",
+      "status": "WORKING",
+      "note": "SYLORA · gpt-5.6\nЯ поруч.\n\nSylora тимчасово недоступна. Спробуй трохи пізніше.\n\n",
+      "evidence": [
+        "screenshots/tablet/06-ai.png"
+      ]
+    },
+    {
+      "id": "ui.tablet.wallet",
+      "status": "WORKING",
+      "note": "SYLORA WALLET · TEST LUMEN\nБаланс і заробіток\n\nLUMEN balances are TEST/DEMO econ",
+      "evidence": [
+        "screenshots/tablet/07-wallet.png"
+      ]
+    },
+    {
+      "id": "qa.video",
+      "status": "WORKING",
+      "note": "/workspace/artifacts/qa/video/SYLORA-FULL-WALKTHROUGH.webm",
+      "evidence": []
+    }
+  ],
+  "findings": [
+    {
+      "severity": "FIXED",
+      "where": "mobile+tablet home",
+      "issue": "eco-carousel overflow contained; re-verified scrollWidth==clientWidth"
+    }
+  ],
+  "consoleErrors": [
+    {
+      "folder": "desktop",
+      "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "folder": "desktop",
+      "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "folder": "desktop",
+      "message": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    }
+  ],
+  "screenshots": [
+    {
+      "folder": "desktop",
+      "name": "02-login",
+      "file": "artifacts/qa/screenshots/desktop/02-login.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "03-register",
+      "file": "artifacts/qa/screenshots/desktop/03-register.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "01-home",
+      "file": "artifacts/qa/screenshots/desktop/01-home.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "04-feed",
+      "file": "artifacts/qa/screenshots/desktop/04-feed.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "05-profile",
+      "file": "artifacts/qa/screenshots/desktop/05-profile.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "06-messages",
+      "file": "artifacts/qa/screenshots/desktop/06-messages.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "06b-notifications",
+      "file": "artifacts/qa/screenshots/desktop/06b-notifications.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "07-live",
+      "file": "artifacts/qa/screenshots/desktop/07-live.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "07b-live-create",
+      "file": "artifacts/qa/screenshots/desktop/07b-live-create.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "07c-live-following",
+      "file": "artifacts/qa/screenshots/desktop/07c-live-following.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "08-live-studio",
+      "file": "artifacts/qa/screenshots/desktop/08-live-studio.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "09-live-command-center",
+      "file": "artifacts/qa/screenshots/desktop/09-live-command-center.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "10-live-social-connections",
+      "file": "artifacts/qa/screenshots/desktop/10-live-social-connections.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "11-live-ai-host",
+      "file": "artifacts/qa/screenshots/desktop/11-live-ai-host.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "12-live-chat",
+      "file": "artifacts/qa/screenshots/desktop/12-live-chat.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "12b-live-controls",
+      "file": "artifacts/qa/screenshots/desktop/12b-live-controls.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "13-wallet",
+      "file": "artifacts/qa/screenshots/desktop/13-wallet.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "14-settings",
+      "file": "artifacts/qa/screenshots/desktop/14-settings.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "15-gifts",
+      "file": "artifacts/qa/screenshots/desktop/15-gifts.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "16-ai",
+      "file": "artifacts/qa/screenshots/desktop/16-ai.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "17-clips",
+      "file": "artifacts/qa/screenshots/desktop/17-clips.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "18-videos",
+      "file": "artifacts/qa/screenshots/desktop/18-videos.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "19-explore",
+      "file": "artifacts/qa/screenshots/desktop/19-explore.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "20-communities",
+      "file": "artifacts/qa/screenshots/desktop/20-communities.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "21-learning",
+      "file": "artifacts/qa/screenshots/desktop/21-learning.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "22-business",
+      "file": "artifacts/qa/screenshots/desktop/22-business.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "23-security",
+      "file": "artifacts/qa/screenshots/desktop/23-security.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "24-dashboard",
+      "file": "artifacts/qa/screenshots/desktop/24-dashboard.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "25-canvas",
+      "file": "artifacts/qa/screenshots/desktop/25-canvas.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "26-agents",
+      "file": "artifacts/qa/screenshots/desktop/26-agents.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "27-developer",
+      "file": "artifacts/qa/screenshots/desktop/27-developer.png",
+      "overflowX": false
+    },
+    {
+      "folder": "desktop",
+      "name": "28-identity",
+      "file": "artifacts/qa/screenshots/desktop/28-identity.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "01-home",
+      "file": "artifacts/qa/screenshots/mobile/01-home.png",
+      "overflowX": true
+    },
+    {
+      "folder": "mobile",
+      "name": "02-live",
+      "file": "artifacts/qa/screenshots/mobile/02-live.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "03-ai",
+      "file": "artifacts/qa/screenshots/mobile/03-ai.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "04-messages",
+      "file": "artifacts/qa/screenshots/mobile/04-messages.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "05-profile",
+      "file": "artifacts/qa/screenshots/mobile/05-profile.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "06-live-command-center",
+      "file": "artifacts/qa/screenshots/mobile/06-live-command-center.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "06-live-command-center-platforms",
+      "file": "artifacts/qa/screenshots/mobile/06-live-command-center-platforms.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "07-live-studio",
+      "file": "artifacts/qa/screenshots/mobile/07-live-studio.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "08-wallet",
+      "file": "artifacts/qa/screenshots/mobile/08-wallet.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "09-gifts",
+      "file": "artifacts/qa/screenshots/mobile/09-gifts.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "10-settings",
+      "file": "artifacts/qa/screenshots/mobile/10-settings.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "11-explore",
+      "file": "artifacts/qa/screenshots/mobile/11-explore.png",
+      "overflowX": false
+    },
+    {
+      "folder": "mobile",
+      "name": "12-clips",
+      "file": "artifacts/qa/screenshots/mobile/12-clips.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "01-home",
+      "file": "artifacts/qa/screenshots/tablet/01-home.png",
+      "overflowX": true
+    },
+    {
+      "folder": "tablet",
+      "name": "02-live",
+      "file": "artifacts/qa/screenshots/tablet/02-live.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "03-live-command-center",
+      "file": "artifacts/qa/screenshots/tablet/03-live-command-center.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "03-live-command-center-platforms",
+      "file": "artifacts/qa/screenshots/tablet/03-live-command-center-platforms.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "04-profile",
+      "file": "artifacts/qa/screenshots/tablet/04-profile.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "05-messages",
+      "file": "artifacts/qa/screenshots/tablet/05-messages.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "06-ai",
+      "file": "artifacts/qa/screenshots/tablet/06-ai.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "07-wallet",
+      "file": "artifacts/qa/screenshots/tablet/07-wallet.png",
+      "overflowX": false
+    },
+    {
+      "folder": "tablet",
+      "name": "08-settings",
+      "file": "artifacts/qa/screenshots/tablet/08-settings.png",
+      "overflowX": false
+    }
+  ],
+  "video": "artifacts/qa/video/SYLORA-FULL-WALKTHROUGH.webm",
+  "generatedAt": "2026-08-12T13:33:22.362Z",
+  "overflowFixedAt": "2026-08-12T13:35:58.581Z",
+  "finalReport": "artifacts/qa/reports/FINAL_QA_REPORT.md"
+}

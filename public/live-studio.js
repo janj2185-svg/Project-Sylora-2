@@ -94,7 +94,7 @@ export async function renderLiveStudio({ app, api, esc, toast, state, nav, t }) 
     </div>
 
     <div class="sl-banner ${aiState === 'AI_CONFIGURATION_REQUIRED' ? 'warn' : ''}" id="slAiBanner">
-      AI co-host: <b>${esc(aiState)}</b> · ${esc(overview.honesty?.aiNote || (aiState === 'AI_CONFIGURATION_REQUIRED' ? 'Local tool replies only until OPENAI_API_KEY is set.' : 'Model path available.'))}
+      AI co-host: <b>${esc(aiState)}</b>${overview.honesty?.aiNote && overview.honesty.aiNote !== aiState ? ` · ${esc(overview.honesty.aiNote)}` : (aiState === 'AI_CONFIGURATION_REQUIRED' ? ' · Local tool replies only until OPENAI_API_KEY is set.' : '')}
     </div>
 
     <div class="sl-tabs" role="tablist">
