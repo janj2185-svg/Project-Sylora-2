@@ -1,0 +1,132 @@
+# SYLORA Production Readiness (Phase 0)
+
+Phase 0 establishes foundation guards and diagnostics. It does **not** deploy external infrastructure (PostgreSQL clusters, Redis, TURN servers, OpenAI accounts).
+
+## What runtime validates today
+
+### Boot (process start)
+
+| Check | Development | Production |
+|-------|-------------|------------|
+| `DATABASE_URL` present and `postgresql://` | Optional | **Required — process exits if missing** |
+| Invalid `PORT` | Throws at config load | Throws at config load |
+
+Message on blocked production boot:
+
+```text
+Production startup blocked: DATABASE_URL is required.
+```
+
+No secrets are printed in boot error messages.
+
+### Liveness — `GET /api/health`
+
+Process is alive. Always returns HTTP 200 when the server responds.
+
+Includes:
+
+- `status: "ok"`
+- `mode` (`development` | `test` | `production`)
+- `persistence` label
+- `ai` diagnostics (status, reason — no API key)
+- `realtime` diagnostics (TURN/STUN state)
+- Dependency ping results (postgres/redis/outbox latency, not credentials)
+
+AI is **not** required for liveness.
+
+### Readiness — `GET /api/ready`
+
+Whether the instance should accept production traffic.
+
+Checks (machine-readable `checks` object):
+
+| Component | Production expectation |
+|-----------|------------------------|
+| `server` | Always ready if responding |
+| `database` | PostgreSQL configured and ping OK |
+| `redis` | Configured and ping OK (multi-instance LIVE/realtime) |
+| `outbox` | OK when PostgreSQL outbox available |
+| `config` | Production config validation passed |
+| `ai` | `AI_UNAVAILABLE` fails readiness check (not a crash) |
+| `realtime` | TURN required — `NOT_READY` without TURN in production |
+
+HTTP 503 when `ready: false`.
+
+### AI status values
+
+| Status | Meaning |
+|--------|---------|
+| `AI_CONFIGURED` | `OPENAI_API_KEY` set; real provider calls allowed |
+| `AI_UNAVAILABLE` | No key in production; APIs return 503, not fake OpenAI text |
+| `AI_DEGRADED` | No key in development; local features work, AI chat blocked honestly |
+
+API keys are never sent to clients or logged.
+
+### Realtime / WebRTC status
+
+| Status | When |
+|--------|------|
+| `READY` | TURN server configured in ICE list |
+| `DEGRADED` | Development without TURN (STUN-only or local) |
+| `NOT_READY` | Production LIVE capability without TURN |
+
+ICE servers are exposed only via authenticated `GET /api/live/rtc-config`. TURN username/credential are client WebRTC credentials (browser uses them with the TURN server).
+
+### Redis policy
+
+Redis is **not** required to boot in development.
+
+| Capability | Without Redis |
+|------------|----------------|
+| Rate limits | In-memory fallback |
+| LIVE SSE (single instance) | Local dispatch |
+| Viewer counts / peer leases | In-memory fallback |
+| Cross-instance fanout | Local only |
+| Durable realtime outbox publish | Fails for distributed path |
+
+Production readiness expects Redis for scaling LIVE and durable realtime.
+
+Diagnostics: `checks.redis.expectation` and `redis.capabilities` in config module.
+
+## What is still blocked (external infra)
+
+| Capability | Phase 0 status | Notes |
+|------------|----------------|-------|
+| CI/CD | **CODE READY** | GitHub Actions workflow in repo |
+| PostgreSQL persistence | **CODE READY / EXTERNAL INFRA REQUIRED** | Boot guard enforces URL; cluster must be provisioned |
+| Redis scaling | **CODE READY / EXTERNAL INFRA REQUIRED** | Readiness reports when absent |
+| OpenAI AI | **CODE READY / EXTERNAL INFRA REQUIRED** | Honest unavailable state without key |
+| TURN / WebRTC NAT | **CODE READY / EXTERNAL INFRA REQUIRED** | Config layer only; no TURN server in Node app |
+| Payments | **BLOCKED_EXTERNAL** | Sandbox LUMEN; real provider keys needed |
+| Google OAuth | **BLOCKED_EXTERNAL** | See `/api/integrations/status` |
+
+## Security quick wins (Phase 0)
+
+- `.env` / `.env.local` in `.gitignore`
+- Security headers (CSP, X-Frame-Options, nosniff, optional HSTS)
+- Production boot does not leak `DATABASE_URL` in errors
+- OpenAI errors log status/name, not API key
+- Auth sessions stored as hashes in JSON persistence tests
+
+Not in Phase 0: full auth redesign, CORS overhaul (main app is same-origin SPA), payment hardening.
+
+## Phase 1+ (out of scope for Phase 0)
+
+- Auth redesign (Google, phone)
+- UI / Figma implementation
+- Living Sylora / avatar rewrite
+- Monetization and subscriptions
+- Recommendation engine
+- 3D Sylora
+- New social / business / education product features
+
+## Verification commands
+
+```bash
+npm ci
+npm run lint
+npm run build
+npm test
+```
+
+Production guard tests: `tests/phase0-config-guards.test.mjs`
