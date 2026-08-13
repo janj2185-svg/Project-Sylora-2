@@ -43,11 +43,18 @@ test('TEST 4: missing OPENAI_API_KEY yields unavailable/degraded, not crash', ()
   assert.equal(prod.ai.status, AI_STATUS.UNAVAILABLE);
   const readiness = buildReadinessReport(prod, {
     postgres: { configured: true, ok: true },
-    redis: { configured: true, ok: true },
+    redis: { configured: false, ok: true },
     outbox: { configured: true, ok: true }
   });
   assert.equal(readiness.ai.status, AI_STATUS.UNAVAILABLE);
-  assert.equal(readiness.checks.ai.ok, false);
+  assert.equal(readiness.checks.ai.ok, true);
+  assert.equal(readiness.checks.ai.required, false);
+  const degradedBase = loadRuntimeConfig({
+    NODE_ENV: 'development',
+    OPENAI_API_KEY: 'test-key',
+    OPENAI_BASE_URL: 'http://127.0.0.1:9/v1'
+  });
+  assert.equal(degradedBase.ai.status, AI_STATUS.DEGRADED);
 });
 
 test('TEST 5: missing TURN yields correct realtime readiness status', () => {
@@ -61,20 +68,18 @@ test('TEST 5: missing TURN yields correct realtime readiness status', () => {
   assert.equal(prod.realtime.status, REALTIME_STATUS.NOT_READY);
   const readiness = buildReadinessReport(prod, {
     postgres: { configured: true, ok: true },
-    redis: { configured: true, ok: true },
+    redis: { configured: false, ok: true },
     outbox: { configured: true, ok: true }
   });
   assert.equal(readiness.ready, false);
   assert.equal(readiness.realtime.status, REALTIME_STATUS.NOT_READY);
+  assert.equal(readiness.checks.redis.status, 'DEGRADED');
 });
 
 test('production boot guard exits when DATABASE_URL is missing', async () => {
-  const child = spawn(process.execPath, ['-e', `
-    import { loadRuntimeConfig, enforceProductionBootGuard } from './src/config.mjs';
-    enforceProductionBootGuard(loadRuntimeConfig({ NODE_ENV: 'production', DATABASE_URL: '' }));
-  `], {
+  const child = spawn(process.execPath, ['src/server.mjs'], {
     cwd: process.cwd(),
-    env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '' },
+    env: { ...process.env, NODE_ENV: 'production', DATABASE_URL: '', REDIS_URL: '', PORT: '8794' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stderr = '';
@@ -83,4 +88,59 @@ test('production boot guard exits when DATABASE_URL is missing', async () => {
   assert.notEqual(code, 0);
   assert.match(stderr, /DATABASE_URL is required/);
   assert.doesNotMatch(stderr, /postgresql:\/\//);
+});
+
+test('development process can boot without DATABASE_URL / OpenAI / TURN', async () => {
+  const port = 8795;
+  const child = spawn(process.execPath, ['src/server.mjs'], {
+    env: {
+      ...process.env,
+      PORT: String(port),
+      NODE_ENV: 'development',
+      DATABASE_URL: '',
+      REDIS_URL: '',
+      OPENAI_API_KEY: '',
+      SYLORA_ICE_SERVERS_JSON: '',
+      SYLORA_DATA_FILE: `./tmp/phase0-dev-${port}.json`
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  try {
+    for (let i = 0; i < 50; i++) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/health`);
+        if (res.status > 0) {
+          const health = await res.json();
+          assert.equal(health.alive, true);
+          assert.equal(health.ai.status, AI_STATUS.DEGRADED);
+          assert.equal(health.realtime.status, REALTIME_STATUS.DEGRADED);
+          return;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error('development server did not start');
+  } finally {
+    child.kill('SIGTERM');
+  }
+});
+
+test('public diagnostics never embed secret values', () => {
+  const secret = 'totally-secret-value-do-not-leak';
+  const config = loadRuntimeConfig({
+    NODE_ENV: 'development',
+    DATABASE_URL: `postgresql://user:${secret}@127.0.0.1:5432/sylora`,
+    REDIS_URL: `redis://:${secret}@127.0.0.1:6379`,
+    OPENAI_API_KEY: secret,
+    SYLORA_TURN_CREDENTIAL: secret,
+    SYLORA_PAYMENT_SECRET_KEY: secret
+  });
+  const report = buildReadinessReport(config, {
+    postgres: { configured: true, ok: true },
+    redis: { configured: true, ok: true },
+    outbox: { configured: true, ok: true }
+  });
+  const json = JSON.stringify(report);
+  assert.equal(json.includes(secret), false);
+  assert.equal(json.includes('postgresql://'), false);
 });

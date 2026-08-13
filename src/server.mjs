@@ -343,14 +343,16 @@ async function api(req, res, url) {
   if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
-    const user=await requireUser(req,res);if(!user)return;if(!process.env.OPENAI_API_KEY)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
+    const user=await requireUser(req,res);if(!user)return;
+    if(!runtimeConfig.ai.configured)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED',aiStatus:runtimeConfig.ai.status,reason:'OPENAI_API_KEY_MISSING'});
+    if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     if(!String(req.headers['content-type']||'').startsWith('application/sdp'))return json(res,415,{error:'SDP_REQUIRED'});
     const sdp=await textBody(req);if(!sdp.trim())return json(res,400,{error:'SDP_REQUIRED'});
     const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20)};
     const personality=ecosystem.personalityFor('ai', user);
     const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
-    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
+    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${runtimeConfig.ai.apiKey}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
   }
   if(req.method==='POST'&&p==='/api/ai/realtime/transcript'){
     const user=await requireUser(req,res);if(!user)return;const input=await body(req),role=input.role==='assistant'?'assistant':input.role==='user'?'user':null,text=safeText(input.text,12000),sourceEventId=safeText(input.sourceEventId,160);if(!role||!text)return json(res,400,{error:'TRANSCRIPT_REQUIRED'});
@@ -509,7 +511,19 @@ async function api(req, res, url) {
   m=route('/api/conferences/:id/ai',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const owned=[...(await listConferences(user.id,'science')),...(await listConferences(user.id,'business'))],room=owned.find(x=>x.id===m.id);if(!room)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});if(!room.syloraEnabled)return json(res,403,{error:'SYLORA_NOT_ENABLED'});const input=await body(req),text=safeText(input.text,4000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});try{const response=await openai.responses.create({model:openaiModel,store:false,reasoning:{effort:'low'},max_output_tokens:1800,instructions:`You are Sylora participating on demand inside a private ${room.kind} conference. Be concise, factual and useful. Reply in the language of the question. You are an AI assistant, not a human participant. Do not invent meeting facts that were not provided. Do not perform account writes or claim you changed platform data. Room: ${JSON.stringify({title:room.title,description:room.description,kind:room.kind,participants:participants.map(x=>({displayName:x.displayName,role:x.role}))})}`,input:[{role:'user',content:text}]});const answer=safeText(response.output_text,8000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});const event={id:store.id(),text:answer,question:text,askedBy:store.publicUser(user),createdAt:store.now()};emitConference(m.id,'sylora',event);return json(res,200,{message:answer,event})}catch(error){console.error('Conference Sylora request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'})}}
   m=route('/api/conference-invites/:id/accept',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const accepted=await acceptConference(m.id,user.id);if(!accepted)return json(res,404,{error:'INVITE_NOT_FOUND'});return json(res,200,{accepted})}
   if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});emitLiveStartedEvents({live,host:user});ingestLivePlatformEvent(createPlatformEvent({eventType:'live.started',liveRoomId:live.id,actor:{type:'user',id:user.id},payload:{hostId:user.id,title:live.title}}));return json(res,201,{live});}
-  if(req.method==='GET'&&p==='/api/live/rtc-config'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{iceServers:liveIceServers,turnConfigured:hasTurnServer(liveIceServers)})}
+  if(req.method==='GET'&&p==='/api/live/rtc-config'){
+    const user=await requireUser(req,res);if(!user)return;
+    const { publicRealtimeDiagnostics } = await import('./runtime-status.mjs');
+    const realtime = publicRealtimeDiagnostics(runtimeConfig);
+    return json(res,200,{
+      iceServers: liveIceServers,
+      turnConfigured: hasTurnServer(liveIceServers),
+      readiness: realtime.status,
+      reason: realtime.reason,
+      note: realtime.note,
+      credentialVisibility: 'TURN username/credential are browser-visible for WebRTC ICE; prefer short-lived credentials. Unrelated server secrets are never included.'
+    });
+  }
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
   m=route('/api/live/:id/events',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const countsAsViewer=url.searchParams.get('control')!=='host';res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: presence\ndata: ${JSON.stringify({status:'connected'})}\n\n`);if(!liveStreams.has(live.id))liveStreams.set(live.id,new Set());const targets=liveStreams.get(live.id);targets.add(res);let viewerId=null,viewerHeartbeat=null,lastViewerCount=null;if(countsAsViewer){viewerId=store.id();if(!liveViewerLeases.has(live.id))liveViewerLeases.set(live.id,new Set());liveViewerLeases.get(live.id).add(viewerId);lastViewerCount=await touchLiveViewer(live.id,viewerId);emitLive(live.id,'viewers',{count:lastViewerCount});viewerHeartbeat=setInterval(async()=>{if(!targets.has(res))return;const count=await touchLiveViewer(live.id,viewerId);if(count!==lastViewerCount){lastViewerCount=count;emitLive(live.id,'viewers',{count})}},15_000)}const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25_000);req.on('close',()=>{clearInterval(heartbeat);if(viewerHeartbeat)clearInterval(viewerHeartbeat);targets.delete(res);if(!targets.size)liveStreams.delete(live.id);if(viewerId){const local=liveViewerLeases.get(live.id);local?.delete(viewerId);if(local&&!local.size)liveViewerLeases.delete(live.id);removeLiveViewer(live.id,viewerId).then(count=>emitLive(live.id,'viewers',{count})).catch(()=>{})}});return;}
   m=route('/api/live/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['host-ready','viewer-ready','viewer-rejected','offer','answer','ice','viewer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='viewer-ready'){if(user.id===live.hostId)return json(res,400,{error:'VIEWER_SIGNAL_REQUIRED'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else if(kind==='host-ready'||kind==='offer'||kind==='viewer-rejected'){if(user.id!==live.hostId)return json(res,403,{error:'HOST_ONLY_SIGNAL'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}else{if(await livePeerRegistry.owner(live.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitLive(live.id,'signal',signal);if(kind==='viewer-left')await livePeerRegistry.release(live.id,fromPeerId,user.id);return json(res,202,{accepted:true});}
@@ -571,7 +585,9 @@ async function api(req, res, url) {
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
   if(req.method==='POST'&&p==='/api/ai/chat'){
-    const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
+    const user=await requireUser(req,res);if(!user)return;
+    if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED',aiStatus:runtimeConfig.ai.status,reason:runtimeConfig.ai.configured?'OPENAI_BASE_URL_OVERRIDE':'OPENAI_API_KEY_MISSING',fallback:runtimeConfig.ai.status==='AI_DEGRADED'});
+    if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     const input=await body(req),text=safeText(input.text,6000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
     const view=safeText(input.view||'command_center',40)||'command_center';
     try{
@@ -582,8 +598,8 @@ async function api(req, res, url) {
       ecosystem.ensurePersonalAgent(user);
       ecosystem.recordActivity(user,{kind:'chat',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
       ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat'});
-      return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
-    }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'});}
+      return json(res,200,{message:answer,model:openaiModel,aiStatus:runtimeConfig.ai.status,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
+    }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR',aiStatus:runtimeConfig.ai.status});}
   }
   return json(res, 404, { error: 'NOT_FOUND' });
 }
@@ -613,10 +629,24 @@ function staticFile(req, res, url) {
 
 export const server = http.createServer(async (req, res) => {
   try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED'}); await api(req,res,url); } else staticFile(req,res,url); }
-  catch (e) { console.error(e); if (!res.headersSent) json(res, e.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: e.message || 'BAD_REQUEST' }); else res.end(); }
+  catch (e) {
+    const known = new Set(['BODY_TOO_LARGE', 'INVALID_JSON', 'UNSUPPORTED_MEDIA_TYPE', 'MEDIA_TOO_LARGE', 'INVALID_VIDEO_FILE']);
+    const safeCode = known.has(e?.message) ? e.message : 'BAD_REQUEST';
+    console.error(e?.name || 'error', safeCode);
+    if (!res.headersSent) json(res, e?.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: safeCode });
+    else res.end();
+  }
 });
 
 if (runtimeConfig.nodeEnv !== 'test') {
+  console.log('SYLORA boot', {
+    mode: runtimeConfig.nodeEnv,
+    persistence: runtimeConfig.database.configured ? 'postgres' : 'json-dev',
+    databaseConfigured: runtimeConfig.database.configured,
+    redisConfigured: runtimeConfig.redis.configured,
+    ai: runtimeConfig.ai.status,
+    webrtc: runtimeConfig.realtime.status
+  });
   Promise.allSettled([liveFanout.start(),conferenceFanout.start(),realtimeFanout.start()]).then(()=>realtimeOutbox.start());
   server.listen(port, () => console.log(`SYLORA running on http://localhost:${port}`));
   const shutdown=async()=>{server.close();realtimeOutbox.stop();await Promise.allSettled([liveFanout.close(),conferenceFanout.close(),realtimeFanout.close()]);await Promise.allSettled([postgres.close(),redis.close()]);process.exit(0)};

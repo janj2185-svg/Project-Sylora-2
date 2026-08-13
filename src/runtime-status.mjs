@@ -13,17 +13,18 @@ import {
 
 export function publicAiDiagnostics(config) {
   const status = resolveAiStatus(config);
-  const reason = status === AI_STATUS.CONFIGURED
-    ? 'OPENAI_API_KEY_SET'
-    : status === AI_STATUS.UNAVAILABLE
-      ? 'OPENAI_API_KEY_MISSING'
-      : 'OPENAI_API_KEY_MISSING_DEV_DEGRADED';
+  let reason = 'OPENAI_API_KEY_MISSING_DEV_DEGRADED';
+  if (status === AI_STATUS.CONFIGURED) reason = 'OPENAI_API_KEY_SET';
+  else if (status === AI_STATUS.UNAVAILABLE) reason = 'OPENAI_API_KEY_MISSING';
+  else if (config.ai.configured) reason = 'OPENAI_BASE_URL_OVERRIDE';
   return {
     status,
     configured: config.ai.configured,
     reason,
     model: config.ai.configured ? config.ai.model : null,
     fallback: status === AI_STATUS.DEGRADED
+      ? (config.ai.configured ? 'custom_base_url' : 'dev_local_unavailable')
+      : null
   };
 }
 
@@ -79,24 +80,30 @@ export function buildReadinessReport(config, dependencyPing = {}) {
       status: production && !config.database.configured ? 'NOT_READY' : postgres.ok ? 'READY' : 'NOT_READY'
     },
     redis: {
-      ok: production ? redis.ok && redis.configured : redis.ok,
+      // Missing Redis is OK for single-instance; only fail when URL is set but unreachable.
+      ok: redis.configured ? !!redis.ok : true,
       configured: redis.configured ?? config.redis.configured,
-      status: production && !config.redis.configured ? 'NOT_READY' : redis.ok ? 'READY' : 'DEGRADED',
+      status: !config.redis.configured
+        ? 'DEGRADED'
+        : (redis.ok ? 'READY' : 'NOT_READY'),
       expectation: redisProductionExpectation(config)
     },
     outbox: {
       ok: outbox.ok ?? true,
       configured: outbox.configured ?? false,
-      status: outbox.ok ? 'READY' : 'DEGRADED'
+      status: outbox.ok ? (outbox.configured ? 'READY' : 'DEGRADED') : 'NOT_READY'
     },
     config: {
       ok: validateProductionConfig(config).valid,
       status: validateProductionConfig(config).valid ? 'READY' : 'NOT_READY'
     },
     ai: {
-      ok: ai.status !== AI_STATUS.UNAVAILABLE,
+      // AI status is reported; missing AI does not block core traffic readiness.
+      ok: true,
+      required: false,
       status: ai.status,
-      reason: ai.reason
+      reason: ai.reason,
+      fallback: ai.fallback
     },
     realtime: {
       ok: realtime.status !== REALTIME_STATUS.NOT_READY,
@@ -106,19 +113,22 @@ export function buildReadinessReport(config, dependencyPing = {}) {
     }
   };
 
+  const redisHardFail = !!(redis.configured && redis.ok === false);
   const ready = checks.server.ok
     && checks.database.ok
     && checks.config.ok
-    && (production ? checks.redis.ok : true)
+    && !redisHardFail
     && (production ? realtime.status !== REALTIME_STATUS.NOT_READY : true);
 
   return {
     ready,
+    status: ready ? 'ready' : 'not_ready',
     mode: config.nodeEnv,
     persistence: persistenceLabel(config),
     checks,
     ai,
     realtime,
+    config: publicConfigDiagnostics(config),
     dependencies: { postgres, redis, outbox }
   };
 }
@@ -126,11 +136,13 @@ export function buildReadinessReport(config, dependencyPing = {}) {
 export function buildLivenessReport(config, dependencyPing = {}) {
   return {
     status: 'ok',
+    alive: true,
     service: 'sylora-core',
     mode: config.nodeEnv,
     persistence: persistenceLabel(config),
     ai: publicAiDiagnostics(config),
     realtime: publicRealtimeDiagnostics(config),
+    config: publicConfigDiagnostics(config),
     dependencies: dependencyPing
   };
 }

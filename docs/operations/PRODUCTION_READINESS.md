@@ -44,10 +44,10 @@ Checks (machine-readable `checks` object):
 |-----------|------------------------|
 | `server` | Always ready if responding |
 | `database` | PostgreSQL configured and ping OK |
-| `redis` | Configured and ping OK (multi-instance LIVE/realtime) |
+| `redis` | Optional for single-instance; `DEGRADED` when absent; hard-fail only if URL set but unreachable |
 | `outbox` | OK when PostgreSQL outbox available |
 | `config` | Production config validation passed |
-| `ai` | `AI_UNAVAILABLE` fails readiness check (not a crash) |
+| `ai` | Reported (`AI_*`); missing key does **not** block overall readiness |
 | `realtime` | TURN required — `NOT_READY` without TURN in production |
 
 HTTP 503 when `ready: false`.
@@ -84,7 +84,7 @@ Redis is **not** required to boot in development.
 | Cross-instance fanout | Local only |
 | Durable realtime outbox publish | Fails for distributed path |
 
-Production readiness expects Redis for scaling LIVE and durable realtime.
+Redis is **not** a production boot requirement for a single instance. Missing Redis is reported as `DEGRADED` with `requiredForMultiInstance: true` so operators know multi-node Live/SSE will not scale.
 
 Diagnostics: `checks.redis.expectation` and `redis.capabilities` in config module.
 

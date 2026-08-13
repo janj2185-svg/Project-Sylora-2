@@ -106,9 +106,13 @@ export function loadRuntimeConfig(env = process.env) {
 }
 
 export function resolveAiStatus(config) {
-  if (config.ai.configured) return AI_STATUS.CONFIGURED;
-  if (config.nodeEnv === RuntimeMode.PRODUCTION) return AI_STATUS.UNAVAILABLE;
-  return AI_STATUS.DEGRADED;
+  if (!config.ai.configured) {
+    if (config.nodeEnv === RuntimeMode.PRODUCTION) return AI_STATUS.UNAVAILABLE;
+    return AI_STATUS.DEGRADED;
+  }
+  const baseUrl = String(config.ai.baseUrl || '').trim();
+  if (baseUrl && !/api\.openai\.com/i.test(baseUrl)) return AI_STATUS.DEGRADED;
+  return AI_STATUS.CONFIGURED;
 }
 
 export function resolveRealtimeStatus(config) {
@@ -156,11 +160,17 @@ export function redisCapabilityMap() {
 
 export function redisProductionExpectation(config) {
   if (config.nodeEnv !== RuntimeMode.PRODUCTION) {
-    return { required: false, reason: 'OPTIONAL_IN_DEV' };
+    return {
+      requiredForBoot: false,
+      requiredForMultiInstance: false,
+      reason: 'OPTIONAL_IN_DEV',
+      note: 'Single-instance development works with in-memory fallbacks.'
+    };
   }
   return {
-    required: true,
+    requiredForBoot: false,
+    requiredForMultiInstance: true,
     reason: 'PRODUCTION_LIVE_REALTIME_SCALING',
-    note: 'Redis is required for multi-instance LIVE/realtime fanout and durable outbox.'
+    note: 'Redis is not required to boot a single production instance, but multi-instance LIVE/SSE fanout and shared rate limits need Redis.'
   };
 }
