@@ -17,6 +17,7 @@ test('Living Sylora observes gift and produces structured reaction', async () =>
   assert.ok(reaction.payload.emotion);
   assert.ok(['none', 'highlight_gift'].includes(reaction.payload.action));
   assert.equal(reaction.payload.fallback, true);
+  assert.equal(reaction.payload.source, 'local_fallback');
   assert.equal(reaction.payload.provider, 'local_fallback');
-  assert.equal(reaction.payload.aiStatus, 'AI_DEGRADED');
+  assert.equal(reaction.payload.aiStatus, 'AI_UNAVAILABLE');
 });
