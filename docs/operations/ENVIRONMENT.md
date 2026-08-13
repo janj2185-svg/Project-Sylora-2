@@ -30,7 +30,7 @@ This document describes runtime environment variables for SYLORA core. Do not co
 |----------|----------|-----|------|------------|-------|
 | `REDIS_URL` | Optional in dev | Optional | Usually empty | **Required for multi-instance LIVE/realtime** | Used for rate limits (with in-memory fallback), cross-instance fanout, viewer counts, peer leases, durable outbox |
 
-Without Redis in development, LIVE works on a single instance with in-memory fallbacks. Production readiness reports `NOT_READY` for scaling-sensitive paths when Redis is absent.
+Without Redis, LIVE works on a single instance with in-memory fallbacks. Missing Redis is reported as `DEGRADED` (multi-instance scaling note); it does not hard-fail single-instance production readiness.
 
 ## AI (OpenAI)
 
