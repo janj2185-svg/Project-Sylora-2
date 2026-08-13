@@ -25,10 +25,15 @@ test('auth → post → gift → ledger works end to end', async () => {
   try {
     const health = await call('/api/health');
     assert.equal(health.status, 'ok');
+    assert.equal(health.alive, true);
     assert.equal(health.persistence, 'json-dev-runtime');
+    assert.equal(health.ai.status, 'AI_UNAVAILABLE');
     assert.equal(health.dependencies.postgres.configured, false);
     assert.equal(health.dependencies.redis.configured, false);
-    assert.equal((await call('/api/ready')).ready, true);
+    const ready = await call('/api/ready');
+    assert.equal(ready.ready, true);
+    assert.equal(ready.checks.server.status, 'ok');
+    assert.equal(ready.ai.status, 'AI_UNAVAILABLE');
     const unauthRtc = await fetch(`${base}/api/live/rtc-config`);
     assert.equal(unauthRtc.status, 401);
     const alice = await call('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: 'alice@test.dev', username: 'alice', password: 'password123' }) });
