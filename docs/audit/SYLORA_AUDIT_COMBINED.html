@@ -1,0 +1,3519 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Forensic Audit Report</title>
+<style>body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 11pt;
+  line-height: 1.45;
+  color: #1a1a2e;
+  max-width: 100%;
+}
+h1 { font-size: 22pt; color: #4a3aff; margin-top: 0; page-break-after: avoid; }
+h2 { font-size: 16pt; color: #2d2a5a; page-break-after: avoid; border-bottom: 1px solid #e8e6ff; padding-bottom: 4px; }
+h3 { font-size: 13pt; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 9.5pt; margin: 12px 0; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: #f4f3ff; font-weight: 600; }
+tr:nth-child(even) { background: #fafafa; }
+code { background: #f4f4f8; padding: 1px 4px; border-radius: 3px; font-size: 9pt; }
+pre { background: #f8f8fc; padding: 10px; border-radius: 6px; font-size: 8.5pt; overflow-x: auto; }
+blockquote { border-left: 3px solid #4a3aff; margin: 12px 0; padding: 8px 16px; background: #faf9ff; }
+hr { border: none; border-top: 2px solid #e8e6ff; margin: 24px 0; }
+a { color: #4a3aff; }
+@media print {
+  h1, h2, h3 { page-break-after: avoid; }
+  table, pre, blockquote { page-break-inside: avoid; }
+}
+
+  @page { size: A4; margin: 18mm 16mm; }
+  .cover { text-align:center; padding: 80px 20px 40px; page-break-after: always; }
+  .cover h1 { font-size: 28pt; margin-bottom: 8px; }
+  .cover p { color: #555; font-size: 12pt; }
+  hr { page-break-before: always; }
+</style>
+</head>
+<body>
+<section class="cover">
+  <p style="letter-spacing:.12em;font-size:11pt;color:#4a3aff">PROJECT SYLORA 2</p>
+  <h1>Forensic Audit Report</h1>
+  <p>Baseline state assessment · 2026-08-13</p>
+  <p style="margin-top:40px;font-size:10pt;color:#888">Evidence-based forensic audit</p>
+</section>
+<h1>SYLORA — Full Forensic Audit (Source of Truth)</h1>
+<p><strong>Project:</strong> Project Sylora 2 (SYLORA)<br><strong>Audit date:</strong> 2026-08-13<br><strong>Auditor:</strong> Cloud forensic pass (code + runtime + screenshots)<br><strong>Branch baseline:</strong> <code>main</code> @ forensic run<br><strong>Rule:</strong> Claims require evidence. README and prior agent reports were not trusted without verification.</p>
+<hr>
+<h2>Related documents</h2>
+<table>
+<thead>
+<tr>
+<th>Document</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Architecture (as-is)</td>
+<td><a href="./SYLORA_ARCHITECTURE_MAP.md">SYLORA_ARCHITECTURE_MAP.md</a></td>
+</tr>
+<tr>
+<td>UI map</td>
+<td><a href="./SYLORA_UI_MAP.md">SYLORA_UI_MAP.md</a></td>
+</tr>
+<tr>
+<td>Real vs Mock</td>
+<td><a href="./SYLORA_REAL_VS_MOCK.md">SYLORA_REAL_VS_MOCK.md</a></td>
+</tr>
+<tr>
+<td>Duplication</td>
+<td><a href="./SYLORA_DUPLICATION_REPORT.md">SYLORA_DUPLICATION_REPORT.md</a></td>
+</tr>
+<tr>
+<td>Security</td>
+<td><a href="./SYLORA_SECURITY_AUDIT.md">SYLORA_SECURITY_AUDIT.md</a></td>
+</tr>
+<tr>
+<td>Production readiness</td>
+<td><a href="./SYLORA_PRODUCTION_READINESS.md">SYLORA_PRODUCTION_READINESS.md</a></td>
+</tr>
+<tr>
+<td>Remediation roadmap</td>
+<td><a href="./SYLORA_REMEDIATION_PLAN.md">SYLORA_REMEDIATION_PLAN.md</a></td>
+</tr>
+<tr>
+<td>Screenshots</td>
+<td><code>/workspace/audit/screenshots/desktop/</code>, <code>mobile/</code></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>1. Executive summary</h2>
+<p>SYLORA is a <strong>monolithic Node.js application</strong> serving a <strong>vanilla JS SPA</strong> (~897 LOC frontend, ~6500 LOC backend core+ecosystem) with <strong>296 HTTP endpoints</strong>, optional <strong>PostgreSQL/Redis</strong>, and <strong>OpenAI</strong> integration. The product presents a <strong>broad surface area</strong> (social, live, AI, business OS, science, gifts) but <strong>most capabilities are UI + API stubs</strong> backed by JSON file storage in dev.</p>
+<h3>Completion (weighted, honest)</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>%</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Overall SYLORA completion</strong></td>
+<td><strong>27%</strong></td>
+</tr>
+<tr>
+<td>UI completion</td>
+<td>68%</td>
+</tr>
+<tr>
+<td>Functional completion</td>
+<td>22%</td>
+</tr>
+<tr>
+<td>Backend completion</td>
+<td>48%</td>
+</tr>
+<tr>
+<td>End-to-end completion</td>
+<td>14%</td>
+</tr>
+<tr>
+<td>Production readiness</td>
+<td>18%</td>
+</tr>
+</tbody></table>
+<h3>Module counts</h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Verified 100% working (strict E2E)</td>
+<td><strong>4</strong></td>
+</tr>
+<tr>
+<td>Partial</td>
+<td>45</td>
+</tr>
+<tr>
+<td>Mock/static</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Broken</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Missing</td>
+<td>15</td>
+</tr>
+<tr>
+<td>P0 blockers</td>
+<td>4</td>
+</tr>
+<tr>
+<td>P1 issues</td>
+<td>12</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>2. What was run (evidence log)</h2>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Result</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm install</code></td>
+<td>PASS</td>
+<td>59 packages, 0 vulns</td>
+</tr>
+<tr>
+<td><code>npm run lint</code></td>
+<td>PASS</td>
+<td>exit 0</td>
+</tr>
+<tr>
+<td><code>npm run build</code></td>
+<td>PASS</td>
+<td>syntax-check only</td>
+</tr>
+<tr>
+<td><code>npm test</code></td>
+<td><strong>134/134 PASS</strong></td>
+<td>DATABASE_URL= REDIS_URL= empty</td>
+</tr>
+<tr>
+<td>Server <code>node src/server.mjs</code></td>
+<td>PASS</td>
+<td>:8787</td>
+</tr>
+<tr>
+<td><code>GET /api/health</code></td>
+<td>ok, json-dev-runtime</td>
+<td>runtime curl</td>
+</tr>
+<tr>
+<td>Register → post → gift → live</td>
+<td>PASS</td>
+<td>node runtime script</td>
+</tr>
+<tr>
+<td>AI chat</td>
+<td>503 AI_PROVIDER_NOT_CONFIGURED</td>
+<td>expected without key</td>
+</tr>
+<tr>
+<td>Docker compose</td>
+<td><strong>NOT RUN</strong></td>
+<td>docker not installed</td>
+</tr>
+<tr>
+<td>Browser screenshots</td>
+<td>22 captured</td>
+<td>audit/screenshots/</td>
+</tr>
+<tr>
+<td>WebRTC live/calls</td>
+<td><strong>NOT VERIFIED</strong></td>
+<td>requires browser media</td>
+</tr>
+<tr>
+<td>Postgres production mode</td>
+<td><strong>NOT VERIFIED</strong></td>
+<td>no DB in audit env</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>3. Inventory (repository map)</h2>
+<p>See <a href="./SYLORA_ARCHITECTURE_MAP.md">SYLORA_ARCHITECTURE_MAP.md</a>.</p>
+<p><strong>Applications:</strong> 1 (Node server + static SPA)<br><strong>Packages:</strong> root only (<code>sylora@0.1.0</code>)<br><strong>SDK:</strong> <code>sdk/js/</code> minimal<br><strong>Database:</strong> <code>infra/postgres/schema.sql</code> + migrations 002–012<br><strong>Docker:</strong> Dockerfile + compose.yaml<br><strong>CI/CD:</strong> none<br><strong>Tests:</strong> 134 files in <code>tests/</code><br><strong>Assets:</strong> ~45MB PNG in <code>public/assets/</code><br><strong>Deprecated:</strong> old <code>docs/audit/*</code>, <code>renderProfileLegacy</code>, patch scripts  </p>
+<hr>
+<h2>4. UI / navigation audit</h2>
+<p>Full per-page detail: <a href="./SYLORA_UI_MAP.md">SYLORA_UI_MAP.md</a>.</p>
+<h3>Navigation issues found</h3>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/videos</code>, <code>/gifts</code>, <code>/ai</code> not in left rail (by design but hidden)</td>
+<td>P3</td>
+</tr>
+<tr>
+<td>Duplicate wallet surfaces (header, profile, gifts)</td>
+<td>P2</td>
+</tr>
+<tr>
+<td>LIVE &quot;Following&quot; always empty</td>
+<td>P2</td>
+</tr>
+<tr>
+<td>Admin only via More grid</td>
+<td>OK</td>
+</tr>
+<tr>
+<td>Locale selector offers 14 langs; server PATCH only uk/pl/en</td>
+<td>P2</td>
+</tr>
+<tr>
+<td>No Google sign-in button</td>
+<td>P1 product gap</td>
+</tr>
+</tbody></table>
+<h3>Proposed unified IA (not implemented)</h3>
+<pre><code>Home | Live | Create▾ | Discover | Messages | Sylora | Profile
+Settings▾ → Identity, Security, Business tools, Developer, Admin
+</code></pre>
+<hr>
+<h2>5. Button interaction matrix</h2>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Status</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Register (API)</td>
+<td><strong>WORKING</strong></td>
+<td>POST 201 runtime</td>
+</tr>
+<tr>
+<td>Register (UI form)</td>
+<td>PARTIAL</td>
+<td>Same API; not browser-automated</td>
+</tr>
+<tr>
+<td>Login</td>
+<td><strong>WORKING</strong></td>
+<td>API 401 on bad creds</td>
+</tr>
+<tr>
+<td>Logout</td>
+<td><strong>WORKING</strong></td>
+<td>API 200</td>
+</tr>
+<tr>
+<td>Google auth</td>
+<td><strong>MISSING</strong></td>
+<td>No UI/route</td>
+</tr>
+<tr>
+<td>Profile edit</td>
+<td>PARTIAL</td>
+<td>PATCH /api/me exists</td>
+</tr>
+<tr>
+<td>Follow/like/comment</td>
+<td>PARTIAL</td>
+<td>API exists</td>
+</tr>
+<tr>
+<td>Language selector</td>
+<td><strong>WORKING</strong></td>
+<td>onchange → setLocale + PATCH (app.js account())</td>
+</tr>
+<tr>
+<td>Messages/calls</td>
+<td>PARTIAL</td>
+<td>API; WebRTC BLOCKED</td>
+</tr>
+<tr>
+<td>Start/join stream</td>
+<td>PARTIAL</td>
+<td>Create API OK; media BLOCKED</td>
+</tr>
+<tr>
+<td>Gifts send</td>
+<td><strong>WORKING</strong></td>
+<td>POST 201 TEST LUMEN</td>
+</tr>
+<tr>
+<td>Wallet/payments</td>
+<td><strong>MOCK</strong></td>
+<td>TEST label</td>
+</tr>
+<tr>
+<td>Subscriptions</td>
+<td><strong>MISSING</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>AI interaction</td>
+<td><strong>BLOCKED</strong></td>
+<td>No OPENAI_API_KEY</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td><strong>WORKING</strong></td>
+<td>Navigation</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>6. Responsive audit</h2>
+<table>
+<thead>
+<tr>
+<th>Viewport</th>
+<th>Score</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Mobile 360–412</td>
+<td>68/100</td>
+<td>Dock OK; tall heroes</td>
+</tr>
+<tr>
+<td>Tablet</td>
+<td><strong>NOT VERIFIED</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Desktop 1366–1920</td>
+<td>72/100</td>
+<td>Sidebar layout works</td>
+</tr>
+</tbody></table>
+<p>Issues: overflow rare; touch targets generally OK; modals not fully tested; keyboard safe areas partially via CSS <code>viewport-fit=cover</code>.</p>
+<hr>
+<h2>7. Design system audit</h2>
+<p><strong>Verdict:</strong> Light futuristic SYLORA aesthetic <strong>is present</strong> (aurora, glass cards, horizon PNG) but <strong>fragmented across 11 CSS files</strong> with overlapping tokens.</p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Consistent?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Typography</td>
+<td>Mostly (Inter-like stack in styles.css)</td>
+</tr>
+<tr>
+<td>Colors/gradients</td>
+<td>Yes — warm light theme</td>
+</tr>
+<tr>
+<td>Spacing/cards</td>
+<td>Similar radius ~28px heroes</td>
+</tr>
+<tr>
+<td>Dark dashboard drift</td>
+<td><strong>No</strong> — stays light</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>Mix emoji + unicode symbols</td>
+</tr>
+<tr>
+<td>Loading/skeleton</td>
+<td>Minimal spinners</td>
+</tr>
+<tr>
+<td>a11y</td>
+<td>Partial ARIA; contrast generally OK on light bg</td>
+</tr>
+</tbody></table>
+<p>Pages that feel like different products: <strong>none severe</strong> — consolidation CSS unified scenes per <code>data-view</code>.</p>
+<hr>
+<h2>8. Sylora AI audit</h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Provider</td>
+<td>OpenAI via <code>openai</code> npm ^7.4</td>
+</tr>
+<tr>
+<td>Models</td>
+<td><code>OPENAI_MODEL</code> default gpt-5.6; realtime gpt-realtime-2.1</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>server.mjs + ecosystem/service.mjs</td>
+</tr>
+<tr>
+<td>System prompts</td>
+<td>personalityFor + contextPack per view</td>
+</tr>
+<tr>
+<td>Tool calling</td>
+<td>3 tools, 3-round max</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>JSON/PG; user + ai_confirmed sources</td>
+</tr>
+<tr>
+<td>Streaming text</td>
+<td>Via Responses API output_text (not SSE to client)</td>
+</tr>
+<tr>
+<td>Voice</td>
+<td>OpenAI Realtime HTTP SDP exchange</td>
+</tr>
+<tr>
+<td>STT/TTS</td>
+<td>Browser Speech + OpenAI transcription config</td>
+</tr>
+<tr>
+<td>Multilingual</td>
+<td>UI i18n; AI replies in user language (prompt)</td>
+</tr>
+<tr>
+<td>Business/creator/education assistants</td>
+<td>Ecosystem personas — <strong>PARTIAL</strong></td>
+</tr>
+<tr>
+<td>Live co-host</td>
+<td>living-sylora + hooks — <strong>BLOCKED</strong> without AI</td>
+</tr>
+<tr>
+<td>Moderation</td>
+<td>Safety filter patterns in living-sylora</td>
+</tr>
+<tr>
+<td>Rate limit</td>
+<td>12/min/user AI</td>
+</tr>
+<tr>
+<td>Fallback</td>
+<td>503 when no key; lexical search fallback</td>
+</tr>
+<tr>
+<td>Cost controls</td>
+<td>trackAiUsage in ecosystem — not verified</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th>Readiness</th>
+<th>%</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AI UI</td>
+<td>75%</td>
+</tr>
+<tr>
+<td>AI backend</td>
+<td>55% (code) / <strong>0% live</strong> without key</td>
+</tr>
+<tr>
+<td>Voice</td>
+<td>40% code / <strong>BLOCKED</strong></td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>70%</td>
+</tr>
+<tr>
+<td>Live co-host</td>
+<td>15%</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>9. Living Sylora / Avatar audit</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Reality</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Model format</td>
+<td><strong>PNG sprite sheets</strong> (not GLB/GLTF)</td>
+</tr>
+<tr>
+<td>Renderer</td>
+<td>DOM + CSS + <code>&lt;img&gt;</code> layers</td>
+</tr>
+<tr>
+<td>Skeleton/rig/blendshapes</td>
+<td><strong>NOT SUPPORTED BY CURRENT MODEL</strong></td>
+</tr>
+<tr>
+<td>Blinking/gaze</td>
+<td>CSS classes + JS timers — <strong>REAL</strong></td>
+</tr>
+<tr>
+<td>Lipsync</td>
+<td>CSS viseme grid from audio bands — <strong>FAKE/SIMULATION</strong></td>
+</tr>
+<tr>
+<td>Emotions</td>
+<td>PNG atlases exist; limited use in AI hero</td>
+</tr>
+<tr>
+<td>Voice sync</td>
+<td>Partial viseme frames</td>
+</tr>
+<tr>
+<td>Realtime 3D</td>
+<td><strong>MISSING</strong></td>
+</tr>
+<tr>
+<td>Mobile performance</td>
+<td>Heavy PNG loads (~2MB base avatar)</td>
+</tr>
+</tbody></table>
+<p>Classification: <strong>CSS/PNG/SPRITE — NOT real 3D avatar.</strong></p>
+<hr>
+<h2>10. Live / streaming audit</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Class</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>UI</td>
+<td>UI exists</td>
+</tr>
+<tr>
+<td>Create room</td>
+<td>Functional locally (API verified)</td>
+</tr>
+<tr>
+<td>WebRTC mesh</td>
+<td>Prototype (code complete, not E2E tested)</td>
+</tr>
+<tr>
+<td>RTMP/OBS ingest</td>
+<td>Missing (companion is control bridge only)</td>
+</tr>
+<tr>
+<td>Chat/likes/gifts</td>
+<td>Functional locally (API + SSE)</td>
+</tr>
+<tr>
+<td>Battles</td>
+<td>Partial</td>
+</tr>
+<tr>
+<td>Recording</td>
+<td>Prototype (canvas capture in studio)</td>
+</tr>
+<tr>
+<td>TURN</td>
+<td><strong>BLOCKED_EXTERNAL</strong></td>
+</tr>
+<tr>
+<td>Production-ready</td>
+<td><strong>No</strong></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>11. Live gifts audit</h2>
+<p>Catalog: 10 gifts in <code>/api/gifts</code> (spark…infinite-sylora). Gift V2 passports: 20 named in <code>gift-v2/catalog.js</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Gift tier</th>
+<th>Renderer</th>
+<th>Sound</th>
+<th>Backend tx</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>basic–legendary v1 IDs</td>
+<td>GPU Three.js procedural OR 2D atlas</td>
+<td>gift-sfx.js</td>
+<td>REAL in JSON; atomic in PG tests</td>
+</tr>
+<tr>
+<td>phoenix-rebirth v2</td>
+<td>WebGL + keyframe PNGs</td>
+<td>physical-audio</td>
+<td>Same send pipeline</td>
+</tr>
+</tbody></table>
+<p><strong>Not a video gift system</strong> — interactive WebGL/Canvas with optional LIVE segmentation (<strong>BLOCKED</strong> without MediaPipe bundle).</p>
+<hr>
+<h2>12. Authentication audit</h2>
+<table>
+<thead>
+<tr>
+<th>Flow</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Registration</td>
+<td>PASS API</td>
+</tr>
+<tr>
+<td>Login</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>Logout</td>
+<td>PASS (even without token)</td>
+</tr>
+<tr>
+<td>Session refresh</td>
+<td><strong>MISSING</strong> — single long-lived bearer</td>
+</tr>
+<tr>
+<td>Recovery/verify</td>
+<td><strong>MISSING</strong></td>
+</tr>
+<tr>
+<td>Google/phone</td>
+<td><strong>MISSING</strong></td>
+</tr>
+<tr>
+<td>Protected routes</td>
+<td>Client-side renderAuth + server 401</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>env email list → role admin</td>
+</tr>
+<tr>
+<td>scrypt passwords</td>
+<td>PASS (auth.mjs)</td>
+</tr>
+<tr>
+<td>Token storage</td>
+<td>localStorage — XSS risk</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>13. Backend API table</h2>
+<p><strong>296 endpoints</strong> documented in architecture map. Summary:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Endpoints</th>
+<th>Frontend uses</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Core social/live</td>
+<td>~90</td>
+<td>app.js</td>
+</tr>
+<tr>
+<td>Ecosystem</td>
+<td>~206</td>
+<td>~140 via app.js, 5 command-palette, 1 obs-overlay</td>
+</tr>
+<tr>
+<td>Backend-only</td>
+<td>~150</td>
+<td>No UI caller</td>
+</tr>
+</tbody></table>
+<p>Full METHOD|PATH table: grep <code>src/server.mjs</code> + <code>src/ecosystem/routes.mjs</code> or see subagent export in git history.</p>
+<p>Status: Most return JSON; <strong>live verification</strong> only on subset without Postgres/OpenAI.</p>
+<hr>
+<h2>14. Database audit</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>JSON dev</th>
+<th>Postgres schema</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Users/sessions</td>
+<td>yes</td>
+<td>users, sessions</td>
+</tr>
+<tr>
+<td>Social</td>
+<td>yes</td>
+<td>posts, reactions, comments</td>
+</tr>
+<tr>
+<td>Messages</td>
+<td>yes</td>
+<td>conversations, messages</td>
+</tr>
+<tr>
+<td>Live</td>
+<td>yes</td>
+<td>live_rooms, live_messages + migration 012 state</td>
+</tr>
+<tr>
+<td>Wallet/gifts</td>
+<td>yes</td>
+<td>wallets, ledger, gifts</td>
+</tr>
+<tr>
+<td>AI</td>
+<td>yes</td>
+<td>ai_messages, ai_memories, ai_actions</td>
+</tr>
+<tr>
+<td>Ecosystem</td>
+<td>JSON blobs in store</td>
+<td>migrations 010–011 ecosystem</td>
+</tr>
+</tbody></table>
+<p><strong>Schema drift risk:</strong> server still writes many entities only to JSON store even when auth social PG enabled (communities, courses, videos, reports).</p>
+<hr>
+<h2>15. Performance</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Finding</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>public/assets</td>
+<td>45MB</td>
+</tr>
+<tr>
+<td>app.js</td>
+<td>897 LOC single file — no minification</td>
+</tr>
+<tr>
+<td>11 CSS files</td>
+<td>Sequential blocking</td>
+</tr>
+<tr>
+<td>Three.js vendor</td>
+<td>~1MB+</td>
+</tr>
+<tr>
+<td>Lazy loading</td>
+<td>Minimal</td>
+</tr>
+<tr>
+<td>Gift GPU</td>
+<td>Can stress mobile GPU — quality governor exists</td>
+</tr>
+<tr>
+<td>ffmpeg</td>
+<td>Sync spawn blocks event loop during transcode</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>16. Accessibility</h2>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Keyboard nav</td>
+<td>Partial — buttons focusable</td>
+</tr>
+<tr>
+<td>Focus visible</td>
+<td>CSS partial</td>
+</tr>
+<tr>
+<td>Labels</td>
+<td>Some aria-label</td>
+</tr>
+<tr>
+<td>Contrast</td>
+<td>Generally OK light theme</td>
+</tr>
+<tr>
+<td>Touch targets</td>
+<td>Mobile dock OK</td>
+</tr>
+<tr>
+<td>Reduced motion</td>
+<td>Respected in scheduleSyloraLife</td>
+</tr>
+<tr>
+<td>Forms</td>
+<td>Basic labels missing on some prompts</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>17. Test coverage truth</h2>
+<p><strong>134 tests PASS</strong> — but they <strong>do not</strong> mean product-ready:</p>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Covered?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Unit (parsers, gifts, motion)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>API integration (in-memory server)</td>
+<td>Yes — strong vertical slices</td>
+</tr>
+<tr>
+<td>Postgres (pg-mem)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>E2E browser</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>WebRTC</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>AI live OpenAI</td>
+<td>Mock server only</td>
+</tr>
+<tr>
+<td>Security penetration</td>
+<td><strong>No</strong></td>
+</tr>
+<tr>
+<td>Load</td>
+<td><strong>No</strong></td>
+</tr>
+</tbody></table>
+<p>Critical flows <strong>without</strong> E2E tests: live viewer, calls, payments, OAuth, AI voice.</p>
+<hr>
+<h2>18. User journeys</h2>
+<table>
+<thead>
+<tr>
+<th>Journey</th>
+<th>Result</th>
+<th>Break point</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>NEW: landing → register → home</td>
+<td><strong>PARTIAL</strong></td>
+<td>Home renders; onboarding <strong>MISSING</strong></td>
+</tr>
+<tr>
+<td>RETURNING: login → nav → profile</td>
+<td><strong>PARTIAL</strong></td>
+<td>API OK; full UI not browser-tested</td>
+</tr>
+<tr>
+<td>AI: open → message → history</td>
+<td><strong>FAIL</strong></td>
+<td>503 no OpenAI key</td>
+</tr>
+<tr>
+<td>CREATOR: studio → go live</td>
+<td><strong>BLOCKED</strong></td>
+<td>Camera/WebRTC not audited</td>
+</tr>
+<tr>
+<td>VIEWER: discover → join → gift</td>
+<td><strong>PARTIAL</strong></td>
+<td>Gift send API OK; watch <strong>BLOCKED</strong></td>
+</tr>
+<tr>
+<td>SOCIAL: follow → message → call</td>
+<td><strong>PARTIAL</strong></td>
+<td>Calls <strong>BLOCKED</strong></td>
+</tr>
+<tr>
+<td>MONETIZATION: wallet → purchase</td>
+<td><strong>FAIL</strong></td>
+<td>TEST LUMEN only; no payments</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>19. Architectural problems (6–12 month risk)</h2>
+<ol>
+<li><strong>God files:</strong> app.js, ecosystem/service.mjs — untestable UI/regression risk  </li>
+<li><strong>Dual persistence:</strong> JSON + Postgres branches everywhere  </li>
+<li><strong>296 endpoints / 21 views:</strong> massive backend-without-frontend debt  </li>
+<li><strong>In-process ffmpeg:</strong> won&#39;t scale  </li>
+<li><strong>SSE fanout in memory:</strong> won&#39;t scale without Redis (designed but optional)  </li>
+<li><strong>TEST LUMEN</strong> misrepresents monetization  </li>
+<li><strong>Avatar marketing vs PNG reality</strong> — trust risk  </li>
+<li><strong>No CI</strong> — regressions undetected</li>
+</ol>
+<hr>
+<h2>20. TODO / placeholder scan</h2>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Count</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>renderProfileLegacy</td>
+<td>1</td>
+<td>dead</td>
+</tr>
+<tr>
+<td>comingSoon i18n key</td>
+<td>UI string only</td>
+<td></td>
+</tr>
+<tr>
+<td>PAYMENT_PROVIDER</td>
+<td>env blocked</td>
+<td></td>
+</tr>
+<tr>
+<td>OAuth OAUTH_DOC</td>
+<td>architectural</td>
+<td></td>
+</tr>
+<tr>
+<td>mock in tests</td>
+<td>legitimate</td>
+<td></td>
+</tr>
+<tr>
+<td>Following tab empty</td>
+<td>honest placeholder</td>
+<td></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>21. Weighted readiness by domain</h2>
+<table>
+<thead>
+<tr>
+<th>Domain</th>
+<th>%</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend shell</td>
+<td>72</td>
+<td>All views render</td>
+</tr>
+<tr>
+<td>Design/UI</td>
+<td>65</td>
+<td>Beautiful but fragmented CSS</td>
+</tr>
+<tr>
+<td>UX</td>
+<td>45</td>
+<td>Many dead-end modules</td>
+</tr>
+<tr>
+<td>Responsive</td>
+<td>60</td>
+<td>Mobile OK; tablet unverified</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>48</td>
+<td>Wide API; many untested live</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>40</td>
+<td>Schema exists; dual-write</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>35</td>
+<td>Email/pass only</td>
+</tr>
+<tr>
+<td>Sylora AI</td>
+<td>12</td>
+<td>Blocked without key</td>
+</tr>
+<tr>
+<td>Avatar</td>
+<td>20</td>
+<td>PNG simulation</td>
+</tr>
+<tr>
+<td>Voice</td>
+<td>15</td>
+<td>Blocked</td>
+</tr>
+<tr>
+<td>Live streaming</td>
+<td>25</td>
+<td>API yes; WebRTC unproven</td>
+</tr>
+<tr>
+<td>Social</td>
+<td>30</td>
+<td>Core post OK</td>
+</tr>
+<tr>
+<td>Messaging</td>
+<td>25</td>
+<td>API exists</td>
+</tr>
+<tr>
+<td>Calls</td>
+<td>20</td>
+<td>Code only</td>
+</tr>
+<tr>
+<td>Gifts</td>
+<td>40</td>
+<td>Send OK; playback heavy</td>
+</tr>
+<tr>
+<td>Wallet/payments</td>
+<td>8</td>
+<td>Mock currency</td>
+</tr>
+<tr>
+<td>Creator tools</td>
+<td>35</td>
+<td>Studio UI + API</td>
+</tr>
+<tr>
+<td>Business</td>
+<td>30</td>
+<td>JSON/ecosystem</td>
+</tr>
+<tr>
+<td>Education</td>
+<td>30</td>
+<td>Free courses OK</td>
+</tr>
+<tr>
+<td>Notifications</td>
+<td>25</td>
+<td>SSE exists</td>
+</tr>
+<tr>
+<td>Analytics</td>
+<td>10</td>
+<td>Minimal</td>
+</tr>
+<tr>
+<td>Admin</td>
+<td>25</td>
+<td>JSON reports</td>
+</tr>
+<tr>
+<td>Security</td>
+<td>42</td>
+<td>Baseline headers/auth</td>
+</tr>
+<tr>
+<td>Performance</td>
+<td>35</td>
+<td>Heavy assets</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>38</td>
+<td>Many unit, no E2E</td>
+</tr>
+<tr>
+<td>DevOps</td>
+<td>15</td>
+<td>No CI</td>
+</tr>
+<tr>
+<td>Production infra</td>
+<td>18</td>
+<td>Compose only</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>22. VERIFIED 100% WORKING (strict)</h2>
+<p>Only features with UI + backend + runtime verification:</p>
+<ol>
+<li><strong>Static SPA shell + routing</strong> (21 views resolve, server fallback)  </li>
+<li><strong>Health / ready probes</strong>  </li>
+<li><strong>Email/password register + login</strong> (JSON mode, scrypt, bearer token)  </li>
+<li><strong>Create text post + list feed</strong> (API runtime)</li>
+</ol>
+<p>Everything else missing at least one of: browser E2E, Postgres mode, external provider, or media permissions.</p>
+<hr>
+<h2>23. Candidates for deletion (do not delete in audit)</h2>
+<p>See <a href="./SYLORA_DUPLICATION_REPORT.md">SYLORA_DUPLICATION_REPORT.md</a>.</p>
+<p>Top candidates: <code>renderProfileLegacy</code>, unused expression PNG v1, old audit markdown claims, redundant design CSS after merge, backend-only experimental endpoints without product owner.</p>
+<hr>
+<h2>24. Missing as a product (strategic)</h2>
+<ul>
+<li>Real identity (OAuth, verify email)  </li>
+<li>Working AI as differentiator (currently off)  </li>
+<li>Proven live streaming with discovery loop  </li>
+<li>Real money loop (not TEST LUMEN)  </li>
+<li>Trust &amp; safety ops (reports in JSON, no workflow)  </li>
+<li>Recommendation/discovery (search only)  </li>
+<li>Network effects (Following live empty)  </li>
+<li>Mobile apps  </li>
+<li>Compliance (delete account, DPA)  </li>
+<li>Observability and on-call</li>
+</ul>
+<hr>
+<h2>25. P0 / P1 classification</h2>
+<h3>P0 — Blockers</h3>
+<ol>
+<li>No CI/CD  </li>
+<li>Production persistence not enforced  </li>
+<li>AI provider not configured (if AI is core promise)  </li>
+<li>WebRTC TURN missing for live product claim</li>
+</ol>
+<h3>P1 — Critical</h3>
+<ul>
+<li>TEST LUMEN presented as currency  </li>
+<li>Media GET without auth  </li>
+<li>No Google auth / recovery  </li>
+<li>Avatar capability misrepresentation risk  </li>
+<li>150 orphan APIs increase attack surface</li>
+</ul>
+<hr>
+<h2>26. Audit methodology notes</h2>
+<ul>
+<li>Prior <code>audit/AUDIT_REPORT.md</code> claims about <code>owmWeather</code> / <code>getThree</code> <strong>were false positives</strong> — symbols not in repository.  </li>
+<li>Language selector <strong>does work</strong> (contrary to interim browser report).  </li>
+<li>Three.js: importmap + relative imports; vendor addons use bare <code>three</code> — works in modern browsers with importmap.</li>
+</ul>
+<hr>
+<h2>27. Change log (audit-only)</h2>
+<p>No product code modified. Added:</p>
+<ul>
+<li><code>docs/audit/SYLORA_*.md</code> (this bundle)  </li>
+<li><code>audit/screenshots/**</code> (22 webp)  </li>
+<li><code>audit/INDEX.md</code>, <code>SUMMARY.txt</code>, <code>AUDIT_REPORT.md</code> (working notes)</li>
+</ul>
+<hr>
+<p><strong>End of source-of-truth audit. Next step: approve <a href="./SYLORA_REMEDIATION_PLAN.md">SYLORA_REMEDIATION_PLAN.md</a> before any fixes.</strong></p>
+<hr>
+<h1>Appendix: SYLORA_ARCHITECTURE_MAP</h1>
+<blockquote>
+<p>Source of truth derived from repository inspection + runtime checks. Not from README or prior agent reports.</p>
+</blockquote>
+<h2>Repository topology</h2>
+<pre><code>Project-Sylora-2/
+├── src/                    # Node.js backend (ESM)
+│   ├── server.mjs          # HTTP server, core API (~590 LOC)
+│   ├── store.mjs           # JSON file persistence (dev fallback)
+│   ├── auth.mjs            # scrypt password + bearer tokens
+│   ├── companion.mjs       # OBS WebSocket bridge (separate process)
+│   ├── infra/              # postgres.mjs, redis.mjs
+│   ├── repositories/       # Postgres repos (auth, wallet, ai, live, ecosystem, outbox, conference)
+│   └── ecosystem/          # Mega-module: service.mjs (~3885 LOC), routes.mjs (~1215 LOC), 40+ domain files
+├── public/                 # Static SPA + assets (~45MB PNG/SVG)
+│   ├── index.html          # Shell + 11 CSS + importmap for Three.js
+│   ├── app.js              # Entire frontend SPA (~897 LOC)
+│   ├── gift-engine.js, gift-gpu-engine.js, gift-v2/*, gift-runtime.js
+│   ├── obs-overlay.html/js, phoenix-preview.html/js
+│   └── assets/             # PNG atlases, avatar sprites, phoenix keyframes
+├── infra/postgres/         # schema.sql + 11 migrations (002–012)
+├── tests/                  # 134 Node test files (*.test.mjs), no Playwright/Cypress
+├── scripts/                # migrate.mjs, deploy-prod.sh, patch scripts
+├── sdk/js/                 # Minimal JS SDK stub
+├── compose.yaml + Dockerfile
+└── docs/                   # Design docs + prior audits (not authoritative)
+</code></pre>
+<h2>Runtime architecture (actual)</h2>
+<pre><code class="language-mermaid">flowchart TB
+  Browser[Browser SPA public/app.js]
+  Node[Node HTTP src/server.mjs]
+  JSON[(data/sylora.json)]
+  PG[(PostgreSQL)]
+  Redis[(Redis)]
+  OpenAI[OpenAI API]
+  Companion[companion.mjs OBS bridge]
+
+  Browser --&gt;|REST + SSE| Node
+  Node --&gt;|if DATABASE_URL| PG
+  Node --&gt;|if no DATABASE_URL| JSON
+  Node --&gt;|if REDIS_URL| Redis
+  Node --&gt;|if OPENAI_API_KEY| OpenAI
+  Browser --&gt;|local WS optional| Companion
+  Node --&gt;|static files| Browser
+</code></pre>
+<h3>Persistence modes</h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Trigger</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>JSON dev runtime</td>
+<td><code>DATABASE_URL</code> empty</td>
+<td><code>GET /api/health</code> → <code>persistence: json-dev-runtime</code> (verified runtime)</td>
+</tr>
+<tr>
+<td>Postgres hybrid</td>
+<td><code>DATABASE_URL</code> set</td>
+<td><code>authSocial.enabled</code>, wallet/ai/live repos; migrations in <code>infra/postgres/migrations/</code></td>
+</tr>
+<tr>
+<td>Ecosystem cache</td>
+<td>Always</td>
+<td>Large JSON arrays in <code>store.data</code> + optional <code>PostgresEcosystemRepository</code></td>
+</tr>
+</tbody></table>
+<p>Production <code>compose.yaml</code> expects Postgres 17 + Redis 8 + migrate on boot.</p>
+<h2>API surface</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Count</th>
+<th>Files</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Core routes</td>
+<td>~90</td>
+<td><code>src/server.mjs</code></td>
+</tr>
+<tr>
+<td>Ecosystem routes</td>
+<td>~206</td>
+<td><code>src/ecosystem/routes.mjs</code></td>
+</tr>
+<tr>
+<td><strong>Total HTTP endpoints</strong></td>
+<td><strong>296</strong></td>
+<td>Grep-verified</td>
+</tr>
+<tr>
+<td>SSE streams</td>
+<td>6</td>
+<td><code>/api/events</code>, <code>/api/gifts/stream</code>, <code>/api/live/:id/events</code>, <code>/api/conferences/:id/events</code>, <code>/api/calls/:id/events</code>, <code>/api/studio/browser-source/events</code></td>
+</tr>
+<tr>
+<td>WebSocket on <code>/api/*</code></td>
+<td>0</td>
+<td>Signaling via HTTP POST + SSE fanout</td>
+</tr>
+</tbody></table>
+<h2>Frontend architecture</h2>
+<ul>
+<li><strong>Single-page app</strong>: one <code>app.js</code>, pathname routing via <code>SPA_SHELL_VIEWS</code> (21 views).</li>
+<li><strong>No React/Vue/Svelte</strong> — vanilla JS string templates.</li>
+<li><strong>No build step for UI</strong> — <code>npm run build</code> only syntax-checks JS.</li>
+<li><strong>Design</strong>: 11 stacked CSS files (v2–v6, consolidation, avatar, etc.).</li>
+</ul>
+<h2>Realtime / media</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Implementation</th>
+<th>Production-ready?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Live WebRTC</td>
+<td>HTTP signaling + SSE; <code>LivePeerRegistry</code> + optional Redis</td>
+<td>Functional locally; needs TURN for NAT</td>
+</tr>
+<tr>
+<td>Calls / conferences</td>
+<td>Same pattern via <code>call-engine</code>, <code>conference-fanout</code></td>
+<td>Code exists; browser E2E not verified in audit</td>
+</tr>
+<tr>
+<td>Live chat / gifts</td>
+<td>SSE fanout</td>
+<td>Verified API + SSE endpoint exists</td>
+</tr>
+<tr>
+<td>Video upload</td>
+<td>Raw POST to <code>/api/media/upload</code>; ffmpeg HLS in-process</td>
+<td>Requires ffmpeg (present on audit VM)</td>
+</tr>
+<tr>
+<td>OBS</td>
+<td><code>companion.mjs</code> + browser overlay token</td>
+<td>Companion not started in audit</td>
+</tr>
+<tr>
+<td>RTMP / CDN streaming</td>
+<td><strong>Not present</strong></td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h2>AI architecture</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Location</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Text chat</td>
+<td><code>runSyloraAi()</code> in server.mjs + OpenAI Responses API</td>
+<td><strong>BLOCKED</strong> without <code>OPENAI_API_KEY</code> (503 verified)</td>
+</tr>
+<tr>
+<td>Tool calling</td>
+<td><code>get_my_context</code>, <code>propose_post</code>, <code>propose_memory</code></td>
+<td>Implemented; needs OpenAI</td>
+</tr>
+<tr>
+<td>Voice realtime</td>
+<td>POST <code>/api/ai/realtime</code> → OpenAI Realtime HTTP</td>
+<td><strong>BLOCKED</strong> without key</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>JSON or <code>postgres-ai</code>; manual + confirmed actions</td>
+<td>Works without OpenAI (CRUD verified)</td>
+</tr>
+<tr>
+<td>Living Sylora / director</td>
+<td><code>ecosystem/living-sylora/</code>, platform events</td>
+<td>In-memory + optional AI hook</td>
+</tr>
+<tr>
+<td>Ecosystem intelligence</td>
+<td><code>ecosystem/service.mjs</code> (3000+ LOC)</td>
+<td>Many endpoints; ~150 without frontend callers</td>
+</tr>
+</tbody></table>
+<h2>Security boundaries (implemented)</h2>
+<ul>
+<li>Bearer session tokens (SHA-256 hashed at rest in Postgres mode)</li>
+<li>Rate limits: in-memory + optional Redis (<code>allowRequest</code>, <code>allowAi</code>)</li>
+<li>CSP, X-Frame-Options, nosniff (<code>securityHeaders()</code>)</li>
+<li>Admin via <code>SYLORA_ADMIN_EMAILS</code> env</li>
+<li>Password: scrypt (<code>auth.mjs</code>)</li>
+</ul>
+<h2>What is NOT in the architecture</h2>
+<ul>
+<li>Separate frontend/backend repos</li>
+<li>Microservices (monolith)</li>
+<li>Mobile native apps</li>
+<li>CI/CD pipelines (no <code>.github/workflows</code>)</li>
+<li>Kubernetes / Terraform</li>
+<li>Real payment provider</li>
+<li>Google OAuth flow (env placeholders only)</li>
+<li>Email verification / password recovery</li>
+<li>CDN / object storage (media on local disk)</li>
+</ul>
+<h2>Deprecated / experimental signals</h2>
+<ul>
+<li><code>renderProfileLegacy()</code> in app.js — dead code, superseded by <code>renderProfile()</code></li>
+<li>Multiple <code>scripts/patch-*.mjs</code> — one-off migration patches</li>
+<li>Prior <code>docs/audit/*.md</code> reports — superseded by this forensic baseline</li>
+<li><code>docs/FINAL_IMPLEMENTATION_REPORT.md</code> — do not trust without verification</li>
+</ul>
+<h2>Test architecture</h2>
+<ul>
+<li><strong>134 Node native tests</strong> (<code>npm test</code> with empty DATABASE_URL/REDIS_URL)</li>
+<li>Covers: API E2E slices, postgres repos (pg-mem), gifts, motion, security headers, RTC config</li>
+<li><strong>No browser E2E</strong> in CI sense; <code>tests/avatar-ui.test.mjs</code> checks file existence only</li>
+</ul>
+<hr>
+<h1>Appendix: SYLORA_UI_MAP</h1>
+<p>Evidence: <code>public/index.html</code>, <code>public/app.js</code>, screenshots in <code>audit/screenshots/</code>.</p>
+<h2>Navigation shell (persistent)</h2>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Location</th>
+<th>Routes / actions</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Brand</td>
+<td>Header</td>
+<td>→ <code>/</code> feed</td>
+</tr>
+<tr>
+<td>Command palette ⌘K</td>
+<td>Header <code>#globalSearch</code></td>
+<td>Search, slash commands → explore/ai/messages/etc.</td>
+</tr>
+<tr>
+<td>Locale <code>&lt;select&gt;</code></td>
+<td>Header <code>#localeSwitch</code></td>
+<td>14 options; <strong>WORKING</strong> — <code>setLocale()</code> + <code>PATCH /api/me</code> (<code>app.js</code> account())</td>
+</tr>
+<tr>
+<td>LUMEN balance ♢</td>
+<td>Header (authed)</td>
+<td>→ <code>/gifts</code></td>
+</tr>
+<tr>
+<td>Inbox ◌</td>
+<td>Header (authed)</td>
+<td>→ <code>/messages</code></td>
+</tr>
+<tr>
+<td>Avatar</td>
+<td>Header (authed)</td>
+<td>→ <code>/profile</code></td>
+</tr>
+<tr>
+<td>Logout ↪</td>
+<td>Header (authed)</td>
+<td>POST <code>/api/auth/logout</code></td>
+</tr>
+<tr>
+<td>Sign in</td>
+<td>Header (guest)</td>
+<td>→ renderAuth() inline</td>
+</tr>
+<tr>
+<td>Left rail primary</td>
+<td><code>index.html</code></td>
+<td>feed, live, clips, studio, learning, business, explore, communities</td>
+</tr>
+<tr>
+<td>Left rail secondary</td>
+<td></td>
+<td>messages, profile, more, create hub</td>
+</tr>
+<tr>
+<td>Sylora mini</td>
+<td>Left rail</td>
+<td>→ <code>/ai</code></td>
+</tr>
+<tr>
+<td>Right rail</td>
+<td></td>
+<td>Live pulse, Sylora CTA</td>
+</tr>
+<tr>
+<td>Mobile dock</td>
+<td>Bottom</td>
+<td>feed, live, ai, messages, profile</td>
+</tr>
+</tbody></table>
+<p>Screenshots: <code>audit/screenshots/desktop/01_home_feed.webp</code>, <code>audit/screenshots/mobile/*.webp</code></p>
+<hr>
+<h2>SPA views (21)</h2>
+<h3>1. Home — <code>/</code> → <code>feed</code></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Render</td>
+<td><code>renderFeed()</code></td>
+</tr>
+<tr>
+<td>Purpose</td>
+<td>Personalized home, composer, carousels</td>
+</tr>
+<tr>
+<td>APIs</td>
+<td><code>/api/feed</code>, <code>/api/live</code>, <code>/api/users</code>, <code>/api/communities</code>, <code>/api/courses</code>, <code>/api/businesses</code>, <code>/api/home/hub</code>, <code>/api/daily-brief</code>, POST <code>/api/posts</code></td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>Browse public; composer requires login</td>
+</tr>
+<tr>
+<td>Status</td>
+<td><strong>PARTIAL</strong> — feed/composer work (API verified); hub/brief need auth</td>
+</tr>
+<tr>
+<td>Mock</td>
+<td>LUMEN labeled TEST</td>
+</tr>
+<tr>
+<td>Screenshot</td>
+<td>desktop <code>01_home_feed.webp</code>, mobile <code>01_home_mobile.webp</code></td>
+</tr>
+</tbody></table>
+<h3>2. LIVE — <code>/live</code></h3>
+<p>| Tabs | discover, following, create, battles, studio link |
+| APIs | <code>/api/live</code>, <code>/api/live/entertainment</code>, WebRTC <code>/api/live/rtc-config</code>, SSE <code>/api/live/:id/events</code> |
+| Status | <strong>PARTIAL</strong> — room list/create verified API; WebRTC watch <strong>BLOCKED</strong> (no browser media test); following tab empty by design |
+| Screenshot | <code>02_live.webp</code>, <code>02_live_mobile.webp</code> |</p>
+<h3>3. Studio — <code>/studio</code></h3>
+<p>| Purpose | Camera, canvas, scenes, OBS/companion, go live |
+| APIs | <code>/api/studio/scenes</code>, POST <code>/api/live</code>, browser-source token |
+| Auth | Required |
+| Status | <strong>PARTIAL</strong> — scenes API verified; camera/WebRTC <strong>BLOCKED</strong> in headless audit |
+| Screenshot | <code>04_studio.webp</code> |</p>
+<h3>4. Clips — <code>/clips</code></h3>
+<p>| APIs | GET <code>/api/videos?format=clip</code>, upload <code>/api/media/upload</code>, POST <code>/api/videos</code> |
+| Status | <strong>PARTIAL</strong> — list works; upload needs file + ffmpeg |
+| Screenshot | <code>03_clips.webp</code> |</p>
+<h3>5. Videos — <code>/videos</code></h3>
+<p>| Nav | Feed carousel, More → Media (not in left rail) |
+| Status | Same pipeline as clips — <strong>PARTIAL</strong> |</p>
+<h3>6. Explore — <code>/explore</code></h3>
+<p>| APIs | <code>/api/search</code>, <code>/api/search/universal</code> (authed) |
+| Status | <strong>PARTIAL</strong> — lexical search works; semantic may degrade without AI |
+| Screenshot | <code>07_explore.webp</code> |</p>
+<h3>7. Messages — <code>/messages</code></h3>
+<p>| Sub-tabs | messages, notifications, invites, calls, priority |
+| APIs | conversations, notifications, calls, SSE <code>/api/events</code> |
+| Auth | Required |
+| Status | <strong>PARTIAL</strong> — API layer exists; WebRTC calls <strong>BLOCKED</strong> in audit |
+| Screenshot | <code>09_messages.webp</code>, mobile <code>04_messages_mobile.webp</code> |</p>
+<h3>8. Sylora AI — <code>/ai</code></h3>
+<p>| APIs | <code>/api/ai/history</code>, chat, realtime, memory, actions |
+| Auth | Required |
+| Avatar UI | PNG sprite + CSS visemes (<code>sylora-avatar-v2-base.png</code>, gestures) — <strong>NOT 3D</strong> |
+| Status | <strong>PARTIAL</strong> — UI renders; chat <strong>BLOCKED</strong> (no OPENAI_API_KEY); voice <strong>BLOCKED</strong> |
+| Screenshot | <code>10_ai.webp</code>, mobile <code>03_ai_mobile.webp</code> |</p>
+<h3>9. Profile — <code>/profile</code></h3>
+<p>| APIs | <code>/api/me</code>, stats, progress, ledger, notifications; PATCH profile |
+| Status | <strong>PARTIAL</strong> — profile CRUD verified via API |
+| Screenshot | <code>11_profile.webp</code>, mobile <code>05_profile_mobile.webp</code> |</p>
+<h3>10. Gifts — <code>/gifts</code></h3>
+<p>| APIs | GET <code>/api/gifts</code>, POST <code>/api/gifts/send</code> |
+| Status | <strong>PARTIAL</strong> — send works in TEST LUMEN (API verified); WebGL gift playback depends on GPU |
+| Screenshot | <code>12_gifts.webp</code> |</p>
+<h3>11. More (Settings hub) — <code>/more</code></h3>
+<p>| Purpose | Grid launcher to identity, agents, developer, security, dashboard, canvas, admin, videos, gifts |
+| Status | <strong>REAL</strong> navigation shell |
+| Screenshot | <code>13_more.webp</code>, mobile <code>06_more_mobile.webp</code> |</p>
+<h3>12. Identity — <code>/identity</code></h3>
+<p>| APIs | <code>/api/identity</code>, <code>/api/kg</code> |
+| Auth | Required |
+| Screenshot | <code>14_identity.webp</code> |</p>
+<h3>13. Agents — <code>/agents</code></h3>
+<p>| APIs | <code>/api/agents</code>, install, negotiations |
+| Screenshot | <code>15_agents.webp</code> |</p>
+<h3>14. Developer — <code>/developer</code></h3>
+<p>| APIs | <code>/api/developer/apps</code>, keys; OAuth doc is static JSON |
+| Screenshot | <code>16_developer.webp</code> |</p>
+<h3>15. Security — <code>/security</code></h3>
+<p>| APIs | security-center, memory, privacy, reputation |
+| Not screenshotted | Auth required; same shell as other gated views |</p>
+<h3>16. Dashboard — <code>/dashboard</code></h3>
+<p>| APIs | <code>/api/dashboard</code>, <code>/api/ai/command</code> |
+| Not screenshotted | |</p>
+<h3>17. Canvas — <code>/canvas</code></h3>
+<p>| APIs | <code>/api/canvas</code> |
+| Not screenshotted | |</p>
+<h3>18. Communities — <code>/communities</code></h3>
+<p>| Sub-views | <code>openCommunity()</code>, channel posts (no URL change) |
+| APIs | <code>/api/communities</code>, channels, social extensions |
+| Screenshot | <code>08_communities.webp</code> |</p>
+<h3>19. Learning — <code>/learning</code></h3>
+<p>| Sub-views | courses, science hub, conference WebRTC |
+| APIs | courses, <code>/api/learning/*</code>, <code>/api/science/*</code>, conferences |
+| Screenshot | <code>05_learning.webp</code> |</p>
+<h3>20. Business — <code>/business</code></h3>
+<p>| APIs | businesses, orgs, CRM, invoices, conferences |
+| Screenshot | <code>06_business.webp</code> |</p>
+<h3>21. Admin — <code>/admin</code></h3>
+<p>| Access | <code>role === &#39;admin&#39;</code> only |
+| APIs | <code>/api/admin/reports</code>, audit |
+| Not screenshotted | Requires admin account |</p>
+<hr>
+<h2>Standalone pages (not SPA views)</h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>URL</th>
+<th>Purpose</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Phoenix preview</td>
+<td><code>/phoenix-preview.html</code></td>
+<td>Gift V2 cinematic demo</td>
+<td><strong>REAL</strong> client-only WebGL</td>
+</tr>
+<tr>
+<td>OBS overlay</td>
+<td><code>/obs-overlay.html?token=</code></td>
+<td>Stream overlay SSE</td>
+<td><strong>PARTIAL</strong> — needs valid token</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Auth gate (inline, no route)</h2>
+<p>| Render | <code>renderAuth()</code> |
+| Forms | Register (username, email, password) / Login (identity, password) |
+| APIs | POST <code>/api/auth/register</code>, <code>/api/auth/login</code> |
+| Google | <strong>MISSING</strong> — no UI button |
+| Recovery | <strong>MISSING</strong> |
+| Status | <strong>REAL</strong> — register/login verified API + runtime |</p>
+<hr>
+<h2>Visual tree (actual product IA)</h2>
+<pre><code>SYLORA
+├── Home (/)
+├── LIVE (/live)
+│   ├── Discover
+│   ├── Following [empty state]
+│   ├── Create stream
+│   ├── Battles
+│   └── → Studio (/studio)
+├── Clips (/clips)
+├── Studio (/studio)
+├── Science &amp; Learning (/learning)
+│   ├── Courses [inline]
+│   └── Science conference [inline WebRTC]
+├── Business (/business)
+│   ├── Company directory
+│   ├── Org workspace [inline]
+│   └── Business conference [inline]
+├── Discover (/explore)
+├── Communities (/communities)
+│   └── Channel view [inline]
+├── Inbox (/messages)
+│   ├── Messages / Notifications / Invites / Calls / Priority
+│   └── Call session [inline WebRTC]
+├── Sylora AI (/ai)
+├── Profile (/profile)
+├── Gifts (/gifts) [header shortcut]
+├── Videos (/videos) [hidden nav]
+├── Settings hub (/more)
+│   ├── Identity (/identity)
+│   ├── Agents (/agents)
+│   ├── Developer (/developer)
+│   ├── Security (/security)
+│   ├── Dashboard (/dashboard)
+│   ├── Canvas (/canvas)
+│   └── Admin (/admin) [role gate]
+├── Create Hub [modal overlay]
+└── Command palette [modal overlay]
+</code></pre>
+<hr>
+<h2>Responsive notes (screenshot audit)</h2>
+<table>
+<thead>
+<tr>
+<th>Viewport</th>
+<th>Score</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Desktop 1440×900</td>
+<td>72/100</td>
+<td>Sidebar + content OK; 11 CSS files load</td>
+</tr>
+<tr>
+<td>Mobile 390×844</td>
+<td>68/100</td>
+<td>Bottom dock works; hero sections tall</td>
+</tr>
+<tr>
+<td>Tablet</td>
+<td>Not captured</td>
+<td>Same CSS breakpoints in <code>modules.css</code> — <strong>NOT VERIFIED</strong></td>
+</tr>
+</tbody></table>
+<h2>Console / network (verified vs false positives)</h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Verified?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>favicon.ico 404</td>
+<td><strong>YES</strong> — no favicon in public/</td>
+</tr>
+<tr>
+<td>AI degraded banner</td>
+<td><strong>YES</strong> — without OPENAI_API_KEY</td>
+</tr>
+<tr>
+<td><code>owmWeather</code> / <code>getThree</code> ReferenceError</td>
+<td><strong>NOT IN CODEBASE</strong> — false positive in interim agent report; not reproduced via static analysis</td>
+</tr>
+<tr>
+<td>Three.js bare <code>from &#39;three&#39;</code> in vendor addons</td>
+<td>Mitigated by importmap in index.html; gift-gpu uses relative paths</td>
+</tr>
+</tbody></table>
+<hr>
+<h1>Appendix: SYLORA_REAL_VS_MOCK</h1>
+<p>Classification per module. Evidence: code + runtime/API tests on 2026-08-13.</p>
+<p>Legend: <strong>REAL</strong> = end-to-end verified | <strong>PARTIAL</strong> | <strong>MOCK</strong> | <strong>STATIC UI</strong> | <strong>PLACEHOLDER</strong> | <strong>BROKEN</strong> | <strong>MISSING</strong> | <strong>BLOCKED</strong></p>
+<hr>
+<h2>Platform core</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HTTP server + static SPA</td>
+<td>REAL</td>
+<td>Server running :8787; all routes 200</td>
+</tr>
+<tr>
+<td>JSON persistence mode</td>
+<td>REAL</td>
+<td>health → json-dev-runtime; register/post/gift API OK</td>
+</tr>
+<tr>
+<td>Postgres persistence</td>
+<td>PARTIAL</td>
+<td>11 migrations + repos; not runtime-tested (Docker unavailable)</td>
+</tr>
+<tr>
+<td>Redis fanout</td>
+<td>PARTIAL</td>
+<td>Code + tests with mocks; not runtime-tested</td>
+</tr>
+<tr>
+<td>Rate limiting</td>
+<td>PARTIAL</td>
+<td>In-memory works; Redis path untested live</td>
+</tr>
+<tr>
+<td>Session auth (email/password)</td>
+<td>REAL</td>
+<td>Register/login/logout API verified</td>
+</tr>
+<tr>
+<td>Google OAuth</td>
+<td>MISSING</td>
+<td><code>integrations.mjs</code> → BLOCKED_EXTERNAL; no UI</td>
+</tr>
+<tr>
+<td>Phone auth</td>
+<td>MISSING</td>
+<td>No routes</td>
+</tr>
+<tr>
+<td>Email verification</td>
+<td>MISSING</td>
+<td>No routes</td>
+</tr>
+<tr>
+<td>Password recovery</td>
+<td>MISSING</td>
+<td>No routes</td>
+</tr>
+<tr>
+<td>Admin moderation</td>
+<td>PARTIAL</td>
+<td>API exists; needs admin role to E2E</td>
+</tr>
+</tbody></table>
+<h2>Social</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Feed + posts</td>
+<td>REAL</td>
+<td>POST/GET verified</td>
+</tr>
+<tr>
+<td>Reactions, comments</td>
+<td>PARTIAL</td>
+<td>API exists; UI not browser-tested</td>
+</tr>
+<tr>
+<td>Follow / block</td>
+<td>PARTIAL</td>
+<td>API exists</td>
+</tr>
+<tr>
+<td>Notifications</td>
+<td>PARTIAL</td>
+<td>API + SSE; not browser-tested</td>
+</tr>
+<tr>
+<td>Universal search (lexical)</td>
+<td>REAL</td>
+<td><code>/api/search</code> works</td>
+</tr>
+<tr>
+<td>Universal search (AI)</td>
+<td>BLOCKED</td>
+<td>Needs OpenAI / authed semantic endpoint</td>
+</tr>
+<tr>
+<td>Communities</td>
+<td>PARTIAL</td>
+<td>API tested in api.test.mjs</td>
+</tr>
+<tr>
+<td>Public profiles</td>
+<td>STATIC UI</td>
+<td>Letter avatars only</td>
+</tr>
+</tbody></table>
+<h2>Messaging &amp; calls</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DM conversations</td>
+<td>PARTIAL</td>
+<td>API in server.mjs; not browser E2E</td>
+</tr>
+<tr>
+<td>SSE user events</td>
+<td>PARTIAL</td>
+<td>Endpoint exists</td>
+</tr>
+<tr>
+<td>Voice/video calls</td>
+<td>PARTIAL</td>
+<td>WebRTC signaling code; <strong>BLOCKED</strong> browser test</td>
+</tr>
+<tr>
+<td>Sylora AI call</td>
+<td>PLACEHOLDER</td>
+<td><code>/api/calls/sylora</code> — no frontend caller</td>
+</tr>
+</tbody></table>
+<h2>LIVE &amp; streaming</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Create live room</td>
+<td>REAL</td>
+<td>POST <code>/api/live</code> → 201 verified</td>
+</tr>
+<tr>
+<td>Live list / chat API</td>
+<td>REAL</td>
+<td>GET endpoints verified</td>
+</tr>
+<tr>
+<td>WebRTC viewer/host</td>
+<td>PARTIAL</td>
+<td>Signaling implemented; no E2E media test</td>
+</tr>
+<tr>
+<td>TURN / NAT</td>
+<td>BLOCKED</td>
+<td><code>SYLORA_ICE_SERVERS_JSON</code> empty → STUN-only</td>
+</tr>
+<tr>
+<td>RTMP / OBS ingest</td>
+<td>MISSING</td>
+<td>Only browser-source overlay + companion bridge</td>
+</tr>
+<tr>
+<td>Recording</td>
+<td>PARTIAL</td>
+<td>Studio canvas record client-side only</td>
+</tr>
+<tr>
+<td>Battles / resonance</td>
+<td>PARTIAL</td>
+<td>API + store hooks</td>
+</tr>
+<tr>
+<td>Live Following tab</td>
+<td>PLACEHOLDER</td>
+<td>Empty state — no backend</td>
+</tr>
+<tr>
+<td>Creator insights</td>
+<td>BLOCKED</td>
+<td>Needs OpenAI for AI portions</td>
+</tr>
+</tbody></table>
+<h2>Media</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Video upload</td>
+<td>PARTIAL</td>
+<td>Endpoint exists; ffmpeg required</td>
+</tr>
+<tr>
+<td>HLS transcode</td>
+<td>PARTIAL</td>
+<td>spawn ffmpeg in-process</td>
+</tr>
+<tr>
+<td>Clips / video hub UI</td>
+<td>STATIC UI</td>
+<td>Lists from store</td>
+</tr>
+</tbody></table>
+<h2>Gifts &amp; wallet</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Gift catalog</td>
+<td>REAL</td>
+<td>GET <code>/api/gifts</code> — 10 tier gifts</td>
+</tr>
+<tr>
+<td>Send gift + ledger</td>
+<td>REAL</td>
+<td>POST send 201 in runtime test (JSON mode)</td>
+</tr>
+<tr>
+<td>LUMEN currency</td>
+<td>MOCK</td>
+<td>Labeled TEST; 10000 on register; not real money</td>
+</tr>
+<tr>
+<td>Postgres atomic wallet</td>
+<td>PARTIAL</td>
+<td>Tested in pg-mem only</td>
+</tr>
+<tr>
+<td>Gift GPU WebGL</td>
+<td>PARTIAL</td>
+<td>Procedural Three.js meshes; tests pass</td>
+</tr>
+<tr>
+<td>Gift V2 Phoenix</td>
+<td>PARTIAL</td>
+<td>phoenix-preview.html works standalone</td>
+</tr>
+<tr>
+<td>Gift atlas PNG</td>
+<td>STATIC UI</td>
+<td>2D sprite fallback in gift-engine</td>
+</tr>
+<tr>
+<td>MediaPipe segmentation</td>
+<td>PLACEHOLDER</td>
+<td>Optional window global; not bundled</td>
+</tr>
+</tbody></table>
+<h2>Sylora AI</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Text chat</td>
+<td>BLOCKED</td>
+<td>503 without OPENAI_API_KEY</td>
+</tr>
+<tr>
+<td>Tool calling</td>
+<td>PARTIAL</td>
+<td>Code complete; untested without provider</td>
+</tr>
+<tr>
+<td>Memory CRUD</td>
+<td>REAL</td>
+<td>API verified without OpenAI</td>
+</tr>
+<tr>
+<td>Pending actions</td>
+<td>PARTIAL</td>
+<td>confirm/cancel routes exist</td>
+</tr>
+<tr>
+<td>Voice realtime</td>
+<td>BLOCKED</td>
+<td>Needs OpenAI + mic permission</td>
+</tr>
+<tr>
+<td>Browser STT/TTS</td>
+<td>PARTIAL</td>
+<td>Speech API used in UI when available</td>
+</tr>
+<tr>
+<td>Living Sylora engine</td>
+<td>PARTIAL</td>
+<td>In-memory emotion/memory classes</td>
+</tr>
+<tr>
+<td>Live co-host AI</td>
+<td>BLOCKED</td>
+<td>Needs OpenAI hook in ecosystem</td>
+</tr>
+<tr>
+<td>Translation</td>
+<td>BLOCKED</td>
+<td>Provider keys missing</td>
+</tr>
+<tr>
+<td>150+ ecosystem AI endpoints</td>
+<td>MOCK/STATIC</td>
+<td>Backend-only, no UI</td>
+</tr>
+</tbody></table>
+<h2>Avatar (Living Sylora)</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>3D rigged model</td>
+<td>MISSING</td>
+<td>No GLB/GLTF in repo</td>
+</tr>
+<tr>
+<td>PNG sprite avatar</td>
+<td>REAL</td>
+<td>assets/sylora-avatar-v2-base.png + gesture PNGs</td>
+</tr>
+<tr>
+<td>CSS blink / saccade</td>
+<td>REAL</td>
+<td>scheduleSyloraLife() in app.js</td>
+</tr>
+<tr>
+<td>Viseme lip sync</td>
+<td>PARTIAL</td>
+<td>CSS sprite sheet from audio bands — not true lipsync</td>
+</tr>
+<tr>
+<td>Emotions</td>
+<td>STATIC UI</td>
+<td>Expression PNG atlases exist unused in main AI view</td>
+</tr>
+<tr>
+<td>Hands/body rig</td>
+<td>NOT SUPPORTED</td>
+<td>PNG rig assets exist but not animated skeletal</td>
+</tr>
+</tbody></table>
+<h2>Business / education / science</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Business directory</td>
+<td>PARTIAL</td>
+<td>CRUD in JSON store</td>
+</tr>
+<tr>
+<td>Org workspace (CRM, invoices)</td>
+<td>PARTIAL</td>
+<td>Ecosystem service — JSON backed</td>
+</tr>
+<tr>
+<td>Courses / lessons</td>
+<td>PARTIAL</td>
+<td>api.test.mjs enrollment flow</td>
+</tr>
+<tr>
+<td>Paid courses</td>
+<td>BLOCKED</td>
+<td>PAYMENT_PROVIDER_REQUIRED</td>
+</tr>
+<tr>
+<td>Science calculators/tools</td>
+<td>PARTIAL</td>
+<td>Many POST endpoints; sparse UI</td>
+</tr>
+<tr>
+<td>Conferences WebRTC</td>
+<td>PARTIAL</td>
+<td>Same as calls</td>
+</tr>
+</tbody></table>
+<h2>Developer / agents</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>API keys</td>
+<td>PARTIAL</td>
+<td>POST keys works in ecosystem</td>
+</tr>
+<tr>
+<td>OAuth/OIDC</td>
+<td>PLACEHOLDER</td>
+<td>OAUTH_DOC JSON only</td>
+</tr>
+<tr>
+<td>Agent marketplace</td>
+<td>PARTIAL</td>
+<td>UI + list endpoints</td>
+</tr>
+</tbody></table>
+<h2>Monetization</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Wallet display</td>
+<td>MOCK</td>
+<td>TEST LUMEN</td>
+</tr>
+<tr>
+<td>Stripe/payments</td>
+<td>MISSING</td>
+<td>env BLOCKED_EXTERNAL</td>
+</tr>
+<tr>
+<td>Subscriptions</td>
+<td>MISSING</td>
+<td>No implementation</td>
+</tr>
+<tr>
+<td>Creator payouts</td>
+<td>MOCK</td>
+<td>earnings field in wallet; no fiat</td>
+</tr>
+</tbody></table>
+<h2>Infrastructure</h2>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Class</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Docker compose</td>
+<td>PARTIAL</td>
+<td>compose.yaml valid syntax; Docker not on audit VM</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>MISSING</td>
+<td>No .github/workflows</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>MISSING</td>
+<td>Console logs only</td>
+</tr>
+<tr>
+<td>Backups</td>
+<td>MISSING</td>
+<td>No strategy in repo</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Summary counts</h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>~Count</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>REAL</td>
+<td>12</td>
+</tr>
+<tr>
+<td>PARTIAL</td>
+<td>45</td>
+</tr>
+<tr>
+<td>MOCK</td>
+<td>4</td>
+</tr>
+<tr>
+<td>STATIC UI</td>
+<td>8</td>
+</tr>
+<tr>
+<td>PLACEHOLDER</td>
+<td>6</td>
+</tr>
+<tr>
+<td>BROKEN</td>
+<td>1 (favicon 404 — trivial)</td>
+</tr>
+<tr>
+<td>MISSING</td>
+<td>15</td>
+</tr>
+<tr>
+<td>BLOCKED</td>
+<td>14</td>
+</tr>
+</tbody></table>
+<hr>
+<h1>Appendix: SYLORA_DUPLICATION_REPORT</h1>
+<p>Forensic scan 2026-08-13. Format: <strong>A → duplicates B → keep → remove/merge</strong></p>
+<hr>
+<h2>Pages &amp; navigation</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>renderProfile()</code></td>
+<td><code>renderProfileLegacy()</code></td>
+<td><code>renderProfile()</code></td>
+<td>Delete <code>renderProfileLegacy()</code> (~dead code, app.js)</td>
+</tr>
+<tr>
+<td>Profile stats on <code>/profile</code></td>
+<td>Wallet on header + <code>/gifts</code> + ledger section</td>
+<td>Single wallet entry in profile; header as shortcut only</td>
+<td>Reduce repeated LUMEN displays</td>
+</tr>
+<tr>
+<td><code>/more</code> settings grid</td>
+<td>Left rail &quot;Налаштування&quot;</td>
+<td>Both OK (hub vs primary nav)</td>
+<td>Clarify IA labels only</td>
+</tr>
+<tr>
+<td><code>/videos</code></td>
+<td><code>/clips</code></td>
+<td>Both (different format)</td>
+<td>Shared uploader component (currently duplicated <code>renderClipUploader</code> / <code>renderVideoUploader</code>)</td>
+</tr>
+<tr>
+<td>Business org workspace</td>
+<td>Business hub cards</td>
+<td>Workspace for depth</td>
+<td>Hub as index only</td>
+</tr>
+<tr>
+<td>Learning courses</td>
+<td>Science hub tools</td>
+<td>Distinct products</td>
+<td>Shared &quot;create course&quot; flow already duplicated in Create Hub</td>
+</tr>
+</tbody></table>
+<h2>Wallet / monetization UI</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Header balance button</td>
+<td>Profile vitals LUMEN</td>
+<td>Header shortcut</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>/gifts</code> balance hero</td>
+<td>Profile wallet card</td>
+<td>Profile as source of truth</td>
+<td>Gifts page focus on catalog/send only</td>
+</tr>
+<tr>
+<td><code>/api/ledger</code> on profile</td>
+<td>Gift send responses</td>
+<td>Both APIs</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h2>Settings / profile</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/profile</code> locale in form</td>
+<td>Header <code>#localeSwitch</code></td>
+<td>Header (global)</td>
+<td>Remove locale from profile form or sync one control</td>
+</tr>
+<tr>
+<td><code>/security</code> memory center</td>
+<td><code>/ai</code> memory tab</td>
+<td>Security for privacy; AI for chat context</td>
+<td>Document boundary; merge UI later</td>
+</tr>
+<tr>
+<td><code>/identity</code></td>
+<td><code>/profile</code> bio/display</td>
+<td>Identity = professional; profile = social</td>
+<td>OK if documented; currently overlapping fields</td>
+</tr>
+</tbody></table>
+<h2>Navigation components</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Left rail <code>.nav</code></td>
+<td>Mobile dock <code>.nav</code></td>
+<td>Both</td>
+<td>Extract shared NAV_ITEMS config (currently duplicated in index.html)</td>
+</tr>
+<tr>
+<td>Create Hub actions</td>
+<td>Feed horizon buttons</td>
+<td>Create Hub</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Command palette routes</td>
+<td>More grid</td>
+<td>Palette for power users</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<h2>CSS / design system</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>design-consolidation.css</code></td>
+<td><code>design-v2.css</code> … <code>design-scenes-v6.css</code></td>
+<td><strong>One</strong> canonical token file + scene overrides</td>
+<td>Merge 8 design-* files (all loaded in index.html)</td>
+</tr>
+<tr>
+<td><code>styles.css</code></td>
+<td><code>modules.css</code></td>
+<td>Base + modules</td>
+<td>Audit redundant rules</td>
+</tr>
+<tr>
+<td><code>design-avatar-assembled.css</code></td>
+<td><code>design-living-horizon.css</code></td>
+<td>Consolidate avatar/horizon</td>
+<td></td>
+</tr>
+<tr>
+<td>Hero background <code>sylora-horizon-v3.png</code></td>
+<td>Repeated in v4/v5/v6 CSS</td>
+<td>Single <code>--hero-bg</code> variable</td>
+<td></td>
+</tr>
+</tbody></table>
+<h2>Gift systems (major)</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gift-v2/*</code> (canonical per gift-runtime.js)</td>
+<td><code>gift-engine.js</code> (2D canvas)</td>
+<td>V2 + runtime router</td>
+<td>Demote engine to fallback only</td>
+</tr>
+<tr>
+<td><code>gift-gpu-engine.js</code> (WebGL procedural)</td>
+<td>gift-v2 WebGL renderer</td>
+<td>GPU for v1 tier IDs; V2 for phoenix</td>
+<td>Document matrix in one module</td>
+</tr>
+<tr>
+<td><code>gift-sfx.js</code></td>
+<td>gift-v2 physical-audio</td>
+<td>V2 audio director</td>
+<td>Merge SFX paths</td>
+</tr>
+<tr>
+<td>PNG atlas <code>sylora-gift-atlas-v1.png</code></td>
+<td>WebGL meshes</td>
+<td>Atlas for low-end fallback</td>
+<td>OK dual path</td>
+</tr>
+<tr>
+<td>Phoenix preview page</td>
+<td>Live gift stage</td>
+<td>Runtime controller</td>
+<td>Preview dev-only</td>
+</tr>
+</tbody></table>
+<h2>Backend / persistence</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>JSON <code>store.data.*</code></td>
+<td>Postgres repositories</td>
+<td>Postgres in production</td>
+<td>JSON dev-only; stop dual-write paths in server.mjs</td>
+</tr>
+<tr>
+<td><code>store.notify()</code></td>
+<td><code>authSocial.createNotification()</code></td>
+<td>Postgres path when enabled</td>
+<td>Single notify abstraction</td>
+</tr>
+<tr>
+<td>Live engagement in JSON</td>
+<td><code>liveRepo.engagement()</code></td>
+<td>Postgres when configured</td>
+<td>Already branched — simplify</td>
+</tr>
+<tr>
+<td>Ecosystem in JSON blobs</td>
+<td><code>PostgresEcosystemRepository</code></td>
+<td>Postgres for durable personal AI</td>
+<td>Migration incomplete for all entities</td>
+</tr>
+</tbody></table>
+<h2>API logic</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/search</code></td>
+<td><code>/api/search/universal</code></td>
+<td>Universal when authed</td>
+<td>Deprecate duplicate result shaping</td>
+</tr>
+<tr>
+<td><code>/api/ai/chat</code></td>
+<td><code>/api/ai/command</code></td>
+<td>Chat for AI screen; command for palette</td>
+<td>Shared <code>runSyloraAi()</code> already — OK</td>
+</tr>
+<tr>
+<td><code>/api/live/:id/resonance</code></td>
+<td><code>/api/live/battles</code></td>
+<td>One battle API</td>
+<td>Two creation paths</td>
+</tr>
+<tr>
+<td>Conference AI POST</td>
+<td>Sylora AI chat</td>
+<td>Shared OpenAI client</td>
+<td>OK backend</td>
+</tr>
+</tbody></table>
+<h2>State &amp; services</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>state.me</code></td>
+<td>Cached users in store</td>
+<td>Session from API</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ecosystem/service.mjs</code> (3885 LOC)</td>
+<td>Domain files unused by UI</td>
+<td>Split by bounded context</td>
+<td>Extract only used domains</td>
+</tr>
+</tbody></table>
+<h2>Assets</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sylora-expressions-v1.png</code></td>
+<td><code>sylora-expressions-v2.png</code></td>
+<td>v2 if used</td>
+<td>Remove unused v1</td>
+</tr>
+<tr>
+<td><code>sylora-visemes-v1.png</code></td>
+<td><code>sylora-visemes-v2.png</code></td>
+<td>v2 in CSS</td>
+<td>Remove v1 if unreferenced</td>
+</tr>
+<tr>
+<td><code>sylora-assistant-v1.png</code></td>
+<td><code>sylora-avatar-v2-base.png</code></td>
+<td>v2 for AI hero</td>
+<td>v1 only in hero CSS ghosts</td>
+</tr>
+<tr>
+<td>Multiple hand rig PNG sets v1–v4</td>
+<td>Avatar motion in app.js</td>
+<td>v4 if referenced</td>
+<td>Audit ~45MB asset folder</td>
+</tr>
+</tbody></table>
+<h2>Tests / docs</h2>
+<table>
+<thead>
+<tr>
+<th>A</th>
+<th>B</th>
+<th>Keep</th>
+<th>Remove/merge</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>docs/audit/CURRENT_STATE.md</code></td>
+<td>This forensic audit</td>
+<td><strong>SYLORA_FULL_AUDIT.md</strong></td>
+<td>Archive old audit docs</td>
+</tr>
+<tr>
+<td><code>docs/FINAL_IMPLEMENTATION_REPORT.md</code></td>
+<td>Reality</td>
+<td>Delete or mark historical</td>
+<td>Misleading if read as current</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Priority merge order (remediation reference only — not executed)</h2>
+<ol>
+<li>CSS design files → single design system</li>
+<li>Gift runtime → one entry (<code>gift-runtime.js</code> already declared canonical)</li>
+<li>JSON vs Postgres → production path only in prod</li>
+<li>Dead <code>renderProfileLegacy</code></li>
+<li>Clip/video uploader duplication</li>
+</ol>
+<hr>
+<h1>Appendix: SYLORA_SECURITY_AUDIT</h1>
+<p>Date: 2026-08-13 | Mode: static + runtime (JSON dev server)</p>
+<p><strong>No secret values are printed below.</strong></p>
+<hr>
+<h2>Executive summary</h2>
+<p>SYLORA implements meaningful baseline security (scrypt passwords, hashed session tokens, CSP, rate limits, AI memory secret rejection). It is <strong>not production-safe</strong> as-is due to: dual persistence complexity, missing OAuth/payment hardening, admin/report data in JSON file, no CSRF tokens for cookie-less API (Bearer-only mitigates), and large attack surface from 296 endpoints.</p>
+<hr>
+<h2>Findings by severity</h2>
+<h3>P1 — Critical</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Issue</th>
+<th>Location</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>S-P1-1</td>
+<td>Production requires Postgres+Redis but dev JSON mode allows full data in plaintext file</td>
+<td><code>data/sylora.json</code>, <code>SYLORA_DATA_FILE</code></td>
+<td>File contains password hashes, sessions; committed path in repo <code>.gitignore</code> only</td>
+</tr>
+<tr>
+<td>S-P1-2</td>
+<td>No Google OAuth despite user-facing product expectation — phishing gap if added without PKCE</td>
+<td><code>integrations.mjs</code></td>
+<td>BLOCKED_EXTERNAL only</td>
+</tr>
+<tr>
+<td>S-P1-3</td>
+<td>Admin reports stored in same JSON store as user content — no RBAC separation in dev mode</td>
+<td><code>server.mjs</code> <code>/api/admin/*</code></td>
+<td>Works but file-level access = full compromise</td>
+</tr>
+<tr>
+<td>S-P1-4</td>
+<td>Media served from local disk without auth on GET <code>/media/:id</code></td>
+<td><code>serveMedia()</code></td>
+<td>Any guessable UUID leaks uploaded video</td>
+</tr>
+</tbody></table>
+<h3>P2 — Major</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Issue</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>S-P2-1</td>
+<td>Bearer token in localStorage (<code>sylora_token</code>) — XSS steals session</td>
+<td><code>public/app.js</code> bootstrap</td>
+</tr>
+<tr>
+<td>S-P2-2</td>
+<td>CORS not explicitly configured (same-origin SPA — OK today; risky if split)</td>
+<td>server.mjs</td>
+</tr>
+<tr>
+<td>S-P2-3</td>
+<td>Rate limit falls back to in-memory per-process — bypassed under horizontal scale without Redis</td>
+<td><code>allowRequest()</code></td>
+</tr>
+<tr>
+<td>S-P2-4</td>
+<td>AI tool actions expire 24h but no user notification channel audit</td>
+<td><code>aiCreateAction()</code></td>
+</tr>
+<tr>
+<td>S-P2-5</td>
+<td>Browser-source overlay token in query string — leak via logs/referrer</td>
+<td><code>/obs-overlay.html?token=</code></td>
+</tr>
+<tr>
+<td>S-P2-6</td>
+<td>Idempotency key required for Postgres gifts but not JSON gift path</td>
+<td><code>POST /api/gifts/send</code></td>
+</tr>
+<tr>
+<td>S-P2-7</td>
+<td>Session locale PATCH accepts only uk/pl/en server-side but UI offers 14 languages</td>
+<td><code>PATCH /api/me</code> vs i18n</td>
+</tr>
+</tbody></table>
+<h3>P3 — Minor</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Issue</th>
+<th>Location</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>S-P3-1</td>
+<td>favicon 404</td>
+<td>public/</td>
+</tr>
+<tr>
+<td>S-P3-2</td>
+<td>CSP allows <code>&#39;unsafe-inline&#39;</code> styles</td>
+<td>securityHeaders()</td>
+</tr>
+<tr>
+<td>S-P3-3</td>
+<td>Logout succeeds without token (200)</td>
+<td>runtime test</td>
+</tr>
+<tr>
+<td>S-P3-4</td>
+<td><code>.env.example</code> contains dev postgres password placeholder</td>
+<td>not a leak but weak default</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Category checklist</h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Exposed secrets in repo</td>
+<td>PASS</td>
+<td><code>.env.example</code> placeholders only; test keys in tests only</td>
+</tr>
+<tr>
+<td>Auth bypass</td>
+<td>PARTIAL</td>
+<td>requireUser on protected routes; optional session on reads</td>
+</tr>
+<tr>
+<td>IDOR</td>
+<td>PARTIAL</td>
+<td>Media GET unauthenticated; live SSE public</td>
+</tr>
+<tr>
+<td>XSS</td>
+<td>PARTIAL</td>
+<td><code>esc()</code> used in templates; innerHTML with escaped data</td>
+</tr>
+<tr>
+<td>CSRF</td>
+<td>N/A</td>
+<td>Bearer header API — no cookies</td>
+</tr>
+<tr>
+<td>SQL injection</td>
+<td>PASS</td>
+<td>Parameterized pg queries in repositories</td>
+</tr>
+<tr>
+<td>Injection (JSON body)</td>
+<td>PARTIAL</td>
+<td>safeText truncation</td>
+</tr>
+<tr>
+<td>WebSocket security</td>
+<td>N/A</td>
+<td>SSE instead</td>
+</tr>
+<tr>
+<td>Upload safety</td>
+<td>PARTIAL</td>
+<td>Magic bytes + size limit; no AV scan</td>
+</tr>
+<tr>
+<td>PII in logs</td>
+<td>PARTIAL</td>
+<td>Client errors posted to <code>/__client_error</code> truncated</td>
+</tr>
+<tr>
+<td>Dependency vulns</td>
+<td>PASS</td>
+<td>npm audit 0 at audit time</td>
+</tr>
+<tr>
+<td>AI prompt injection</td>
+<td>PARTIAL</td>
+<td>Safety filter in living-sylora; tool allowlist</td>
+</tr>
+<tr>
+<td>Memory secrets</td>
+<td>PASS</td>
+<td>sanitizeMemoryValue rejects api keys (test)</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Exposed credentials scan</h2>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Found in repo?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Live API keys</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Private keys PEM</td>
+<td>No (placeholder env only)</td>
+</tr>
+<tr>
+<td>Hardcoded passwords</td>
+<td>Test fixtures only</td>
+</tr>
+<tr>
+<td>Session tokens in data file</td>
+<td>Hashed (tokenHash) in test data from runtime registrations</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Recommendations (document only — not implemented)</h2>
+<ol>
+<li>Authenticate media downloads or use signed URLs</li>
+<li>Move session to httpOnly cookie + CSRF if same-site</li>
+<li>Enforce Redis rate limits in production health gate (already in <code>/api/ready</code>)</li>
+<li>Complete OAuth with PKCE before any UI</li>
+<li>Strip query tokens from OBS overlay (POST token exchange)</li>
+<li>Align locale UI with server allowed set</li>
+</ol>
+<hr>
+<h1>Appendix: SYLORA_PRODUCTION_READINESS</h1>
+<p>Assessment date: 2026-08-13 | Environment: Cloud audit VM</p>
+<hr>
+<h2>Readiness score: <strong>18 / 100</strong></h2>
+<hr>
+<h2>Checklist</h2>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Status</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Environment separation</td>
+<td>PARTIAL</td>
+<td>NODE_ENV checks; <code>.env.local</code> load</td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>PARTIAL</td>
+<td>Dockerfile + compose.yaml; <strong>Docker not installed on audit VM</strong></td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td><strong>MISSING</strong></td>
+<td>No <code>.github/workflows</code></td>
+</tr>
+<tr>
+<td>Secrets management</td>
+<td>PARTIAL</td>
+<td>Env vars; no Vault/KMS</td>
+</tr>
+<tr>
+<td>DB migrations</td>
+<td>PARTIAL</td>
+<td><code>scripts/migrate.mjs</code> + SQL migrations; not run live</td>
+</tr>
+<tr>
+<td>Backups</td>
+<td><strong>MISSING</strong></td>
+<td>No backup scripts</td>
+</tr>
+<tr>
+<td>Logging</td>
+<td>PARTIAL</td>
+<td>console.error; client error beacon</td>
+</tr>
+<tr>
+<td>Metrics</td>
+<td><strong>MISSING</strong></td>
+<td><code>/api/ecosystem/metrics</code> admin only</td>
+</tr>
+<tr>
+<td>Tracing</td>
+<td><strong>MISSING</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Health checks</td>
+<td><strong>REAL</strong></td>
+<td><code>/api/health</code>, <code>/api/ready</code> verified</td>
+</tr>
+<tr>
+<td>Error monitoring</td>
+<td><strong>MISSING</strong></td>
+<td>No Sentry/etc.</td>
+</tr>
+<tr>
+<td>Rate limiting</td>
+<td>PARTIAL</td>
+<td>Implemented; Redis optional</td>
+</tr>
+<tr>
+<td>CDN</td>
+<td><strong>MISSING</strong></td>
+<td>Static from Node</td>
+</tr>
+<tr>
+<td>Object storage</td>
+<td><strong>MISSING</strong></td>
+<td>Local <code>data/media/</code></td>
+</tr>
+<tr>
+<td>Deployment script</td>
+<td>PARTIAL</td>
+<td><code>scripts/deploy-prod.sh</code> for Hetzner</td>
+</tr>
+<tr>
+<td>Rollback</td>
+<td><strong>MISSING</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Disaster recovery</td>
+<td><strong>MISSING</strong></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Privacy (GDPR)</td>
+<td>PARTIAL</td>
+<td><code>/api/privacy/requests</code> ecosystem route</td>
+</tr>
+<tr>
+<td>Account deletion</td>
+<td><strong>MISSING</strong></td>
+<td>No route found</td>
+</tr>
+<tr>
+<td>Data export</td>
+<td>PARTIAL</td>
+<td><code>/api/ai/memory/export</code> only</td>
+</tr>
+<tr>
+<td>HTTPS</td>
+<td>PARTIAL</td>
+<td>nginx example <code>infra/nginx/sylora.conf.example</code>; HSTS opt-in</td>
+</tr>
+<tr>
+<td>Horizontal scale</td>
+<td>PARTIAL</td>
+<td>Redis fanout designed; JSON store blocks scale</td>
+</tr>
+<tr>
+<td>ffmpeg dependency</td>
+<td><strong>REAL</strong></td>
+<td>Present on VM; required for HLS</td>
+</tr>
+<tr>
+<td>Production AI</td>
+<td><strong>BLOCKED</strong></td>
+<td>OPENAI_API_KEY required</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td><strong>BLOCKED</strong></td>
+<td>PAYMENT_PROVIDER</td>
+</tr>
+<tr>
+<td>TURN servers</td>
+<td><strong>BLOCKED</strong></td>
+<td>SYLORA_ICE_SERVERS_JSON</td>
+</tr>
+</tbody></table>
+<hr>
+<h2><code>/api/ready</code> behavior</h2>
+<p>When <code>NODE_ENV=production</code>, ready=false unless postgres+redis+outbox all configured (<code>dependencyHealth()</code> in server.mjs).</p>
+<p>Dev mode (audit): ready=true with JSON fallback.</p>
+<hr>
+<h2>Docker compose (static validation)</h2>
+<p><code>docker compose config</code> — <strong>not run</strong> (docker missing). YAML structure reviewed: postgres healthcheck, redis AOF, migrate on start, healthcheck on sylora service.</p>
+<hr>
+<h2>Deployment path (documented)</h2>
+<ol>
+<li><code>scripts/deploy-prod.sh</code> → git pull + docker compose up</li>
+<li><code>docs/DEPLOY-HETZNER.md</code> — manual VPS guide</li>
+</ol>
+<p>Not executed in audit.</p>
+<hr>
+<h2>Blockers to production launch</h2>
+<ol>
+<li>Configure Postgres + Redis + run migrations</li>
+<li>Set OPENAI_API_KEY (if AI is launch-critical)</li>
+<li>Configure TURN for WebRTC</li>
+<li>Replace TEST LUMEN with real payment provider or remove monetization claims</li>
+<li>Add CI pipeline (test + lint + build)</li>
+<li>Media storage strategy (S3-compatible)</li>
+<li>Remove or secure dev JSON persistence in production images</li>
+<li>Observability stack</li>
+</ol>
+<hr>
+<h2>What would pass a minimal prod bar</h2>
+<ul>
+<li>Health/ready endpoints</li>
+<li>Security headers + CSP</li>
+<li>Password hashing</li>
+<li>Docker packaging exists</li>
+<li>Migration scripts exist</li>
+<li>Rate limit + body size limits</li>
+</ul>
+<h2>What fails a full prod bar</h2>
+<ul>
+<li>No automated deploy verification in repo</li>
+<li>No backup/restore</li>
+<li>Monolithic ffmpeg transcode in API process</li>
+<li>45MB static assets served by Node</li>
+<li>Single <code>app.js</code> / <code>service.mjs</code> god-files</li>
+<li>~150 API endpoints without authz audit</li>
+</ul>
+<hr>
+<h1>Appendix: SYLORA_REMEDIATION_PLAN</h1>
+<p><strong>Do not execute until approved.</strong> Ordered by dependency and readiness impact.</p>
+<hr>
+<h2>Phase 0 — P0 blockers</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P0</td>
+<td>Dev JSON persistence in prod</td>
+<td>server.mjs, compose.yaml</td>
+<td>Fail boot if production without DATABASE_URL</td>
+<td>Postgres</td>
+<td><code>/api/ready</code> 503 without DB in production</td>
+</tr>
+<tr>
+<td>P0</td>
+<td>Docker/CI absent</td>
+<td>.github/workflows</td>
+<td>Add CI: lint, test, compose config</td>
+<td>—</td>
+<td>PR checks green</td>
+</tr>
+<tr>
+<td>P0</td>
+<td>AI core blocked</td>
+<td>.env, server.mjs</td>
+<td>Document required OPENAI_API_KEY; degrade UI honestly</td>
+<td>OpenAI account</td>
+<td>Chat returns 200 with key</td>
+</tr>
+<tr>
+<td>P0</td>
+<td>WebRTC NAT</td>
+<td>rtc-config.mjs</td>
+<td>Configure TURN in SYLORA_ICE_SERVERS_JSON</td>
+<td>TURN provider</td>
+<td>Two-browser live test connects</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 1 — Architecture &amp; foundations</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>Dual persistence confusion</td>
+<td>store.mjs, repositories/*</td>
+<td>Single write path per entity</td>
+<td>Phase 0</td>
+<td>No duplicate live/chat in JSON when PG on</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>3885 LOC service.mjs</td>
+<td>ecosystem/service.mjs</td>
+<td>Extract domains with tests</td>
+<td>—</td>
+<td>≤500 LOC per module</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>11 CSS files</td>
+<td>public/design-*.css</td>
+<td>Merge to design-tokens + scenes</td>
+<td>Design review</td>
+<td>2 CSS files loaded</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Unauthenticated media</td>
+<td>server.mjs serveMedia</td>
+<td>Signed URLs or auth check</td>
+<td>—</td>
+<td>401 without token</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 2 — Core user flows</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>No browser E2E tests</td>
+<td>tests/</td>
+<td>Playwright: register→post→logout</td>
+<td>CI</td>
+<td>1 green E2E pipeline</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Google auth missing</td>
+<td>server.mjs, app.js</td>
+<td>OAuth PKCE or remove from marketing</td>
+<td>Google console</td>
+<td>Login with Google works</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Password recovery</td>
+<td>server.mjs</td>
+<td>Email reset flow</td>
+<td>SMTP</td>
+<td>Reset link works</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Live Following empty</td>
+<td>live repo</td>
+<td>Implement follow graph for live</td>
+<td>Social graph</td>
+<td>Tab shows rooms</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Clip/video uploader dup</td>
+<td>app.js</td>
+<td>Shared upload component</td>
+<td>—</td>
+<td>One uploader module</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 3 — Sylora AI / avatar</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>AI chat blocked</td>
+<td>server.mjs, OpenAI</td>
+<td>Configure provider + eval tests</td>
+<td>OPENAI_API_KEY</td>
+<td>ai.test passes live</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Avatar is PNG not 3D</td>
+<td>app.js, assets</td>
+<td>Decide: honest 2D OR import GLB</td>
+<td>Art pipeline</td>
+<td>Product truth in UI copy</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Viseme fake lipsync</td>
+<td>app.js setSyloraViseme</td>
+<td>Integrate viseme v2 sheet or drop claim</td>
+<td>—</td>
+<td>Sync within 100ms of audio</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>150 orphan AI endpoints</td>
+<td>ecosystem/routes.mjs</td>
+<td>Hide or wire UI</td>
+<td>Product spec</td>
+<td>Each endpoint has UI or <code>@internal</code></td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 4 — Live / social / creator</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>WebRTC E2E unverified</td>
+<td>app.js live/calls</td>
+<td>Manual + automated WebRTC test</td>
+<td>TURN</td>
+<td>Host+viewer video</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>RTMP absent</td>
+<td>—</td>
+<td>Scope decision: browser-only or ingest</td>
+<td>Infra</td>
+<td>Document limitation</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Companion not bundled</td>
+<td>companion.mjs</td>
+<td>Document start script in compose</td>
+<td>OBS</td>
+<td>Studio connects</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Battle dual API</td>
+<td>server.mjs, routes.mjs</td>
+<td>Unify battle creation</td>
+<td>—</td>
+<td>One endpoint</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 5 — Monetization</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>TEST LUMEN misleading</td>
+<td>app.js, wallet</td>
+<td>Rename to DEMO or integrate Stripe</td>
+<td>Payment provider</td>
+<td>Real checkout OR honest label</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Paid courses blocked</td>
+<td>server.mjs enroll</td>
+<td>Payment webhook</td>
+<td>Stripe</td>
+<td>Paid enroll works</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Creator payouts</td>
+<td>wallet repo</td>
+<td>Payout ledger + admin</td>
+<td>Legal</td>
+<td>Export CSV</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 6 — Responsive / design consistency</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P2</td>
+<td>Tablet not tested</td>
+<td>modules.css</td>
+<td>Test 768–1024 breakpoints</td>
+<td>—</td>
+<td>Screenshot suite</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Mixed EN/UK in nav</td>
+<td>i18n.js, index.html</td>
+<td>Full i18n for nav labels</td>
+<td>—</td>
+<td>PL/EN complete</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>favicon 404</td>
+<td>public/</td>
+<td>Add favicon.ico</td>
+<td>—</td>
+<td>200 on /favicon.ico</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 7 — Security / performance / testing</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>localStorage token</td>
+<td>app.js</td>
+<td>httpOnly cookie migration</td>
+<td>—</td>
+<td>XSS token theft mitigated</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>45MB assets</td>
+<td>public/assets</td>
+<td>Compress, lazy-load, CDN</td>
+<td>CDN</td>
+<td>LCP &lt; 2.5s</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Gift runtime paths</td>
+<td>gift-runtime.js</td>
+<td>Consolidate fallback chain</td>
+<td>Phase 1 CSS</td>
+<td>One play() API</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Dependency audit in CI</td>
+<td>package.json</td>
+<td>npm audit --production</td>
+<td>CI</td>
+<td>Fail on high</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Phase 8 — Production readiness</h2>
+<table>
+<thead>
+<tr>
+<th>PRIORITY</th>
+<th>PROBLEM</th>
+<th>FILES/MODULES</th>
+<th>ACTION</th>
+<th>DEPENDENCIES</th>
+<th>ACCEPTANCE CRITERIA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P0</td>
+<td>No backups</td>
+<td>infra/</td>
+<td>pg_dump cron + media sync</td>
+<td>Postgres</td>
+<td>Restore drill</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>No metrics</td>
+<td>server.mjs</td>
+<td>Prometheus /health metrics</td>
+<td>—</td>
+<td>Dashboard</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>ffmpeg in API process</td>
+<td>server.mjs</td>
+<td>Queue workers for transcode</td>
+<td>Redis queue</td>
+<td>API stays responsive</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Account deletion</td>
+<td>routes.mjs</td>
+<td>GDPR delete user</td>
+<td>Legal</td>
+<td>Data removed in 30d</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Top 10 tasks by readiness ROI</h2>
+<ol>
+<li>Postgres+Redis production boot + migrations</li>
+<li>OPENAI_API_KEY + Sylora chat E2E</li>
+<li>TURN for Live/Calls</li>
+<li>CI (test/lint/build)</li>
+<li>Playwright smoke E2E</li>
+<li>Payment provider OR remove TEST LUMEN branding</li>
+<li>CSS/design consolidation</li>
+<li>Media auth/signed URLs</li>
+<li>Browser WebRTC verification suite</li>
+<li>favicon + honest AI/avatar product copy</li>
+</ol>
+
+</body>
+</html>
