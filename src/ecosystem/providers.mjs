@@ -3,22 +3,40 @@
  * Concrete adapters resolve from env; missing provider → honest blocked status.
  */
 
+import { AI_STATUS, loadRuntimeConfig } from '../config.mjs';
+
 export function resolveAiProvider() {
-  if (process.env.OPENAI_API_KEY) {
+  const config = loadRuntimeConfig(process.env);
+  if (config.ai.configured) {
     return {
       id: 'openai',
-      status: 'ready',
+      status: config.ai.status === AI_STATUS.DEGRADED ? 'degraded' : 'ready',
+      aiStatus: config.ai.status,
       chatModel: process.env.OPENAI_MODEL || 'gpt-5.6',
       fastModel: process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || 'gpt-5.6',
       realtimeModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime'
     };
   }
-  return { id: 'none', status: 'blocked_provider', chatModel: null, fastModel: null, realtimeModel: null };
+  return {
+    id: 'none',
+    status: 'blocked_provider',
+    aiStatus: config.ai.status,
+    chatModel: null,
+    fastModel: null,
+    realtimeModel: null
+  };
 }
 
 export function resolveSpeechProvider() {
-  if (process.env.OPENAI_API_KEY) return { id: 'openai-realtime', status: 'ready' };
-  return { id: 'none', status: 'blocked_provider' };
+  const config = loadRuntimeConfig(process.env);
+  if (config.ai.configured) {
+    return {
+      id: 'openai-realtime',
+      status: config.ai.status === AI_STATUS.DEGRADED ? 'degraded' : 'ready',
+      aiStatus: config.ai.status
+    };
+  }
+  return { id: 'none', status: 'blocked_provider', aiStatus: config.ai.status };
 }
 
 export function resolveTranslationProvider() {

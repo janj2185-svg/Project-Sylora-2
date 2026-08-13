@@ -1,6 +1,14 @@
 data/*.json
 !.gitkeep
 .env
-.env.local
+.env.*
+!.env.example
 node_modules/
 *.log
+.DS_Store
+coverage/
+tmp/*
+!tmp/.gitkeep
+:memory:
+*.pem
+*.key

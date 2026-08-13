@@ -13,7 +13,9 @@ import { PostgresAuthSocialRepository } from './repositories/postgres-auth-socia
 import { PostgresWalletRepository } from './repositories/postgres-wallet.mjs';
 import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
-import { hasTurnServer, parseIceServers } from './rtc-config.mjs';
+import { hasTurnServer } from './rtc-config.mjs';
+import { loadRuntimeConfig, enforceProductionBootGuard } from './config.mjs';
+import { buildLivenessReport, buildReadinessReport, publicAiDiagnostics } from './runtime-status.mjs';
 import { LiveFanout } from './live-fanout.mjs';
 import { LivePeerRegistry } from './live-peer-registry.mjs';
 import { ConferenceFanout } from './conference-fanout.mjs';
@@ -30,8 +32,10 @@ import { createPlatformEvent } from './platform-event-spine.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
 if (process.env.NODE_ENV !== 'test' && fs.existsSync(localEnvFile)) process.loadEnvFile(localEnvFile);
+const runtimeConfig = loadRuntimeConfig();
+enforceProductionBootGuard(runtimeConfig);
 const publicDir = path.resolve(__dirname, '../public');
-const dataFile = process.env.SYLORA_DATA_FILE || path.resolve(__dirname, '../data/sylora.json');
+const dataFile = runtimeConfig.dataFile || path.resolve(__dirname, '../data/sylora.json');
 const mediaDir = path.resolve(path.dirname(dataFile), 'media');
 const store = new Store(dataFile).load();
 fs.mkdirSync(mediaDir, { recursive: true });
@@ -43,18 +47,23 @@ const liveOverlayStreams = new Map();
 const userStreams = new Map();
 const browserSourceTokens = new Map();
 const rateBuckets = new Map();
-const port = Number(process.env.PORT || 8787);
-const ttlDays = Number(process.env.SESSION_TTL_DAYS || 30);
-const creatorGiftShareBps = Math.max(0, Math.min(10000, Number(process.env.CREATOR_GIFT_SHARE_BPS || 7000)));
-const adminEmails=new Set(String(process.env.SYLORA_ADMIN_EMAILS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean));
-const openaiModel=String(process.env.OPENAI_MODEL||'gpt-5.6');
-const openaiRealtimeModel=String(process.env.OPENAI_REALTIME_MODEL||'gpt-realtime-2.1');
-const openaiRealtimeVoice=String(process.env.OPENAI_REALTIME_VOICE||'marin');
-const liveIceServers=parseIceServers(process.env.SYLORA_ICE_SERVERS_JSON);
-const openai=process.env.OPENAI_API_KEY?new OpenAI({apiKey:process.env.OPENAI_API_KEY,...(process.env.OPENAI_BASE_URL?{baseURL:process.env.OPENAI_BASE_URL}:{})}):null;
+const port = runtimeConfig.port;
+const ttlDays = runtimeConfig.sessionTtlDays;
+const creatorGiftShareBps = runtimeConfig.creatorGiftShareBps;
+const adminEmails = runtimeConfig.adminEmails;
+const openaiModel = runtimeConfig.ai.model;
+const openaiRealtimeModel = runtimeConfig.ai.realtimeModel;
+const openaiRealtimeVoice = runtimeConfig.ai.realtimeVoice;
+const liveIceServers = runtimeConfig.iceServers;
+const openai = runtimeConfig.ai.configured
+  ? new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    ...(process.env.OPENAI_BASE_URL ? { baseURL: process.env.OPENAI_BASE_URL } : {})
+  })
+  : null;
 const aiBuckets=new Map();
-const postgres=new PostgresService(process.env.DATABASE_URL);
-const redis=new RedisService(process.env.REDIS_URL);
+const postgres = new PostgresService(runtimeConfig.database.configured ? process.env.DATABASE_URL : '');
+const redis = new RedisService(runtimeConfig.redis.configured ? process.env.REDIS_URL : '');
 const liveFanout=new LiveFanout({redis,dispatch:dispatchLiveLocal});
 const livePeerRegistry=new LivePeerRegistry(redis);
 const conferenceFanout=new ConferenceFanout({redis,dispatch:dispatchConferenceLocal});
@@ -122,10 +131,7 @@ function json(res, status, body) {
 }
 function companionConnectSrc() {
   const defaults = ['http://127.0.0.1:43179', 'http://localhost:43179', 'ws://127.0.0.1:4455', 'ws://localhost:4455', 'wss://localhost:4455'];
-  const extra = String(process.env.SYLORA_COMPANION_ORIGINS || '')
-    .split(',')
-    .map((x) => x.trim())
-    .filter(Boolean);
+  const extra = runtimeConfig.companion.origins;
   return [...new Set([...defaults, ...extra])].join(' ');
 }
 function securityHeaders(res) {
@@ -144,9 +150,9 @@ function securityHeaders(res) {
     "base-uri 'self'",
     "frame-ancestors 'none'"
   ];
-  if (process.env.NODE_ENV === 'production') csp.push('upgrade-insecure-requests');
+  if (runtimeConfig.nodeEnv === 'production') csp.push('upgrade-insecure-requests');
   res.setHeader('content-security-policy', csp.join('; '));
-  if (process.env.NODE_ENV === 'production' && process.env.SYLORA_ENABLE_HSTS === '1') {
+  if (runtimeConfig.nodeEnv === 'production' && runtimeConfig.companion.enableHsts) {
     res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
   }
 }
@@ -161,7 +167,10 @@ async function allowRequest(req) {
   bucket.count += 1; return bucket.count <= limit;
 }
 async function allowAi(userId){const now=Date.now(),windowMs=60_000,limit=12;if(redis.configured){try{return await redis.rateCount(`sylora:rate:ai:${userId}`,windowMs)<=limit}catch{}}const b=aiBuckets.get(userId);if(!b||b.resetAt<=now){aiBuckets.set(userId,{count:1,resetAt:now+windowMs});return true}b.count+=1;return b.count<=limit}
-async function dependencyHealth(){const [pg,cache,outbox]=await Promise.all([postgres.ping(),redis.ping(),outboxRepo.health()]),production=process.env.NODE_ENV==='production',ready=pg.ok&&cache.ok&&outbox.ok&&(!production||(pg.configured&&cache.configured&&outbox.configured));return {ready,postgres:pg,redis:cache,outbox}}
+async function dependencyHealth() {
+  const [pg, cache, outbox] = await Promise.all([postgres.ping(), redis.ping(), outboxRepo.health()]);
+  return { postgres: pg, redis: cache, outbox };
+}
 async function body(req) {
   let raw = '';
   for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error('BODY_TOO_LARGE'); }
@@ -313,16 +322,33 @@ function serveHls(req,res,mediaId,fileName){if(!/^(index\.m3u8|seg-\d{5}\.ts)$/.
 
 async function api(req, res, url) {
   const p = url.pathname;
-  if(req.method==='GET'&&p==='/api/health'){const dependencies=await dependencyHealth();return json(res,200,{status:dependencies.ready?'ok':'degraded',service:'sylora-core',persistence:postgres.configured?'postgres-social-wallet-ai-hybrid':'json-dev-runtime',ecosystem:'personal-ai-identity-kg-agents-developers',ecosystemPersistence:ecosystemRepo.enabled?'postgres+json-cache':'json',dependencies})}
+  if (req.method === 'GET' && p === '/api/health') {
+    const dependencies = await dependencyHealth();
+    const report = buildLivenessReport(runtimeConfig, dependencies);
+    return json(res, 200, {
+      ...report,
+      ecosystem: 'personal-ai-identity-kg-agents-developers',
+      ecosystemPersistence: ecosystemRepo.enabled ? 'postgres+json-cache' : 'json'
+    });
+  }
   if(req.method==='GET'&&p==='/api/integrations/status'){const {integrationStatus}=await import('./integrations.mjs');return json(res,200,{integrations:integrationStatus()})}
   if(req.method==='GET'&&p==='/api/platform/capabilities'){const {capabilityRegistry}=await import('./platform-events.mjs');return json(res,200,{capabilities:capabilityRegistry(),graph:ecosystem.platformCapabilityGraph()})}
-  if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction})}
+  if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction,ai:publicAiDiagnostics(runtimeConfig)})}
   if(req.method==='POST'&&p==='/api/sylora/director/propose'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);return json(res,200,ecosystem.directorPropose({...input,liveRoomId:input.liveId||null,viewerCount:input.viewerCount||0}))}
-  if(req.method==='GET'&&p==='/api/ready'){const dependencies=await dependencyHealth();return json(res,dependencies.ready?200:503,{ready:dependencies.ready,dependencies})}
+  if (req.method === 'GET' && p === '/api/ready') {
+    const dependencies = await dependencyHealth();
+    const report = buildReadinessReport(runtimeConfig, dependencies);
+    return json(res, report.ready ? 200 : 503, report);
+  }
+  if (req.method === 'GET' && p === '/api/ai/status') {
+    return json(res, 200, publicAiDiagnostics(runtimeConfig));
+  }
   if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
-    const user=await requireUser(req,res);if(!user)return;if(!process.env.OPENAI_API_KEY)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
+    const user=await requireUser(req,res);if(!user)return;
+    if(!runtimeConfig.ai.configured)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED',aiStatus:runtimeConfig.ai.status,reason:'OPENAI_API_KEY_MISSING'});
+    if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     if(!String(req.headers['content-type']||'').startsWith('application/sdp'))return json(res,415,{error:'SDP_REQUIRED'});
     const sdp=await textBody(req);if(!sdp.trim())return json(res,400,{error:'SDP_REQUIRED'});
     const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20)};
@@ -488,7 +514,19 @@ async function api(req, res, url) {
   m=route('/api/conferences/:id/ai',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const owned=[...(await listConferences(user.id,'science')),...(await listConferences(user.id,'business'))],room=owned.find(x=>x.id===m.id);if(!room)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});if(!room.syloraEnabled)return json(res,403,{error:'SYLORA_NOT_ENABLED'});const input=await body(req),text=safeText(input.text,4000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});try{const response=await openai.responses.create({model:openaiModel,store:false,reasoning:{effort:'low'},max_output_tokens:1800,instructions:`You are Sylora participating on demand inside a private ${room.kind} conference. Be concise, factual and useful. Reply in the language of the question. You are an AI assistant, not a human participant. Do not invent meeting facts that were not provided. Do not perform account writes or claim you changed platform data. Room: ${JSON.stringify({title:room.title,description:room.description,kind:room.kind,participants:participants.map(x=>({displayName:x.displayName,role:x.role}))})}`,input:[{role:'user',content:text}]});const answer=safeText(response.output_text,8000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});const event={id:store.id(),text:answer,question:text,askedBy:store.publicUser(user),createdAt:store.now()};emitConference(m.id,'sylora',event);return json(res,200,{message:answer,event})}catch(error){console.error('Conference Sylora request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'})}}
   m=route('/api/conference-invites/:id/accept',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const accepted=await acceptConference(m.id,user.id);if(!accepted)return json(res,404,{error:'INVITE_NOT_FOUND'});return json(res,200,{accepted})}
   if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});emitLiveStartedEvents({live,host:user});ingestLivePlatformEvent(createPlatformEvent({eventType:'live.started',liveRoomId:live.id,actor:{type:'user',id:user.id},payload:{hostId:user.id,title:live.title}}));return json(res,201,{live});}
-  if(req.method==='GET'&&p==='/api/live/rtc-config'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{iceServers:liveIceServers,turnConfigured:hasTurnServer(liveIceServers)})}
+  if(req.method==='GET'&&p==='/api/live/rtc-config'){
+    const user=await requireUser(req,res);if(!user)return;
+    const { publicRealtimeDiagnostics } = await import('./runtime-status.mjs');
+    const realtime = publicRealtimeDiagnostics(runtimeConfig);
+    return json(res,200,{
+      iceServers: liveIceServers,
+      turnConfigured: hasTurnServer(liveIceServers),
+      readiness: realtime.status,
+      reason: realtime.reason,
+      note: realtime.note,
+      credentialVisibility: 'TURN username/credential are browser-visible for WebRTC ICE; prefer short-lived credentials. Unrelated server secrets are never included.'
+    });
+  }
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
   m=route('/api/live/:id/events',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const countsAsViewer=url.searchParams.get('control')!=='host';res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: presence\ndata: ${JSON.stringify({status:'connected'})}\n\n`);if(!liveStreams.has(live.id))liveStreams.set(live.id,new Set());const targets=liveStreams.get(live.id);targets.add(res);let viewerId=null,viewerHeartbeat=null,lastViewerCount=null;if(countsAsViewer){viewerId=store.id();if(!liveViewerLeases.has(live.id))liveViewerLeases.set(live.id,new Set());liveViewerLeases.get(live.id).add(viewerId);lastViewerCount=await touchLiveViewer(live.id,viewerId);emitLive(live.id,'viewers',{count:lastViewerCount});viewerHeartbeat=setInterval(async()=>{if(!targets.has(res))return;const count=await touchLiveViewer(live.id,viewerId);if(count!==lastViewerCount){lastViewerCount=count;emitLive(live.id,'viewers',{count})}},15_000)}const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25_000);req.on('close',()=>{clearInterval(heartbeat);if(viewerHeartbeat)clearInterval(viewerHeartbeat);targets.delete(res);if(!targets.size)liveStreams.delete(live.id);if(viewerId){const local=liveViewerLeases.get(live.id);local?.delete(viewerId);if(local&&!local.size)liveViewerLeases.delete(live.id);removeLiveViewer(live.id,viewerId).then(count=>emitLive(live.id,'viewers',{count})).catch(()=>{})}});return;}
   m=route('/api/live/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['host-ready','viewer-ready','viewer-rejected','offer','answer','ice','viewer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='viewer-ready'){if(user.id===live.hostId)return json(res,400,{error:'VIEWER_SIGNAL_REQUIRED'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else if(kind==='host-ready'||kind==='offer'||kind==='viewer-rejected'){if(user.id!==live.hostId)return json(res,403,{error:'HOST_ONLY_SIGNAL'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}else{if(await livePeerRegistry.owner(live.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitLive(live.id,'signal',signal);if(kind==='viewer-left')await livePeerRegistry.release(live.id,fromPeerId,user.id);return json(res,202,{accepted:true});}
@@ -501,7 +539,20 @@ async function api(req, res, url) {
   if(req.method==='POST'&&p==='/api/videos'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const media=store.data.media.find(x=>x.id===input.mediaId&&x.userId===user.id);if(!media)return json(res,400,{error:'OWNED_MEDIA_REQUIRED'});const format=input.format==='clip'?'clip':'video';const video={id:store.id(),userId:user.id,mediaId:media.id,title:safeText(input.title,120)||'Untitled',description:safeText(input.description,2000),format,visibility:'public',createdAt:store.now()};store.data.videos.push(video);store.save();const job=startHlsJob(media,user);return json(res,201,{video:{...video,media:{...media,url:`/media/${media.id}`},author:store.publicUser(user),stream:publicJob(job)}});}
   if(req.method==='GET'&&p==='/api/stats'){const user=await requireUser(req,res);if(!user)return;const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),creatorEarnings:wallet?.earnings||0};return json(res,200,{...social,...giftStats});}
   if(req.method==='GET'&&p==='/api/progress'){const user=await requireUser(req,res);if(!user)return;const progress=authSocial.enabled?await walletRepo.progress(user.id):{donorXp:store.data.donorProgress.find(x=>x.userId===user.id)?.giftXp||0};return json(res,200,{...progress,orbitLevel:levelFromXp(progress.donorXp)})}
-  if(req.method==='GET'&&p==='/api/ai/history'){const user=await requireUser(req,res);if(!user)return;const [messages,memories,pendingActions]=await Promise.all([aiListMessages(user.id,50),aiListMemories(user.id,50),aiListPendingActions(user.id,20)]);return json(res,200,{messages,memories,pendingActions,model:openaiModel,configured:!!openai})}
+  if (req.method === 'GET' && p === '/api/ai/history') {
+    const user = await requireUser(req, res); if (!user) return;
+    const [messages, memories, pendingActions] = await Promise.all([aiListMessages(user.id, 50), aiListMemories(user.id, 50), aiListPendingActions(user.id, 20)]);
+    return json(res, 200, {
+      messages,
+      memories,
+      pendingActions,
+      model: openaiModel,
+      configured: !!openai,
+      aiStatus: runtimeConfig.ai.status,
+      aiReason: runtimeConfig.ai.configured ? 'OPENAI_API_KEY_SET' : runtimeConfig.nodeEnv === 'production' ? 'OPENAI_API_KEY_MISSING' : 'OPENAI_API_KEY_MISSING_DEV_DEGRADED',
+      fallback: runtimeConfig.ai.status === 'AI_DEGRADED'
+    });
+  }
   if(req.method==='DELETE'&&p==='/api/ai/history'){
     const user=await requireUser(req,res);if(!user)return;
     if(aiRepo.enabled){try{await aiRepo.clearMessages?.(user.id)}catch{}}
@@ -537,7 +588,9 @@ async function api(req, res, url) {
   m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
   if(req.method==='POST'&&p==='/api/ai/chat'){
-    const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
+    const user=await requireUser(req,res);if(!user)return;
+    if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED',aiStatus:runtimeConfig.ai.status,reason:runtimeConfig.ai.configured?'OPENAI_BASE_URL_OVERRIDE':'OPENAI_API_KEY_MISSING',fallback:runtimeConfig.ai.status==='AI_DEGRADED'});
+    if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     const input=await body(req),text=safeText(input.text,6000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});
     const view=safeText(input.view||'command_center',40)||'command_center';
     try{
@@ -548,8 +601,8 @@ async function api(req, res, url) {
       ecosystem.ensurePersonalAgent(user);
       ecosystem.recordActivity(user,{kind:'chat',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
       ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat'});
-      return json(res,200,{message:answer,model:openaiModel,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
-    }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'});}
+      return json(res,200,{message:answer,model:openaiModel,aiStatus:runtimeConfig.ai.status,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
+    }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR',aiStatus:runtimeConfig.ai.status});}
   }
   return json(res, 404, { error: 'NOT_FOUND' });
 }
@@ -579,10 +632,24 @@ function staticFile(req, res, url) {
 
 export const server = http.createServer(async (req, res) => {
   try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED'}); await api(req,res,url); } else staticFile(req,res,url); }
-  catch (e) { console.error(e); if (!res.headersSent) json(res, e.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: e.message || 'BAD_REQUEST' }); else res.end(); }
+  catch (e) {
+    const known = new Set(['BODY_TOO_LARGE', 'INVALID_JSON', 'UNSUPPORTED_MEDIA_TYPE', 'MEDIA_TOO_LARGE', 'INVALID_VIDEO_FILE']);
+    const safeCode = known.has(e?.message) ? e.message : 'BAD_REQUEST';
+    console.error(e?.name || 'error', safeCode);
+    if (!res.headersSent) json(res, e?.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: safeCode });
+    else res.end();
+  }
 });
 
-if (process.env.NODE_ENV !== 'test') {
+if (runtimeConfig.nodeEnv !== 'test') {
+  console.log('SYLORA boot', {
+    mode: runtimeConfig.nodeEnv,
+    persistence: runtimeConfig.database.configured ? 'postgres' : 'json-dev',
+    databaseConfigured: runtimeConfig.database.configured,
+    redisConfigured: runtimeConfig.redis.configured,
+    ai: runtimeConfig.ai.status,
+    webrtc: runtimeConfig.realtime.status
+  });
   Promise.allSettled([liveFanout.start(),conferenceFanout.start(),realtimeFanout.start()]).then(()=>realtimeOutbox.start());
   server.listen(port, () => console.log(`SYLORA running on http://localhost:${port}`));
   const shutdown=async()=>{server.close();realtimeOutbox.stop();await Promise.allSettled([liveFanout.close(),conferenceFanout.close(),realtimeFanout.close()]);await Promise.allSettled([postgres.close(),redis.close()]);process.exit(0)};
