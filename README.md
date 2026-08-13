@@ -65,7 +65,7 @@ OBS control is real and deliberately restricted to `localhost` / `127.0.0.1`. Cr
 
 The regenerated arm/wrist assets passed local anatomy/alpha separation checks and their independent sprite layers are enabled in the web avatar. Shoulder, elbow and wrist transforms are rendered as a nested kinematic chain. Each hand now has four anatomy-preserving pose frames (neutral, open, conversational curl and emphasis) selected by the semantic gesture system, with a short cross-fade between frames so finger posture changes naturally together with Sylora's spring-driven arm movement. This avoids assembling a hand from disconnected finger sprites. It is pose-based finger articulation, not a per-finger skeletal rig. Exact browser/device shoulder/wrist/hand alignment still needs visual-regression QA on the target browsers before the Digital Human phase can be marked complete.
 
-The migration is intentionally hybrid for now. PostgreSQL is authoritative for auth/users/sessions, posts, the core social/messaging graph, the test LUMEN wallet/gift ledger, AI messages/memories/actions, LIVE room/chat lifecycle, and the gift realtime outbox when configured. Redis Pub/Sub distributes LIVE and committed gift events across instances, Redis leases coordinate WebRTC peer ownership, and expiring sorted-set leases aggregate viewer presence/counts. The gift outbox uses at-least-once delivery with stable-ID client deduplication, so a process/Redis failure cannot silently erase the durable event after the financial commit. If Redis is unavailable these coordination paths fall back to one process only when Redis is not configured for development; production readiness requires PostgreSQL, Redis and outbox health. The media tracks are still deliberately P2P (six-peer Studio safety cap), not an SFU. Communities/learning, business, media metadata and moderation still use the JSON store. LUMEN remains test currency: real payments, withdrawals and creator payouts are deliberately not enabled.
+The migration is intentionally hybrid for now. PostgreSQL is authoritative for auth/users/sessions, posts, the core social/messaging graph, the test LUMEN wallet/gift ledger, AI messages/memories/actions, LIVE room/chat lifecycle, and the gift realtime outbox when configured. Redis Pub/Sub distributes LIVE and committed gift events across instances, Redis leases coordinate WebRTC peer ownership, and expiring sorted-set leases aggregate viewer presence/counts. The gift outbox uses at-least-once delivery with stable-ID client deduplication, so a process/Redis failure cannot silently erase the durable event after the financial commit. If Redis is unavailable these coordination paths fall back to one process. Redis is not required to boot; production boot requires a valid `DATABASE_URL`, and missing Redis is reported as a scale-out `DEGRADED` diagnostic. See `docs/operations/ENVIRONMENT.md` and `docs/operations/PRODUCTION_READINESS.md`. The media tracks are still deliberately P2P (six-peer Studio safety cap), not an SFU. Communities/learning, business, media metadata and moderation still use the JSON store. LUMEN remains test currency: real payments, withdrawals and creator payouts are deliberately not enabled.
 
 ## Run
 
@@ -107,7 +107,7 @@ The V2 foundation lives in `public/gift-v2/` and starts from story beats and sem
 
 ## Core API
 
-- `GET /api/health` and `GET /api/ready`
+- `GET /api/health`, `GET /api/ready`, and `GET /api/ai/status`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
