@@ -1,8 +1,8 @@
-import { hasTurnServer, parseIceServers } from './rtc-config.mjs';
+import { buildIceServersFromEnv, hasTurnServer } from './rtc-config.mjs';
 
 /** External integration readiness — honest BLOCKED_EXTERNAL until credentials exist. */
 export function integrationStatus() {
-  const iceServers = parseIceServers(process.env.SYLORA_ICE_SERVERS_JSON);
+  const iceServers = buildIceServersFromEnv();
   return {
     googleOAuth: {
       status: process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET
