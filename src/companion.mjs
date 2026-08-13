@@ -48,6 +48,10 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
   const companion=createCompanionServer({token:process.env.SYLORA_COMPANION_TOKEN||crypto.randomBytes(24).toString('base64url'),allowedOrigins:origins.length?origins:[...DEFAULT_ORIGINS]});
   const address=await companion.listen(Number(process.env.SYLORA_COMPANION_PORT||DEFAULT_PORT));
   console.log(`SYLORA Companion listening on http://${address.address}:${address.port}`);
-  console.log(`Pairing token: ${companion.token}`);
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Companion pairing token is not printed in production. Set SYLORA_COMPANION_TOKEN.');
+  } else {
+    console.log(`Pairing token: ${companion.token}`);
+  }
   console.log('Keep this token private. OBS credentials remain in this local process memory only.');
 }

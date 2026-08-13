@@ -3847,9 +3847,10 @@ export class EcosystemService {
     return languageTutorMode(input);
   }
 
-  capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {
+  capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false, aiStatus = null, aiReason = null } = {}) {
     const providers = providerSnapshot();
     const status = this.platformStatus();
+    const resolvedAiStatus = aiStatus || (aiConfigured ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE');
     return {
       aiText: !!aiConfigured,
       aiRealtimeVoice: !!realtimeConfigured && !!aiConfigured,
@@ -3858,6 +3859,8 @@ export class EcosystemService {
       translation: providers.translation?.status || 'degraded',
       embeddings: providers.embedding?.status || 'blocked_provider',
       websocket: true,
+      aiStatus: resolvedAiStatus,
+      aiReason: aiReason || (aiConfigured ? null : 'OPENAI_API_KEY is not set'),
       degraded: {
         ai: !aiConfigured,
         voice: !realtimeConfigured || !aiConfigured,

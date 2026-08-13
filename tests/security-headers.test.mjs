@@ -23,7 +23,7 @@ test('security headers include production HSTS/CSP upgrades when enabled', async
       PORT: String(port),
       NODE_ENV: 'production',
       SYLORA_ENABLE_HSTS: '1',
-      DATABASE_URL: '',
+      DATABASE_URL: 'postgresql://sylora:sylora@127.0.0.1:5432/sylora',
       REDIS_URL: '',
       SYLORA_COMPANION_ORIGINS: 'https://companion.example'
     },
@@ -47,4 +47,6 @@ test('.env.example documents companion token and HSTS flag', () => {
   const env = fs.readFileSync('.env.example', 'utf8');
   assert.match(env, /SYLORA_COMPANION_TOKEN=/);
   assert.match(env, /SYLORA_ENABLE_HSTS=/);
+  assert.match(env, /SYLORA_TURN_URL=/);
+  assert.match(env, /DATABASE_URL=/);
 });

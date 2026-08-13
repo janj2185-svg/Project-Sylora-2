@@ -287,7 +287,9 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/ai/capabilities') {
     return json(res, 200, ecosystem.capabilitiesSnapshot({
       aiConfigured: !!process.env.OPENAI_API_KEY,
-      realtimeConfigured: !!process.env.OPENAI_API_KEY
+      realtimeConfigured: !!process.env.OPENAI_API_KEY,
+      aiStatus: process.env.OPENAI_API_KEY ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE',
+      aiReason: process.env.OPENAI_API_KEY ? null : 'OPENAI_API_KEY is not set'
     })), true;
   }
   if (req.method === 'GET' && p === '/api/home/hub') {
@@ -408,7 +410,9 @@ export async function handleEcosystemRoutes(ctx) {
     const user = await requireUser(req, res); if (!user) return true;
     const capabilities = ecosystem.capabilitiesSnapshot({
       aiConfigured: !!process.env.OPENAI_API_KEY,
-      realtimeConfigured: !!process.env.OPENAI_API_KEY
+      realtimeConfigured: !!process.env.OPENAI_API_KEY,
+      aiStatus: process.env.OPENAI_API_KEY ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE',
+      aiReason: process.env.OPENAI_API_KEY ? null : 'OPENAI_API_KEY is not set'
     });
     return json(res, 200, ecosystem.securityCenter(user, {
       blocks: store.data.blocks.filter(b => b.blockerId === user.id || b.userId === user.id),
@@ -726,7 +730,9 @@ export async function handleEcosystemRoutes(ctx) {
       platform: ecosystem.platformStatus(),
       capabilities: ecosystem.capabilitiesSnapshot({
         aiConfigured: !!process.env.OPENAI_API_KEY,
-        realtimeConfigured: !!process.env.OPENAI_API_KEY
+        realtimeConfigured: !!process.env.OPENAI_API_KEY,
+        aiStatus: process.env.OPENAI_API_KEY ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE',
+        aiReason: process.env.OPENAI_API_KEY ? null : 'OPENAI_API_KEY is not set'
       })
     }), true;
   }
@@ -832,6 +838,9 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, {
       iceServers,
       turnConfigured: typeof hasTurnServer === 'function' ? hasTurnServer(iceServers) : false,
+      status: (typeof hasTurnServer === 'function' && hasTurnServer(iceServers)) ? 'ok' : (process.env.NODE_ENV === 'production' ? 'NOT_READY' : 'DEGRADED'),
+      reason: (typeof hasTurnServer === 'function' && hasTurnServer(iceServers)) ? null : 'TURN_NOT_CONFIGURED',
+      credentialDelivery: 'authenticated_browser_webrtc',
       engine: 'call_engine_shared_webrtc'
     }), true;
   }
