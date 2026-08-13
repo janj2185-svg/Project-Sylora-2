@@ -1,0 +1,50 @@
+{
+  "consoleErrors": [
+    "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "[SYLORA:gift-runtime] TypeError: Failed to resolve module specifier \"three\". Relative references must start with either \"/\", \"./\", or \"../\"."
+  ],
+  "pageErrors": [
+    "TypeError: Failed to resolve module specifier \"three\". Relative references must start with either \"/\", \"./\", or \"../\"."
+  ],
+  "networkErrors": [
+    "net::ERR_ABORTED http://127.0.0.1:8787/__client_error?phase=gift-runtime&m=TypeError%3A%20Failed%20to%20resolve%20module%20specifier%20%22three%22.%20Relative%20references%20must%20start%20with%20either%20%22%2F%22%2C%20%22.%2F%22%2C%20or%20%22..%2F%22.",
+    "net::ERR_ABORTED http://127.0.0.1:8787/business",
+    "net::ERR_ABORTED http://127.0.0.1:8787/more",
+    "net::ERR_ABORTED http://127.0.0.1:8787/gifts",
+    "net::ERR_ABORTED http://127.0.0.1:8787/videos",
+    "net::ERR_ABORTED http://127.0.0.1:8787/",
+    "net::ERR_ABORTED http://127.0.0.1:8787/live",
+    "net::ERR_ABORTED http://127.0.0.1:8787/studio",
+    "net::ERR_ABORTED http://127.0.0.1:8787/ai",
+    "net::ERR_ABORTED http://127.0.0.1:8787/identity",
+    "net::ERR_ABORTED http://127.0.0.1:8787/dashboard",
+    "net::ERR_ABORTED http://127.0.0.1:8787/explore",
+    "net::ERR_ABORTED http://127.0.0.1:8787/communities",
+    "net::ERR_ABORTED http://127.0.0.1:8787/learning",
+    "net::ERR_ABORTED http://127.0.0.1:8787/messages"
+  ],
+  "notes": [
+    "NAV_FAIL business: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL more: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL gifts: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL videos: Navigation timeout of 12000 ms exceeded",
+    "REGISTER_OK shotuser5714",
+    "NAV_FAIL feed: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL live: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL studio: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL ai: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL identity: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL dashboard: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL live: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL explore: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL communities: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL studio: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL studio: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL gifts: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL learning: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL messages: Navigation timeout of 12000 ms exceeded",
+    "NAV_FAIL studio: Navigation timeout of 12000 ms exceeded"
+  ]
+}
