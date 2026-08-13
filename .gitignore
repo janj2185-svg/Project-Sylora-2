@@ -4,3 +4,6 @@ data/*.json
 .env.local
 node_modules/
 *.log
+
+dump.rdb
+:memory:
