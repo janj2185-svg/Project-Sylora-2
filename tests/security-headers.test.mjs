@@ -23,7 +23,7 @@ test('security headers include production HSTS/CSP upgrades when enabled', async
       PORT: String(port),
       NODE_ENV: 'production',
       SYLORA_ENABLE_HSTS: '1',
-      DATABASE_URL: '',
+      DATABASE_URL: 'postgresql://sylora:unused@127.0.0.1:5432/sylora',
       REDIS_URL: '',
       SYLORA_COMPANION_ORIGINS: 'https://companion.example'
     },

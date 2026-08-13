@@ -14,7 +14,7 @@ import { PostgresWalletRepository } from './repositories/postgres-wallet.mjs';
 import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
 import { hasTurnServer } from './rtc-config.mjs';
-import { loadConfig } from './config.mjs';
+import { assertProductionBoot, loadConfig } from './config.mjs';
 import { LiveFanout } from './live-fanout.mjs';
 import { LivePeerRegistry } from './live-peer-registry.mjs';
 import { ConferenceFanout } from './conference-fanout.mjs';
@@ -31,6 +31,11 @@ import { createPlatformEvent } from './platform-event-spine.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
 if (process.env.NODE_ENV !== 'test' && fs.existsSync(localEnvFile)) process.loadEnvFile(localEnvFile);
+const config = loadConfig(process.env);
+if (process.env.NODE_ENV !== 'test') {
+  try { assertProductionBoot(config); }
+  catch (error) { console.error(error.message); process.exit(error.exitCode || 1); }
+}
 const publicDir = path.resolve(__dirname, '../public');
 const dataFile = process.env.SYLORA_DATA_FILE || path.resolve(__dirname, '../data/sylora.json');
 const mediaDir = path.resolve(path.dirname(dataFile), 'media');
@@ -44,7 +49,6 @@ const liveOverlayStreams = new Map();
 const userStreams = new Map();
 const browserSourceTokens = new Map();
 const rateBuckets = new Map();
-const config = loadConfig(process.env);
 const port = config.port;
 const ttlDays = Number(process.env.SESSION_TTL_DAYS || 30);
 const creatorGiftShareBps = Math.max(0, Math.min(10000, Number(process.env.CREATOR_GIFT_SHARE_BPS || 7000)));
