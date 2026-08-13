@@ -9,7 +9,7 @@
     "companion": "node src/companion.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "test": "DATABASE_URL= REDIS_URL= node --test --test-force-exit tests/*.test.mjs",
-    "lint": "node --check src/server.mjs && node --check src/ecosystem/service.mjs && node --check src/ecosystem/routes.mjs && node --check src/ecosystem/sylora-intelligence.mjs && node --check src/ecosystem/domain-intelligence.mjs && node --check public/app.js && node --check public/i18n.js && node --check public/create-hub.js && node --check public/command-palette.js && node --check public/sylora-motion.js",
+    "lint": "node --check src/server.mjs && node --check src/config.mjs && node --check src/readiness.mjs && node --check src/rtc-config.mjs && node --check src/ecosystem/service.mjs && node --check src/ecosystem/routes.mjs && node --check src/ecosystem/sylora-intelligence.mjs && node --check src/ecosystem/domain-intelligence.mjs && node --check public/app.js && node --check public/i18n.js && node --check public/create-hub.js && node --check public/command-palette.js && node --check public/sylora-motion.js",
     "typecheck": "node --check src/ecosystem/*.mjs",
     "build": "node --check src/server.mjs && node --check public/app.js && node --check public/i18n.js && node --check public/create-hub.js"
   },

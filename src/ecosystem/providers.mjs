@@ -3,17 +3,32 @@
  * Concrete adapters resolve from env; missing provider → honest blocked status.
  */
 
-export function resolveAiProvider() {
-  if (process.env.OPENAI_API_KEY) {
+import { resolveAiStatus } from '../config.mjs';
+
+export function resolveAiProvider(env = process.env) {
+  const ai = resolveAiStatus(env);
+  if (ai.configured) {
     return {
       id: 'openai',
       status: 'ready',
-      chatModel: process.env.OPENAI_MODEL || 'gpt-5.6',
-      fastModel: process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || 'gpt-5.6',
-      realtimeModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime'
+      aiStatus: ai.status,
+      reason: ai.reason,
+      fallback: ai.fallback,
+      chatModel: env.OPENAI_MODEL || ai.model,
+      fastModel: env.OPENAI_MODEL_FAST || env.OPENAI_MODEL || ai.model,
+      realtimeModel: env.OPENAI_REALTIME_MODEL || ai.realtimeModel
     };
   }
-  return { id: 'none', status: 'blocked_provider', chatModel: null, fastModel: null, realtimeModel: null };
+  return {
+    id: 'none',
+    status: 'blocked_provider',
+    aiStatus: ai.status,
+    reason: ai.reason,
+    fallback: ai.fallback,
+    chatModel: null,
+    fastModel: null,
+    realtimeModel: null
+  };
 }
 
 export function resolveSpeechProvider() {
