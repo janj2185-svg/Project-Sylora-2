@@ -57,13 +57,13 @@ const openaiRealtimeVoice = runtimeConfig.ai.realtimeVoice;
 const liveIceServers = runtimeConfig.iceServers;
 const openai = runtimeConfig.ai.configured
   ? new OpenAI({
-    apiKey: runtimeConfig.ai.apiKey,
-    ...(runtimeConfig.ai.baseUrl ? { baseURL: runtimeConfig.ai.baseUrl } : {})
+    apiKey: process.env.OPENAI_API_KEY,
+    ...(process.env.OPENAI_BASE_URL ? { baseURL: process.env.OPENAI_BASE_URL } : {})
   })
   : null;
 const aiBuckets=new Map();
-const postgres = new PostgresService(runtimeConfig.database.url);
-const redis = new RedisService(runtimeConfig.redis.url);
+const postgres = new PostgresService(runtimeConfig.database.configured ? process.env.DATABASE_URL : '');
+const redis = new RedisService(runtimeConfig.redis.configured ? process.env.REDIS_URL : '');
 const liveFanout=new LiveFanout({redis,dispatch:dispatchLiveLocal});
 const livePeerRegistry=new LivePeerRegistry(redis);
 const conferenceFanout=new ConferenceFanout({redis,dispatch:dispatchConferenceLocal});
@@ -352,7 +352,7 @@ async function api(req, res, url) {
     const personality=ecosystem.personalityFor('ai', user);
     const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
-    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${runtimeConfig.ai.apiKey}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
+    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
   }
   if(req.method==='POST'&&p==='/api/ai/realtime/transcript'){
     const user=await requireUser(req,res);if(!user)return;const input=await body(req),role=input.role==='assistant'?'assistant':input.role==='user'?'user':null,text=safeText(input.text,12000),sourceEventId=safeText(input.sourceEventId,160);if(!role||!text)return json(res,400,{error:'TRANSCRIPT_REQUIRED'});

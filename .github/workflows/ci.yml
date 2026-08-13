@@ -9,6 +9,7 @@ jobs:
     name: lint-build-test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,6 +19,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
         run: npm ci
@@ -30,3 +36,6 @@ jobs:
 
       - name: Test
         run: npm test
+        env:
+          DATABASE_URL: ''
+          REDIS_URL: ''

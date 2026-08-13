@@ -53,6 +53,8 @@ export function loadRuntimeConfig(env = process.env) {
   const paymentProvider = get('PAYMENT_PROVIDER') || get('SYLORA_PAYMENT_PROVIDER');
   const iceServers = buildIceServersFromEnv(env);
 
+  // Secret values are intentionally NOT stored on the config object.
+  // Callers that need them must read process.env / provided env directly.
   const config = {
     nodeEnv,
     port: parsePort(env.PORT),
@@ -66,25 +68,20 @@ export function loadRuntimeConfig(env = process.env) {
         .filter(Boolean)
     ),
     database: {
-      url: databaseUrl,
       configured: isValidDatabaseUrl(databaseUrl)
     },
     redis: {
-      url: get('REDIS_URL'),
       configured: !!get('REDIS_URL')
     },
     ai: {
-      apiKey: get('OPENAI_API_KEY'),
       model: get('OPENAI_MODEL') || 'gpt-5.6',
       realtimeModel: get('OPENAI_REALTIME_MODEL') || 'gpt-realtime-2.1',
       realtimeVoice: get('OPENAI_REALTIME_VOICE') || 'marin',
-      baseUrl: get('OPENAI_BASE_URL'),
+      baseUrlConfigured: !!get('OPENAI_BASE_URL'),
       configured: !!get('OPENAI_API_KEY')
     },
     payments: {
-      provider: paymentProvider,
-      apiKey: get('SYLORA_PAYMENT_SECRET_KEY'),
-      webhookSecret: get('SYLORA_PAYMENT_WEBHOOK_SECRET'),
+      provider: paymentProvider || null,
       configured: !!(paymentProvider && get('SYLORA_PAYMENT_SECRET_KEY'))
     },
     companion: {
@@ -92,25 +89,26 @@ export function loadRuntimeConfig(env = process.env) {
         .split(',')
         .map((x) => x.trim())
         .filter(Boolean),
-      token: get('SYLORA_COMPANION_TOKEN'),
+      tokenConfigured: !!get('SYLORA_COMPANION_TOKEN'),
       enableHsts: env.SYLORA_ENABLE_HSTS === '1'
     },
     iceServers,
     turnConfigured: hasTurnServer(iceServers)
   };
 
-  config.ai.status = resolveAiStatus(config);
+  config.ai.status = resolveAiStatus(config, env);
   config.realtime = resolveRealtimeStatus(config);
 
   return config;
 }
 
-export function resolveAiStatus(config) {
+export function resolveAiStatus(config, env = process.env) {
   if (!config.ai.configured) {
     if (config.nodeEnv === RuntimeMode.PRODUCTION) return AI_STATUS.UNAVAILABLE;
     return AI_STATUS.DEGRADED;
   }
-  const baseUrl = String(config.ai.baseUrl || '').trim();
+  const baseUrl = String(env.OPENAI_BASE_URL || '').trim();
+  // Custom OpenAI-compatible endpoints are treated as degraded until fully validated.
   if (baseUrl && !/api\.openai\.com/i.test(baseUrl)) return AI_STATUS.DEGRADED;
   return AI_STATUS.CONFIGURED;
 }

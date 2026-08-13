@@ -1,7 +1,7 @@
 {
   "users": [
     {
-      "id": "fc53460f-274a-4e20-900b-000ea58cde9b",
+      "id": "76edc49e-5556-4b77-b868-84f50f493256",
       "username": "host",
       "displayName": "Host",
       "email": "h@test.dev",
@@ -9,10 +9,10 @@
       "locale": "en",
       "bio": "",
       "role": "user",
-      "createdAt": "2026-08-13T19:11:16.206Z"
+      "createdAt": "2026-08-13T19:12:52.819Z"
     },
     {
-      "id": "e037e659-95c0-4ecc-8f66-9d9d6df12d2c",
+      "id": "1743157b-a942-4d52-8020-98d1262c0089",
       "username": "host",
       "displayName": "Host",
       "email": "h@test.dev",
@@ -20,10 +20,10 @@
       "locale": "en",
       "bio": "",
       "role": "user",
-      "createdAt": "2026-08-13T19:11:16.268Z"
+      "createdAt": "2026-08-13T19:12:52.829Z"
     },
     {
-      "id": "f83495f4-fa18-41c4-9538-4727c208ef03",
+      "id": "f2b6defc-232c-4912-bc48-41d376549149",
       "username": "viewer",
       "displayName": "Viewer",
       "email": "v@test.dev",
@@ -31,7 +31,7 @@
       "locale": "en",
       "bio": "",
       "role": "user",
-      "createdAt": "2026-08-13T19:11:16.326Z"
+      "createdAt": "2026-08-13T19:12:52.871Z"
     }
   ],
   "sessions": [],
@@ -57,7 +57,7 @@
   "ecosystemActions": [],
   "agentCatalog": [
     {
-      "id": "67450973-9681-4a01-90bd-d67e2f70c735",
+      "id": "4a1b2274-51b0-49bd-a522-b6ca49b91205",
       "developerId": "sylora-platform",
       "slug": "live-moderator",
       "name": "LIVE Moderator",
@@ -89,11 +89,11 @@
       },
       "installs": 0,
       "revenueShareBps": 7000,
-      "createdAt": "2026-08-13T19:11:16.207Z",
-      "updatedAt": "2026-08-13T19:11:16.207Z"
+      "createdAt": "2026-08-13T19:12:52.819Z",
+      "updatedAt": "2026-08-13T19:12:52.819Z"
     },
     {
-      "id": "5699f60f-d3f7-4448-8ec4-c1ff741604db",
+      "id": "4aa821b2-db88-416f-a7c8-697b863a8ed1",
       "developerId": "sylora-platform",
       "slug": "creator-assistant",
       "name": "Creator Assistant",
@@ -125,11 +125,11 @@
       },
       "installs": 0,
       "revenueShareBps": 7000,
-      "createdAt": "2026-08-13T19:11:16.207Z",
-      "updatedAt": "2026-08-13T19:11:16.207Z"
+      "createdAt": "2026-08-13T19:12:52.819Z",
+      "updatedAt": "2026-08-13T19:12:52.819Z"
     },
     {
-      "id": "753d227a-4953-48dd-a349-39a064644ff6",
+      "id": "abc3449a-3ab3-4d52-a20a-107fdb065826",
       "developerId": "sylora-platform",
       "slug": "business-analyst",
       "name": "Business Analyst",
@@ -160,11 +160,11 @@
       },
       "installs": 0,
       "revenueShareBps": 7000,
-      "createdAt": "2026-08-13T19:11:16.207Z",
-      "updatedAt": "2026-08-13T19:11:16.207Z"
+      "createdAt": "2026-08-13T19:12:52.819Z",
+      "updatedAt": "2026-08-13T19:12:52.819Z"
     },
     {
-      "id": "af11c0ff-080e-4120-9271-f7aca5cbde9c",
+      "id": "23bc03af-760f-48a9-af5b-334807a5d4dc",
       "developerId": "sylora-platform",
       "slug": "translator",
       "name": "Translator Agent",
@@ -193,11 +193,11 @@
       },
       "installs": 0,
       "revenueShareBps": 7000,
-      "createdAt": "2026-08-13T19:11:16.207Z",
-      "updatedAt": "2026-08-13T19:11:16.207Z"
+      "createdAt": "2026-08-13T19:12:52.819Z",
+      "updatedAt": "2026-08-13T19:12:52.819Z"
     },
     {
-      "id": "8a781c86-860d-4b16-8f72-f995869e2197",
+      "id": "63105bf0-6a3d-4d23-ad69-8adcba83ca6f",
       "developerId": "sylora-platform",
       "slug": "teacher",
       "name": "Teacher Agent",
@@ -228,8 +228,8 @@
       },
       "installs": 0,
       "revenueShareBps": 7000,
-      "createdAt": "2026-08-13T19:11:16.207Z",
-      "updatedAt": "2026-08-13T19:11:16.207Z"
+      "createdAt": "2026-08-13T19:12:52.819Z",
+      "updatedAt": "2026-08-13T19:12:52.819Z"
     }
   ],
   "agentInstalls": [],
@@ -270,12 +270,12 @@
   "liveEngagement": [],
   "liveBattles": [
     {
-      "id": "8a2442dd-13ca-4439-8fe4-b135405005b2",
-      "hostLiveId": "404498c2-fe1f-4c62-acee-54a91e7d2fd7",
-      "opponentLiveId": "5ad5a59b-c3f7-43f8-982e-a3374ddee79a",
+      "id": "8e0db4dd-0293-4caa-b62c-121e28985c51",
+      "hostLiveId": "d4fe17ad-6c2d-4f7b-89c8-33c2c1f24840",
+      "opponentLiveId": "72987215-2302-49a6-a3ee-d5606e2cdd1f",
       "mode": "1v1",
       "teamA": [
-        "e037e659-95c0-4ecc-8f66-9d9d6df12d2c"
+        "1743157b-a942-4d52-8020-98d1262c0089"
       ],
       "teamB": [],
       "rounds": [
@@ -337,8 +337,8 @@
         "teamParticipation": 0
       },
       "comebackEvents": [],
-      "startedAt": "2026-08-13T19:11:16.313Z",
-      "endsAt": "2026-08-13T19:14:16.314Z",
+      "startedAt": "2026-08-13T19:12:52.859Z",
+      "endsAt": "2026-08-13T19:15:52.859Z",
       "endedAt": null,
       "fairness": {
         "note": "Victory is multi-factor. Comeback events are presentation-only — no hidden score manipulation."
@@ -385,19 +385,19 @@
   "liveMiniGames": [],
   "liveStages": [
     {
-      "liveId": "404498c2-fe1f-4c62-acee-54a91e7d2fd7",
-      "hostId": "e037e659-95c0-4ecc-8f66-9d9d6df12d2c",
+      "liveId": "d4fe17ad-6c2d-4f7b-89c8-33c2c1f24840",
+      "hostId": "1743157b-a942-4d52-8020-98d1262c0089",
       "speakers": [
         {
-          "userId": "e037e659-95c0-4ecc-8f66-9d9d6df12d2c",
+          "userId": "1743157b-a942-4d52-8020-98d1262c0089",
           "role": "host"
         }
       ],
       "raisedHands": [
-        "f83495f4-fa18-41c4-9538-4727c208ef03"
+        "f2b6defc-232c-4912-bc48-41d376549149"
       ],
       "audienceCount": 0,
-      "updatedAt": "2026-08-13T19:11:16.327Z"
+      "updatedAt": "2026-08-13T19:12:52.872Z"
     }
   ],
   "liveRoomProfiles": [],
