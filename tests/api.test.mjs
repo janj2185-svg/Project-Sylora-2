@@ -25,7 +25,7 @@ test('auth → post → gift → ledger works end to end', async () => {
   try {
     const health = await call('/api/health');
     assert.equal(health.status, 'ok');
-    assert.equal(health.persistence, 'json-dev-runtime');
+    assert.equal(health.persistence, 'json-test-runtime');
     assert.equal(health.dependencies.postgres.configured, false);
     assert.equal(health.dependencies.redis.configured, false);
     assert.equal((await call('/api/ready')).ready, true);
