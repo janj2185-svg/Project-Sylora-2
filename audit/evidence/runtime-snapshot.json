@@ -1,0 +1,46 @@
+{
+  "auditedAt": "2026-08-13T06:30:00Z",
+  "gitHeadAtAudit": "7afe05c",
+  "runtime": {
+    "node": "v22.14.0",
+    "server": "http://127.0.0.1:8787",
+    "persistence": "json-dev-runtime",
+    "postgres": "not running / not configured for this audit run",
+    "redis": "not running / not configured for this audit run",
+    "docker": "not available in environment",
+    "openaiApiKey": false
+  },
+  "commands": {
+    "npm_ci": "pass",
+    "npm_lint": "pass",
+    "npm_build": "pass (syntax check only)",
+    "npm_typecheck": "pass (node --check only)",
+    "npm_test": "134 pass / 0 fail"
+  },
+  "apiSmoke": {
+    "register": "pass",
+    "login": "pass",
+    "logout": "pass",
+    "invalidLogin": "401 INVALID_CREDENTIALS",
+    "post_react_comment": "pass",
+    "follow": "pass",
+    "gift_send": "pass (TEST LUMEN)",
+    "dm": "pass",
+    "live_create_chat": "pass",
+    "live_like_as_host": "400 INVALID_LIKE (by design: host cannot like own room)",
+    "ai_chat": "503 AI_PROVIDER_NOT_CONFIGURED",
+    "translate": "local-passthrough BLOCKED_EXTERNAL",
+    "commerce_production": "blocked / empty products"
+  },
+  "confirmedBugs": [
+    "public/gift-runtime.js imports GIFT_V2_CATALOG but gift-v2/catalog.js exports GIFT_V2_PASSPORTS only",
+    "register ignores input.displayName (always uses username)",
+    "profile locale select only uk/pl/en while header language switcher has 13 locales"
+  ],
+  "diagnosticChangesOnly": [
+    "Copied .env.example to .env.local (gitignored)",
+    "Started server with DATABASE_URL= REDIS_URL= SYLORA_DATA_FILE=./data/sylora-audit.json",
+    "Installed puppeteer-core in /tmp for screenshots (not in repo)",
+    "Created audit/screenshots and docs/audit/*"
+  ]
+}
