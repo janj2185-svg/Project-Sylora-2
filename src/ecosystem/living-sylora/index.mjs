@@ -197,10 +197,15 @@ export class SyloraReactionEngine {
     const prompt = this.buildPrompt(event, snapshot);
 
     let structured;
+    let provider = 'openai';
+    let fallback = false;
     if (typeof this.aiComplete === 'function') {
       const raw = await this.aiComplete(prompt);
       structured = this.parseStructured(raw) || { text: String(raw || '').slice(0, 180), emotion: 'neutral', intensity: 0.4, action: 'none', voiceStyle: 'warm', animationCue: 'nod', priority: 'normal' };
     } else {
+      // Explicit local fallback — never presented as a real OpenAI response.
+      fallback = true;
+      provider = 'local_fallback';
       structured = {
         text: snapshot.gifts.recentGifts.length ? 'Thank you for the gift energy on this LIVE!' : 'I am here with you on this LIVE.',
         emotion: snapshot.emotion.emotion,
@@ -214,6 +219,9 @@ export class SyloraReactionEngine {
 
     const safe = this.safety.filterOutput(structured);
     if (!this.safety.allowAction(safe.action)) safe.action = 'none';
+    safe.provider = provider;
+    safe.fallback = fallback;
+    safe.aiStatus = fallback ? 'AI_DEGRADED' : 'AI_CONFIGURED';
 
     this.context.conversation.turns.push({
       at: new Date().toISOString(),

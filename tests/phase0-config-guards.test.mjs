@@ -114,6 +114,11 @@ test('development process can boot without DATABASE_URL / OpenAI / TURN', async 
           assert.equal(health.alive, true);
           assert.equal(health.ai.status, AI_STATUS.DEGRADED);
           assert.equal(health.realtime.status, REALTIME_STATUS.DEGRADED);
+          const aiRes = await fetch(`http://127.0.0.1:${port}/api/ai/status`);
+          assert.equal(aiRes.status, 200);
+          const ai = await aiRes.json();
+          assert.equal(ai.status, AI_STATUS.DEGRADED);
+          assert.equal('apiKey' in ai, false);
           return;
         }
       } catch {}

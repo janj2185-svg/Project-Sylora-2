@@ -15,7 +15,7 @@ import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
 import { hasTurnServer } from './rtc-config.mjs';
 import { loadRuntimeConfig, enforceProductionBootGuard } from './config.mjs';
-import { buildLivenessReport, buildReadinessReport } from './runtime-status.mjs';
+import { buildLivenessReport, buildReadinessReport, publicAiDiagnostics } from './runtime-status.mjs';
 import { LiveFanout } from './live-fanout.mjs';
 import { LivePeerRegistry } from './live-peer-registry.mjs';
 import { ConferenceFanout } from './conference-fanout.mjs';
@@ -333,12 +333,15 @@ async function api(req, res, url) {
   }
   if(req.method==='GET'&&p==='/api/integrations/status'){const {integrationStatus}=await import('./integrations.mjs');return json(res,200,{integrations:integrationStatus()})}
   if(req.method==='GET'&&p==='/api/platform/capabilities'){const {capabilityRegistry}=await import('./platform-events.mjs');return json(res,200,{capabilities:capabilityRegistry(),graph:ecosystem.platformCapabilityGraph()})}
-  if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction})}
+  if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction,ai:publicAiDiagnostics(runtimeConfig)})}
   if(req.method==='POST'&&p==='/api/sylora/director/propose'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);return json(res,200,ecosystem.directorPropose({...input,liveRoomId:input.liveId||null,viewerCount:input.viewerCount||0}))}
   if (req.method === 'GET' && p === '/api/ready') {
     const dependencies = await dependencyHealth();
     const report = buildReadinessReport(runtimeConfig, dependencies);
     return json(res, report.ready ? 200 : 503, report);
+  }
+  if (req.method === 'GET' && p === '/api/ai/status') {
+    return json(res, 200, publicAiDiagnostics(runtimeConfig));
   }
   if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
