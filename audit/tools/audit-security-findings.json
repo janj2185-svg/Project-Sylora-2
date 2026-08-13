@@ -1,0 +1,111 @@
+[
+  {
+    "type": "env_file_present",
+    "file": "/workspace/.env.local",
+    "note": "Local env file present — must not be committed"
+  },
+  {
+    "type": "assignment_secret",
+    "file": "public/i18n.js",
+    "lines": [
+      7,
+      39,
+      67,
+      90
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/api.test.mjs",
+    "lines": [
+      34,
+      35,
+      237,
+      247
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/companion.test.mjs",
+    "lines": [
+      25,
+      35
+    ]
+  },
+  {
+    "type": "openai_sk",
+    "file": "tests/consolidation.test.mjs",
+    "lines": [
+      55
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/consolidation.test.mjs",
+    "lines": [
+      80
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/ecosystem.test.mjs",
+    "lines": [
+      83
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/engines-science-social.test.mjs",
+    "lines": [
+      159
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/intelligence-layer.test.mjs",
+    "lines": [
+      107
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/live-business-learn.test.mjs",
+    "lines": [
+      165,
+      169
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/p0-calls-foundation.test.mjs",
+    "lines": [
+      36,
+      40
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/platform-core.test.mjs",
+    "lines": [
+      106
+    ]
+  },
+  {
+    "type": "assignment_secret",
+    "file": "tests/platform-intel.test.mjs",
+    "lines": [
+      42
+    ]
+  },
+  {
+    "type": "security_controls_observed",
+    "file": "src/server.mjs",
+    "note": {
+      "csp": true,
+      "rateLimit": true,
+      "scrypt": true,
+      "giftSsePublic": true,
+      "hstsOptIn": true
+    }
+  }
+]

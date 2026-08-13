@@ -1,0 +1,39 @@
+Checking console on home page...
+Checking console on live page...
+Checking console on gifts page...
+
+=== CONSOLE REPORT ===
+
+Total messages: 10
+Errors: 7
+Warnings: 0
+
+--- ERRORS ---
+
+1. ERROR
+   Message: Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.
+   File: http://127.0.0.1:8787/more:2
+
+2. ERROR
+   Message: Failed to load resource: the server responded with a status of 404 (Not Found)
+   File: http://127.0.0.1:8787/favicon.ico:N/A
+
+3. ERROR
+   Message: [SYLORA:gift-runtime] TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+   File: http://127.0.0.1:8787/app.js?v=20260811-consol1:27
+
+4. ERROR
+   Message: Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.
+   File: http://127.0.0.1:8787/live:2
+
+5. ERROR
+   Message: [SYLORA:gift-runtime] TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+   File: http://127.0.0.1:8787/app.js?v=20260811-consol1:27
+
+6. ERROR
+   Message: Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.
+   File: http://127.0.0.1:8787/gifts:2
+
+7. ERROR
+   Message: [SYLORA:gift-runtime] TypeError: Failed to resolve module specifier "three". Relative references must start with either "/", "./", or "../".
+   File: http://127.0.0.1:8787/app.js?v=20260811-consol1:27

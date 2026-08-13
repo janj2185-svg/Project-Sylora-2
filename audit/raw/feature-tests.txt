@@ -1,0 +1,11 @@
+
+=== MOBILE VIEW TESTING (390x844) ===
+✓ Mobile dock found: [class*="mobile-dock"] (visible: true)
+✓ Left sidebar hidden on mobile (correct)
+Horizontal scroll: ✓ NO (good)
+
+=== LANGUAGE SWITCHER TESTING ===
+✗ Language switcher not found
+
+=== CREATE HUB TESTING ===
+✗ Create Hub button not found
