@@ -582,7 +582,11 @@ export class EcosystemService {
           result: {
             summary: sentences.slice(0, 3).join(' ').slice(0, 600) || text.slice(0, 280),
             mode: 'extractive_local',
-            honesty: honestyLabel({ configured: !!process.env.OPENAI_API_KEY, mock: !process.env.OPENAI_API_KEY })
+            honesty: {
+              ...honestyLabel({ configured: !!process.env.OPENAI_API_KEY, mock: !process.env.OPENAI_API_KEY }),
+              fallback: !process.env.OPENAI_API_KEY,
+              reason: process.env.OPENAI_API_KEY ? 'OPENAI_CONFIGURED' : 'AI_UNAVAILABLE'
+            }
           }
         };
       }
@@ -3847,12 +3851,15 @@ export class EcosystemService {
     return languageTutorMode(input);
   }
 
-  capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false } = {}) {
+  capabilitiesSnapshot({ aiConfigured = false, realtimeConfigured = false, aiStatus = null, reason = null, fallback = !aiConfigured } = {}) {
     const providers = providerSnapshot();
     const status = this.platformStatus();
     return {
       aiText: !!aiConfigured,
       aiRealtimeVoice: !!realtimeConfigured && !!aiConfigured,
+      aiStatus: aiStatus || providers.ai?.aiStatus || (aiConfigured ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE'),
+      reason: reason || providers.ai?.reason || (aiConfigured ? 'OPENAI_CONFIGURED' : 'OPENAI_API_KEY_MISSING'),
+      fallback: !!fallback,
       tts: !!aiConfigured,
       stt: !!aiConfigured,
       translation: providers.translation?.status || 'degraded',

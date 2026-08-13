@@ -3,22 +3,38 @@
  * Concrete adapters resolve from env; missing provider → honest blocked status.
  */
 
-export function resolveAiProvider() {
-  if (process.env.OPENAI_API_KEY) {
+import { AI_STATUS, resolveAiStatus } from '../config.mjs';
+
+export function resolveAiProvider(env = process.env) {
+  const ai = resolveAiStatus(env);
+  if (ai.status === AI_STATUS.CONFIGURED) {
     return {
       id: 'openai',
       status: 'ready',
-      chatModel: process.env.OPENAI_MODEL || 'gpt-5.6',
-      fastModel: process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || 'gpt-5.6',
-      realtimeModel: process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime'
+      aiStatus: ai.status,
+      reason: ai.reason,
+      fallback: false,
+      chatModel: env.OPENAI_MODEL || 'gpt-5.6',
+      fastModel: env.OPENAI_MODEL_FAST || env.OPENAI_MODEL || 'gpt-5.6',
+      realtimeModel: env.OPENAI_REALTIME_MODEL || 'gpt-realtime-2.1'
     };
   }
-  return { id: 'none', status: 'blocked_provider', chatModel: null, fastModel: null, realtimeModel: null };
+  return {
+    id: 'none',
+    status: 'blocked_provider',
+    aiStatus: ai.status,
+    reason: ai.reason,
+    fallback: true,
+    chatModel: null,
+    fastModel: null,
+    realtimeModel: null
+  };
 }
 
-export function resolveSpeechProvider() {
-  if (process.env.OPENAI_API_KEY) return { id: 'openai-realtime', status: 'ready' };
-  return { id: 'none', status: 'blocked_provider' };
+export function resolveSpeechProvider(env = process.env) {
+  const ai = resolveAiStatus(env);
+  if (ai.status === AI_STATUS.CONFIGURED) return { id: 'openai-realtime', status: 'ready', aiStatus: ai.status };
+  return { id: 'none', status: 'blocked_provider', aiStatus: ai.status, reason: ai.reason };
 }
 
 export function resolveTranslationProvider() {

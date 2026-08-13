@@ -200,6 +200,8 @@ export class SyloraReactionEngine {
     if (typeof this.aiComplete === 'function') {
       const raw = await this.aiComplete(prompt);
       structured = this.parseStructured(raw) || { text: String(raw || '').slice(0, 180), emotion: 'neutral', intensity: 0.4, action: 'none', voiceStyle: 'warm', animationCue: 'nod', priority: 'normal' };
+      structured.source = 'openai';
+      structured.honesty = { fallback: false, provider: 'openai' };
     } else {
       structured = {
         text: snapshot.gifts.recentGifts.length ? 'Thank you for the gift energy on this LIVE!' : 'I am here with you on this LIVE.',
@@ -208,7 +210,9 @@ export class SyloraReactionEngine {
         action: snapshot.gifts.recentGifts.length ? 'highlight_gift' : 'none',
         voiceStyle: this.context.personality.voiceStyleFor(snapshot.emotion.emotion),
         animationCue: 'wave',
-        priority: 'normal'
+        priority: 'normal',
+        source: 'dev_fallback',
+        honesty: { fallback: true, provider: 'none', reason: 'AI_UNAVAILABLE' }
       };
     }
 

@@ -2,6 +2,19 @@
  * Ecosystem HTTP routes — mounted from server.mjs before 404.
  * Returns true when a request was handled.
  */
+import { resolveAiStatus } from '../config.mjs';
+
+function aiCapabilityFlags(env = process.env) {
+  const ai = resolveAiStatus(env);
+  return {
+    aiConfigured: ai.configured,
+    realtimeConfigured: ai.configured,
+    aiStatus: ai.status,
+    reason: ai.reason,
+    fallback: ai.fallback
+  };
+}
+
 export async function handleEcosystemRoutes(ctx) {
   const {
     req, res, url, json, body, requireUser, route, safeText, ecosystem, store,
@@ -285,10 +298,7 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, ecosystem.confirmProposedTasks(user, m.id, input.tasks || [])), true;
   }
   if (req.method === 'GET' && p === '/api/ai/capabilities') {
-    return json(res, 200, ecosystem.capabilitiesSnapshot({
-      aiConfigured: !!process.env.OPENAI_API_KEY,
-      realtimeConfigured: !!process.env.OPENAI_API_KEY
-    })), true;
+    return json(res, 200, ecosystem.capabilitiesSnapshot(aiCapabilityFlags())), true;
   }
   if (req.method === 'GET' && p === '/api/home/hub') {
     const user = await requireUser(req, res); if (!user) return true;
@@ -406,10 +416,7 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/security-center') {
     const user = await requireUser(req, res); if (!user) return true;
-    const capabilities = ecosystem.capabilitiesSnapshot({
-      aiConfigured: !!process.env.OPENAI_API_KEY,
-      realtimeConfigured: !!process.env.OPENAI_API_KEY
-    });
+    const capabilities = ecosystem.capabilitiesSnapshot(aiCapabilityFlags());
     return json(res, 200, ecosystem.securityCenter(user, {
       blocks: store.data.blocks.filter(b => b.blockerId === user.id || b.userId === user.id),
       capabilities
@@ -724,10 +731,7 @@ export async function handleEcosystemRoutes(ctx) {
       revenueShares: ecosystem.revenueShares(),
       translationVoicePolicy: (await import('./translation.mjs')).VOICE_POLICY,
       platform: ecosystem.platformStatus(),
-      capabilities: ecosystem.capabilitiesSnapshot({
-        aiConfigured: !!process.env.OPENAI_API_KEY,
-        realtimeConfigured: !!process.env.OPENAI_API_KEY
-      })
+      capabilities: ecosystem.capabilitiesSnapshot(aiCapabilityFlags())
     }), true;
   }
 
@@ -832,7 +836,8 @@ export async function handleEcosystemRoutes(ctx) {
     return json(res, 200, {
       iceServers,
       turnConfigured: typeof hasTurnServer === 'function' ? hasTurnServer(iceServers) : false,
-      engine: 'call_engine_shared_webrtc'
+      engine: 'call_engine_shared_webrtc',
+      credentialPolicy: 'webrtc_ice_required'
     }), true;
   }
   if (req.method === 'POST' && p === '/api/calls') {

@@ -79,7 +79,12 @@ export function buildPlatformStatus({ env = process.env } = {}) {
       redis: honestyLabel({ configured: Boolean(env.REDIS_URL) }),
       live: honestyLabel({ configured: true, mock: env.LIVE_MOCK === '1' }),
       lumenWallet: honestyLabel({ configured: true, testBalance: env.LUMEN_TEST_MODE !== '0' }),
-      ai: honestyLabel({ configured: aiReady })
+      ai: {
+        ...honestyLabel({ configured: aiReady }),
+        aiStatus: providers.ai?.aiStatus || (aiReady ? 'AI_CONFIGURED' : 'AI_UNAVAILABLE'),
+        reason: providers.ai?.reason || (aiReady ? 'OPENAI_CONFIGURED' : 'OPENAI_API_KEY_MISSING'),
+        fallback: !aiReady
+      }
     },
     toolCount: TOOL_CATALOG.length,
     memoryCategories: MEMORY_CATEGORIES,
