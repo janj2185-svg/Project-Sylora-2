@@ -80,7 +80,19 @@ async function startProviderStub() {
       && payload.input.some(item => item?.type === 'function_call_output');
     const id = `resp_stub_${++callNumber}`;
     const response = hasToolResult
-      ? { id, object: 'response', status: 'completed', model: 'gpt-5.6', output: [], output_text: 'Provider stub answer.' }
+      ? {
+          id,
+          object: 'response',
+          status: 'completed',
+          model: 'gpt-5.6',
+          output: [{
+            id: `msg_${callNumber}`,
+            type: 'message',
+            status: 'completed',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Provider stub answer.', annotations: [] }]
+          }]
+        }
       : {
           id,
           object: 'response',
