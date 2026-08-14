@@ -75,7 +75,7 @@ Problems:
 | Verification | `Authorization: Bearer <token>` | No cookies and no alternate auth middleware. |
 | Revocation | Delete row/hash on logout | Revocable session architecture is already present; no refresh tokens. |
 | Password hashing | Node `scrypt` with a random 16-byte salt | No plaintext password is intentionally persisted. Input length is not bounded. |
-| Admin | `role === 'admin'` | Admin email allowlist is applied at registration; admin routes check the stored role. |
+| Admin (baseline finding) | `role === 'admin'` | Before Phase 1, an email allowlist could elevate public registration. Phase 1 removed that forgeable path; admin routes still check only the persisted role. |
 | Recovery | None | No fake password-recovery route was found. |
 | Google/phone | Not implemented | Integration status exists only; no second user system exists. |
 

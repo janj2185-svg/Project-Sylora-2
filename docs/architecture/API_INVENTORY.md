@@ -6,14 +6,14 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 299 |
-| Active | 245 |
+| Total unique endpoints | 301 |
+| Active | 247 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
 | Unverified | 54 |
-| Frontend-used | 187 |
-| Backend-only | 112 |
+| Frontend-used | 188 |
+| Backend-only | 113 |
 
 ## Status contract
 
@@ -163,6 +163,8 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/decisions` | OWNER_OR_MEMBER | NO | ACTIVE | KEEP |
 | GET | `/api/developer/apps` | OWNER | YES | ACTIVE | KEEP |
 | POST | `/api/developer/apps` | OWNER | YES | ACTIVE | KEEP |
+| DELETE | `/api/developer/apps/:appId/keys/:keyId` | OWNER | NO | ACTIVE | KEEP |
+| GET | `/api/developer/apps/:id/keys` | OWNER | YES | ACTIVE | KEEP |
 | POST | `/api/developer/apps/:id/keys` | OWNER | YES | ACTIVE | KEEP |
 | GET | `/api/ecosystem/metrics` | ADMIN | NO | UNVERIFIED | VERIFY_BEFORE_PHASE_2 |
 | GET | `/api/ecosystem/status` | PUBLIC | NO | ACTIVE | KEEP |

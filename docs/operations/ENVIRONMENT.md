@@ -14,9 +14,10 @@ This document describes runtime environment variables for SYLORA core. Do not co
 | Variable | Required | Dev | Test | Production | Notes |
 |----------|----------|-----|------|------------|-------|
 | `SYLORA_DATA_FILE` | Optional | `./data/sylora.json` | temp path in tests | — | JSON dev store path when PostgreSQL is absent |
-| `SESSION_TTL_DAYS` | Optional | `30` | `30` | `30` | Session lifetime |
+| `SESSION_TTL_DAYS` | Optional | `30` | `30` | `30` | Session lifetime; whole days in the inclusive range `1..365` |
 | `CREATOR_GIFT_SHARE_BPS` | Optional | `7000` | `7000` | configure | Creator share of gift gross (basis points) |
-| `SYLORA_ADMIN_EMAILS` | Optional | empty | test values | admin list | Comma-separated admin emails |
+
+Public registration always creates `role=user`. The retired `SYLORA_ADMIN_EMAILS` registration shortcut is intentionally ignored because Phase 1 has no email-ownership verification. Existing persisted admin roles continue to work; new admin assignment requires a controlled operator procedure until an audited lifecycle exists.
 
 ## Database
 
@@ -81,9 +82,9 @@ TURN is external infrastructure. Configuration support does not deploy a TURN se
 | `SYLORA_EMBEDDING_PROVIDER` | Optional | Semantic search |
 | `SYLORA_EMBEDDING_API_KEY` | Optional | Embedding API key |
 
-## OAuth / developer platform (future)
+## Developer platform
 
-See `.env.example` for `SYLORA_OAUTH_*` scaffolding variables.
+Scoped developer API keys use PostgreSQL in production and require no signing secret because only a SHA-256 hash is stored. OAuth/OIDC remains future scaffolding; see `.env.example` for the reserved `SYLORA_OAUTH_*` variables.
 
 ## Runtime policy summary
 

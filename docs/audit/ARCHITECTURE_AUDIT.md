@@ -26,7 +26,7 @@ src/server.mjs  ──► repositories (Postgres) ──► PostgreSQL
 
 1. **Schema ahead of runtime** — `schema.sql` has communities/courses/businesses/media/audit; runtime for several still uses JSON.
 2. **Dual write risk** — some paths still call `store.save()` alongside Postgres.
-3. **No general permission engine** — auth is session + role email allowlist + hard-coded AI tools.
+3. **No general permission engine** — auth is session + persisted account role + hard-coded AI tools. Public registration cannot assign elevated roles.
 4. **No Knowledge Graph / Action levels beyond confirm** — only `publish_post` and `remember`.
 5. **Digital Human composition** — three incomplete avatar systems stacked (legacy CSS, V2 arm rig, unused gesture sheet).
 6. **Realtime API surface** — SSE only; no first-party WebSocket protocol for developers.

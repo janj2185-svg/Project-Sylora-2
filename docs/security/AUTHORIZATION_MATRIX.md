@@ -17,8 +17,8 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 
 | Area | Endpoint / operation | Required level | Enforcement | Phase 1 evidence |
 |---|---|---|---|---|
-| registration | `POST /api/auth/register` | PUBLIC + rate limit | Input validation, DB uniqueness, route/IP limit | Auth service and HTTP tests |
-| login | `POST /api/auth/login` | PUBLIC + rate limit | Generic credential failure, status check, route/IP limit | Auth service and HTTP tests |
+| registration | `POST /api/auth/register` | PUBLIC + rate limit | Input validation, DB uniqueness, forced `role=user`, route/IP limit | Auth service and HTTP tests |
+| login | `POST /api/auth/login` | PUBLIC + rate limit | Generic credential failure, status-locked transactional session issuance, route/IP limit | Auth service, HTTP, and real-PostgreSQL race tests |
 | logout | `POST /api/auth/logout` | SESSION TOKEN (optional/idempotent) | Presented token hash is deleted | HTTP and PostgreSQL restart tests |
 | account read | `GET /api/me` | OWNER | User is loaded from session; no target parameter | Unauthenticated, malformed, expired, and revoked-token tests |
 | account update | `PATCH /api/me` | OWNER | Session user ID plus field whitelist | Cross-user/elevation payload test |
@@ -32,7 +32,7 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 | ledger | `GET /api/ledger` | OWNER | Query/filter includes session user ID | Cross-user ledger test |
 | gifts | `POST /api/gifts/send` | AUTHENTICATED SENDER | Sender wallet comes from session; recipient is a separate validated target | Authorization and wallet tests |
 | notifications | `GET /api/notifications` | OWNER | Query filters by session user ID | Repository path and route inventory |
-| AI memory | `/api/ai/memory*`, `/api/ai/history` | OWNER | Every read/update/delete/clear receives session `user.id`; SQL mutations include `user_id` | Cross-user delete test |
+| AI memory | `/api/ai/memory*`, `/api/ai/history` | OWNER + AI CONTROL | Every mutation receives session `user.id`; runtime read/propose additionally checks persisted privacy and AI permission controls | Cross-user, restart, two-instance, and provider-capture tests |
 | AI activity/dashboard | `/api/ai/activity`, `/api/ai/dashboard` | OWNER | Repository reads filter by session user ID | Route and repository tests |
 | LIVE create/chat | `POST /api/live`, `POST /api/live/:id/messages` | AUTHENTICATED | `requireUser`; actor/host comes from session | Authorization test for creation |
 | LIVE management | end, resonance, host signaling, creator insights, stage/room management | OWNER/HOST | Repository or handler checks `host_id === session user` | Non-host end rejection test and existing LIVE tests |
@@ -40,7 +40,8 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 | community channel management | channel creation | OWNER or ADMIN | Community owner/domain membership role or platform admin | Existing route enforcement; not a moderator system |
 | media upload/transcode/job | `/api/media/upload`, transcode/job routes | OWNER | Created by session user; metadata lookup includes `userId` | Existing media tests |
 | raw media read | `GET /media/:id` | PUBLIC BY OPAQUE ID | No visibility/ownership policy at byte-serving route | OPEN P1/P2 decision; not fixed in Phase 1 |
-| developer identity API | `GET /api/v1/identity/me` | API KEY SCOPE or OWNER | API key requires `identity.read`; session fallback uses `requireUser` | Route/repository inspection |
+| developer identity API | `GET /api/v1/identity/me` | API KEY SCOPE or OWNER | Hashed, PostgreSQL-backed API key requires enabled app + `identity.read`; owner account must be active; session fallback uses `requireUser` | Repository and real-PostgreSQL restart/revoke tests |
+| developer key lifecycle | `/api/developer/apps/:id/keys*` | OWNER | App/key queries bind `owner_id` to the session; list omits hash; revoke sets `revoked_at` | JSON and real-PostgreSQL create/list/restart/revoke tests |
 | AI/provider routes | realtime/chat/ask | AUTHENTICATED | Session plus provider/rate checks | Existing API tests |
 
 ## P0/P1 changes in this phase
@@ -51,6 +52,11 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 - Confirmed AI actions for posts, LIVE rooms, direct messages, and invitations call the canonical repositories/hooks instead of creating parallel production JSON records.
 - Logout deletes the session hash and automated tests prove that replaying the old token fails.
 - Critical auth/admin errors have machine-readable codes and safe messages.
+- The unverified email allowlist shortcut was removed: public registration cannot create an admin account.
+- Disabling or blocking an account revokes all existing PostgreSQL sessions, preventing re-enable token resurrection.
+- AI memory opt-out and `memory_read`/`memory_propose` revocation are hydrated from PostgreSQL and enforced before provider context or new durable memory.
+- Canonical account fields use atomic column patches; identity and AI-control JSON fields use locked merge patches, while stale create-if-missing requests preserve the already persisted security/profile state.
+- Migration 014 removes pre-existing sessions for non-active accounts under an account-table lock before installing the status trigger, closing both upgrade and live-deploy resurrection windows.
 
 ## Security invariants tested
 
@@ -67,6 +73,7 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 | Non-host cannot end another user's LIVE room | Enforced |
 | Non-admin cannot read admin audit | Enforced |
 | Password hash is excluded from auth/account/public responses | Enforced by whitelist serializers and tests |
+| Public registration cannot self-assign `admin` | Enforced by a fixed registration role and regression tests |
 
 ## Remaining authorization work
 
@@ -76,4 +83,4 @@ This matrix describes authorization enforced by the Phase 1 code. It is intentio
 - `NOT IMPLEMENTED`: post deletion does not exist, so there is no owner/moderator delete policy yet.
 - `PARTIAL`: public identity privacy currently distinguishes public/self in the canonical routes; follower/connection relationship resolution is not wired there.
 - `OPEN`: raw media bytes are accessible by opaque ID without checking the media/video visibility field.
-- `OPEN`: admin role assignment is based on the registration-time configured email allowlist; there is no audited admin-role lifecycle endpoint.
+- `EXTERNAL DEPENDENCY`: existing persisted admin roles are enforced, but there is no audited in-app role-assignment lifecycle. New admin provisioning must remain a controlled operator action; public registration cannot perform it.
