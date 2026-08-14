@@ -102,10 +102,12 @@ test('Phase 1 login succeeds and wrong, unknown, or disabled accounts share a sa
     assert.equal(loggedIn.user.id, registered.user.id);
     const wrong = await errorCode(service.login({ identity: 'login@example.com', password: 'wrong-password1' }));
     const unknown = await errorCode(service.login({ identity: 'unknown@example.com', password: 'wrong-password1' }));
+    const oversized = await errorCode(service.login({ identity: 'x'.repeat(1000), password: 'x'.repeat(1000) }));
     await pool.query("UPDATE users SET status='disabled' WHERE id=$1", [registered.user.id]);
     const disabled = await errorCode(service.login({ identity: 'login@example.com', password: 'password123' }));
     assert.deepEqual(wrong, { code: 'INVALID_CREDENTIALS', status: 401 });
     assert.deepEqual(unknown, wrong);
+    assert.deepEqual(oversized, wrong);
     assert.deepEqual(disabled, wrong);
   } finally {
     await pool.end();

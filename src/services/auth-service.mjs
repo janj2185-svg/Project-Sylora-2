@@ -96,11 +96,13 @@ export class AuthService {
   }
 
   async login(input = {}) {
-    const identity = String(input.identity || input.email || input.username || '').trim().normalize('NFKC').toLowerCase();
+    const rawIdentity = String(input.identity || input.email || input.username || '').trim().normalize('NFKC').toLowerCase();
+    const identity = rawIdentity.length <= 254 ? rawIdentity : '';
     const password = String(input.password || '');
+    const boundedPassword = password.slice(0, 256);
     const user = identity ? await this.findUserByIdentity(identity) : null;
-    const validPassword = verifyPassword(password, user?.passwordHash || DUMMY_PASSWORD_HASH);
-    if (!user || !validPassword) throw new AuthServiceError('INVALID_CREDENTIALS');
+    const validPassword = verifyPassword(boundedPassword, user?.passwordHash || DUMMY_PASSWORD_HASH);
+    if (!identity || password.length > 256 || !user || !validPassword) throw new AuthServiceError('INVALID_CREDENTIALS');
     if ((user.status || 'active') !== 'active') throw new AuthServiceError('INVALID_CREDENTIALS');
 
     const createdAt = this.now();
