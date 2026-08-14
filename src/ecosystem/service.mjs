@@ -637,8 +637,11 @@ export class EcosystemService {
       case 'create_post': {
         const text = String(input.text || '').slice(0, 4000);
         if (text.length < 1) return { ok: false, error: 'TEXT_REQUIRED' };
-        const post = { id: this.store.id(), userId: user.id, text, kind: 'text', createdAt: this.store.now(), provenance: 'original_upload' };
-        this.store.data.posts.unshift(post);
+        const post = typeof this.hooks.createPost === 'function'
+          ? await this.hooks.createPost(user, text)
+          : { id: this.store.id(), userId: user.id, text, kind: 'text', createdAt: this.store.now(), provenance: 'original_upload' };
+        if (!post) return { ok: false, error: 'POST_CREATE_FAILED' };
+        if (typeof this.hooks.createPost !== 'function') this.store.data.posts.unshift(post);
         this.addProvenance(user, { contentId: post.id, contentType: 'post', origin: 'human', creationMethod: 'command', aiInvolved: true });
         return { ok: true, result: { post } };
       }
@@ -648,11 +651,13 @@ export class EcosystemService {
           id: this.store.id(), hostId: user.id, title, status: 'live', viewerCount: 0,
           createdAt: this.store.now(), endedAt: null, source: 'action_engine'
         };
-        this.store.data.liveRooms.unshift(live);
+        const persisted = typeof this.hooks.createLive === 'function' ? await this.hooks.createLive(live) : live;
+        if (!persisted) return { ok: false, error: 'LIVE_CREATE_FAILED' };
+        if (typeof this.hooks.createLive !== 'function') this.store.data.liveRooms.unshift(persisted);
         this.upsertCalendarItem(user, {
-          kind: 'live', title, startsAt: this.store.now(), refType: 'live', refId: live.id
+          kind: 'live', title, startsAt: this.store.now(), refType: 'live', refId: persisted.id
         });
-        return { ok: true, result: { live } };
+        return { ok: true, result: { live: persisted } };
       }
       case 'schedule_live': {
         const title = String(input.title || 'Scheduled LIVE').slice(0, 120);
@@ -731,6 +736,10 @@ export class EcosystemService {
         const text = String(input.text || '').slice(0, 2000);
         const otherId = input.userId;
         if (!text || !otherId) return { ok: false, error: 'MESSAGE_REQUIRED' };
+        if (typeof this.hooks.sendMessage === 'function') {
+          const sent = await this.hooks.sendMessage(user, { ...input, text, userId: otherId });
+          return sent ? { ok: true, result: sent } : { ok: false, error: 'INVALID_RECIPIENT' };
+        }
         let c = this.store.data.conversations.find(x => x.memberIds?.length === 2 && x.memberIds.includes(user.id) && x.memberIds.includes(otherId));
         if (!c) {
           c = { id: this.store.id(), memberIds: [user.id, otherId], createdAt: this.store.now() };
@@ -743,6 +752,10 @@ export class EcosystemService {
       }
       case 'invite_user': {
         const username = String(input.username || '').replace(/^@/, '').trim();
+        if (typeof this.hooks.inviteUser === 'function') {
+          const invited = await this.hooks.inviteUser(user, { ...input, username });
+          return invited ? { ok: true, result: invited } : { ok: false, error: 'USER_NOT_FOUND' };
+        }
         const target = this.store.data.users.find(u => u.username === username);
         if (!target) return { ok: false, error: 'USER_NOT_FOUND' };
         this.store.notify(target.id, 'invite', user.id, {
