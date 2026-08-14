@@ -66,6 +66,18 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
       agent_id uuid NOT NULL REFERENCES agent_catalog(id) ON DELETE CASCADE, permissions jsonb NOT NULL DEFAULT '[]',
       status text NOT NULL DEFAULT 'installed', installed_at timestamptz NOT NULL DEFAULT now(), removed_at timestamptz
     );
+    CREATE TABLE developer_apps (
+      id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name text NOT NULL, description text NOT NULL DEFAULT '', scopes jsonb NOT NULL DEFAULT '[]',
+      redirect_uris jsonb NOT NULL DEFAULT '[]', webhook_url text NOT NULL DEFAULT '', status text NOT NULL DEFAULT 'sandbox',
+      rate_limit_per_minute int NOT NULL DEFAULT 60, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE developer_api_keys (
+      id uuid PRIMARY KEY, app_id uuid NOT NULL REFERENCES developer_apps(id) ON DELETE CASCADE,
+      owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, prefix text NOT NULL, hash text NOT NULL UNIQUE,
+      label text NOT NULL DEFAULT 'default', last_used_at timestamptz, revoked_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE organizations (
       id uuid PRIMARY KEY, owner_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name text NOT NULL, description text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now()
@@ -100,13 +112,41 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
   });
   assert.equal((await repo.findPersonalAgent(userId)).id, agent.id);
+  await repo.patchPersonalAgent(userId, { privacyControls: { memory: false } });
+  await repo.patchPersonalAgent(userId, { permissions: { memory_read: false } });
+  const patchedAgent = await repo.findPersonalAgent(userId);
+  assert.equal(patchedAgent.privacyControls.memory, false);
+  assert.equal(patchedAgent.permissions.live_assist, true);
+  assert.equal(patchedAgent.permissions.memory_read, false);
+  const staleColdStart = await repo.upsertPersonalAgent({
+    id: randomUUID(), userId, name: 'Sylora', kind: 'personal', locale: 'uk',
+    permissions: { memory_read: true }, contexts: {}, privacyControls: { memory: true },
+    proactiveLevel: 'IMPORTANT_ONLY', voicePersonality: 'warm',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  assert.equal(staleColdStart.id, agent.id);
+  assert.equal(staleColdStart.privacyControls.memory, false);
+  assert.equal(staleColdStart.permissions.memory_read, false);
+  assert.equal(staleColdStart.permissions.live_assist, true);
 
   const identity = await repo.upsertIdentity({
     userId, verifiedPerson: false, creatorPersona: { headline: 'Maker' }, professional: { skills: ['Flutter'] },
     portfolio: [], interests: ['AI'], privacy: { profile: 'public' }, reputationRefs: {}, agentId: agent.id,
     updatedAt: new Date().toISOString()
   });
-  assert.equal((await repo.getIdentity(userId)).creatorPersona.headline, 'Maker');
+  await repo.patchIdentity({ id: userId, username: 'eco', displayName: 'Eco' }, { professional: { title: 'Architect' } });
+  await repo.patchIdentity({ id: userId, username: 'eco', displayName: 'Eco' }, { interests: ['Security'] });
+  const patchedIdentity = await repo.getIdentity(userId);
+  assert.equal(patchedIdentity.creatorPersona.headline, 'Maker');
+  assert.equal(patchedIdentity.professional.title, 'Architect');
+  assert.deepEqual(patchedIdentity.interests, ['Security']);
+  const staleIdentityCreate = await repo.upsertIdentity({
+    userId, verifiedPerson: true, creatorPersona: {}, professional: {}, portfolio: [], interests: [],
+    privacy: {}, reputationRefs: { trust: 'forged' }, agentId: null, updatedAt: new Date().toISOString()
+  });
+  assert.equal(staleIdentityCreate.professional.title, 'Architect');
+  assert.deepEqual(staleIdentityCreate.interests, ['Security']);
+  assert.equal(staleIdentityCreate.verifiedPerson, false);
   assert.ok(identity.userId);
 
   const nodeA = await repo.createKgNode({
@@ -139,6 +179,21 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
   await repo.bumpAgentInstalls(catalog.id);
   assert.equal((await repo.listInstalls(userId)).length, 1);
   assert.equal((await repo.findAgent(catalog.id)).installs, 1);
+
+  const developerApp = await repo.createDeveloperApp({
+    id: randomUUID(), ownerId: userId, name: 'Test App', description: '', scopes: ['identity.read'],
+    redirectUris: [], webhookUrl: '', status: 'sandbox', rateLimitPerMinute: 60,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  const developerKey = await repo.createDeveloperApiKey({
+    id: randomUUID(), appId: developerApp.id, ownerId: userId, prefix: 'syl_test_key', hash: 'a'.repeat(64),
+    label: 'test', lastUsedAt: null, revokedAt: null, createdAt: new Date().toISOString()
+  });
+  assert.equal((await repo.listDeveloperApps(userId)).length, 1);
+  assert.equal((await repo.listDeveloperApiKeys(userId, developerApp.id))[0].id, developerKey.id);
+  assert.equal((await repo.resolveDeveloperApiKey('a'.repeat(64))).app.id, developerApp.id);
+  assert.equal((await repo.revokeDeveloperApiKey(userId, developerApp.id, developerKey.id)).id, developerKey.id);
+  assert.equal(await repo.resolveDeveloperApiKey('a'.repeat(64)), null);
 
   const org = await repo.createOrg({ id: randomUUID(), ownerId: userId, name: 'Acme', description: '', createdAt: new Date().toISOString() });
   await repo.createMembership({ id: randomUUID(), orgId: org.id, userId, role: 'owner', joinedAt: new Date().toISOString() });

@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { hashPassword } from '../src/auth.mjs';
+
+function seedAdmin(file, { email, username, password }) {
+  const id = randomUUID(), now = new Date().toISOString();
+  fs.writeFileSync(file, JSON.stringify({
+    users: [{
+      id, email, username, passwordHash: hashPassword(password), displayName: username,
+      bio: '', locale: 'uk', avatar: '', role: 'admin', status: 'active', createdAt: now, updatedAt: now
+    }],
+    wallets: [{ userId: id, balance: 10000, earnings: 0, currency: 'LUMEN' }]
+  }));
+}
 
 async function request(base, pathname, { method = 'GET', token, payload, headers = {} } = {}) {
   const requestHeaders = { 'content-type': 'application/json', ...headers };
@@ -22,7 +35,9 @@ test('Phase 1 authorization isolates messages, wallet, AI memory, LIVE managemen
   process.env.REDIS_URL = '';
   process.env.OPENAI_API_KEY = '';
   process.env.SYLORA_DATA_FILE = path.join(directory, 'sylora.json');
-  process.env.SYLORA_ADMIN_EMAILS = 'admin@example.com';
+  seedAdmin(process.env.SYLORA_DATA_FILE, {
+    email: 'admin@example.com', username: 'admin_user', password: 'password123'
+  });
   const { server } = await import(`../src/server.mjs?phase1-authz=${Date.now()}`);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -35,7 +50,11 @@ test('Phase 1 authorization isolates messages, wallet, AI memory, LIVE managemen
       assert.equal(result.status, 201, JSON.stringify(result.body));
       return result.body;
     };
-    const admin = await register('admin@example.com', 'admin_user');
+    const adminLogin = await request(base, '/api/auth/login', {
+      method: 'POST', payload: { identity: 'admin@example.com', password: 'password123' }
+    });
+    assert.equal(adminLogin.status, 200, JSON.stringify(adminLogin.body));
+    const admin = adminLogin.body;
     const member = await register('member@example.com', 'member_user');
     const outsider = await register('outsider@example.com', 'outsider_user');
 

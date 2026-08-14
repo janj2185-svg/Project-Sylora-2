@@ -23,11 +23,24 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
   process.env.REDIS_URL = '';
   process.env.OPENAI_API_KEY = '';
   process.env.SYLORA_DATA_FILE = dataFile;
+  process.env.SYLORA_ADMIN_EMAILS = 'alice@example.com';
   const { server } = await import(`../src/server.mjs?phase1-http=${Date.now()}`);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
 
   try {
+    const invalidJson = await fetch(`${base}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{not-valid-json'
+    });
+    assert.equal(invalidJson.status, 400);
+    assert.deepEqual(await invalidJson.json(), {
+      error: 'INVALID_JSON',
+      code: 'INVALID_JSON',
+      message: 'Request body must contain valid JSON.'
+    });
+
     const unauthenticated = await request(base, '/api/me');
     assert.equal(unauthenticated.status, 401);
     assert.deepEqual(unauthenticated.body, {
@@ -49,6 +62,7 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
     });
     assert.equal(aliceRegistration.status, 201);
     assert.equal(aliceRegistration.body.user.email, 'alice@example.com');
+    assert.equal(aliceRegistration.body.user.role, 'user');
     assert.equal('passwordHash' in aliceRegistration.body.user, false);
     assert.doesNotMatch(JSON.stringify(aliceRegistration.body), /password123|passwordHash/);
 
@@ -101,7 +115,8 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
         displayName: 'Hijacked',
         verifiedPerson: true,
         reputationRefs: { trust: 'forged' },
-        professional: { title: 'Architect', skills: ['Security'] }
+        creatorPersona: { headline: 'Builder', passwordHash: 'forged' },
+        professional: { title: 'Architect', skills: ['Security'], passwordHash: 'forged', role: 'admin' }
       }
     });
     assert.equal(profileUpdate.status, 200);
@@ -110,6 +125,10 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
     assert.equal(profileUpdate.body.identity.verifiedPerson, false);
     assert.equal(profileUpdate.body.identity.reputationRefs.trust, null);
     assert.equal(profileUpdate.body.identity.professional.title, 'Architect');
+    assert.equal('passwordHash' in profileUpdate.body.identity.professional, false);
+    assert.equal('role' in profileUpdate.body.identity.professional, false);
+    assert.equal('passwordHash' in profileUpdate.body.identity.creatorPersona, false);
+    assert.doesNotMatch(JSON.stringify(profileUpdate.body), /passwordHash|forged/);
 
     const bobPublicProfile = await request(base, `/api/identity/${bobRegistration.body.user.id}`);
     assert.equal(bobPublicProfile.status, 200);

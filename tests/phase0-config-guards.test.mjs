@@ -19,6 +19,17 @@ test('TEST 1: development without DATABASE_URL allows startup config', () => {
   assert.equal(validation.valid, true);
 });
 
+test('session TTL is a finite bounded whole number', () => {
+  assert.equal(loadRuntimeConfig({ SESSION_TTL_DAYS: '1' }).sessionTtlDays, 1);
+  assert.equal(loadRuntimeConfig({ SESSION_TTL_DAYS: '365' }).sessionTtlDays, 365);
+  for (const value of ['Infinity', 'NaN', '0', '1.5', '366']) {
+    assert.throws(
+      () => loadRuntimeConfig({ SESSION_TTL_DAYS: value }),
+      /Invalid SESSION_TTL_DAYS configuration/
+    );
+  }
+});
+
 test('TEST 2: production without DATABASE_URL fails validation', () => {
   const config = loadRuntimeConfig({ NODE_ENV: 'production', DATABASE_URL: '' });
   const validation = validateProductionConfig(config);

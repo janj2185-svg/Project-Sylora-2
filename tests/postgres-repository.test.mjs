@@ -28,10 +28,16 @@ test('PostgreSQL auth/social repository persists the social and messaging runtim
   assert.equal((await repo.findUserByIdentity('pguser')).email, user.email);
   assert.equal((await repo.userForSession(session.tokenHash)).id, user.id);
 
-  user.displayName = 'Updated PG User'; user.bio = 'Database backed';
-  const updated = await repo.updateUser(user);
+  const updated = await repo.patchUser(user.id, { displayName: 'Updated PG User', bio: 'Database backed' });
   assert.equal(updated.displayName, 'Updated PG User');
   assert.equal(updated.bio, 'Database backed');
+  await Promise.all([
+    repo.patchUser(user.id, { bio: 'Concurrent bio' }),
+    repo.patchUser(user.id, { avatar: '/safe-avatar.png' })
+  ]);
+  const concurrentlyUpdated = await repo.findUserById(user.id);
+  assert.equal(concurrentlyUpdated.bio, 'Concurrent bio');
+  assert.equal(concurrentlyUpdated.avatar, '/safe-avatar.png');
 
   const post = await repo.createPost({ id: randomUUID(), userId: user.id, text: 'PostgreSQL runtime post', kind: 'text', createdAt: new Date().toISOString() });
   assert.equal((await repo.findPost(post.id)).text, 'PostgreSQL runtime post');

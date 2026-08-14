@@ -15,15 +15,16 @@ const EXPECTED_CHECKSUMS = Object.freeze({
   '010_ecosystem_core': '402a28216e1d88b862d436e9526a464ed659a9807abe8a21abdff1082f486b98',
   '011_ecosystem_runtime': 'e4cc689490e878634b2d47b0a9fc2d58e1efc8c6454caffffeba9d7e36d2c88a',
   '012_live_runtime_state': 'f969939234e92ccb68ed1c59f13399c14ec35e4893503267c10c71953da96a69',
-  '013_phase1_identity_auth': 'e735b7e71e50d889a3b040f3ac18b4e7de44dffe64b2709a2b5840c2e4173960'
+  '013_phase1_identity_auth': 'e735b7e71e50d889a3b040f3ac18b4e7de44dffe64b2709a2b5840c2e4173960',
+  '014_session_status_invalidation': '85b51cdf8872c12f0a90a41fb240d528d200703f2fd7ff4f67d7cfa7493a6740'
 });
 
 test('migration manifest is ordered, immutable, and complete through Phase 1', () => {
   const migrations = loadMigrations();
-  assert.equal(migrations.length, 13);
+  assert.equal(migrations.length, 14);
   assert.deepEqual(migrations.map(item => item.name), MIGRATION_FILES.map(([name]) => name));
   assert.deepEqual(Object.fromEntries(migrations.map(item => [item.name, item.checksum])), EXPECTED_CHECKSUMS);
-  assert.deepEqual(migrations.map(item => Number(item.name.slice(0, 3))), Array.from({ length: 13 }, (_, index) => index + 1));
+  assert.deepEqual(migrations.map(item => Number(item.name.slice(0, 3))), Array.from({ length: 14 }, (_, index) => index + 1));
 });
 
 test('fresh schema defines critical keys, ownership cascades, identity uniqueness, timestamps, and indexes', () => {
@@ -35,6 +36,10 @@ test('fresh schema defines critical keys, ownership cascades, identity uniquenes
   assert.match(sql, /users ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active'/i);
   assert.match(sql, /users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now\(\)/i);
   assert.match(sql, /sessions_user_expires_idx ON sessions\(user_id,expires_at DESC\)/i);
+  assert.match(sql, /LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE;[\s\S]*DELETE FROM sessions\s+USING users/i);
+  assert.match(sql, /DELETE FROM sessions\s+USING users[\s\S]*users\.status <> 'active'/i);
+  assert.match(sql, /DELETE FROM sessions WHERE user_id = NEW\.id/i);
+  assert.match(sql, /AFTER UPDATE OF status ON users/i);
   assert.match(sql, /ai_memories ADD COLUMN IF NOT EXISTS category text NOT NULL/i);
   assert.match(sql, /ai_memories_user_updated_idx ON ai_memories\(user_id,updated_at DESC\)/i);
 });
@@ -54,18 +59,24 @@ test('migration runner applies every migration transactionally and is idempotent
     }
   };
   await applyMigrations(client);
-  assert.equal(applied.size, 13);
-  assert.equal(commands.filter(command => command === 'BEGIN').length, 13);
-  assert.equal(commands.filter(command => command === 'COMMIT').length, 13);
+  assert.equal(applied.size, 14);
+  assert.equal(commands.filter(command => command === 'SELECT pg_advisory_lock($1)').length, 1);
+  assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 1);
+  assert.equal(commands.filter(command => command === 'BEGIN').length, 14);
+  assert.equal(commands.filter(command => command === 'COMMIT').length, 14);
   const before = commands.length;
   await applyMigrations(client);
   assert.equal(commands.slice(before).some(command => command === 'BEGIN'), false);
+  assert.equal(commands.filter(command => command === 'SELECT pg_advisory_lock($1)').length, 2);
+  assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 2);
 });
 
 test('migration runner fails closed when an applied checksum differs', async () => {
   const first = loadMigrations()[0];
+  let unlocked = false;
   const client = {
     async query(sql, params = []) {
+      if (/^SELECT pg_advisory_unlock/i.test(sql)) unlocked = true;
       if (/^SELECT checksum FROM _sylora_migrations/i.test(sql) && params[0] === first.name) {
         return { rowCount: 1, rows: [{ checksum: '0'.repeat(64) }] };
       }
@@ -73,4 +84,5 @@ test('migration runner fails closed when an applied checksum differs', async () 
     }
   };
   await assert.rejects(() => applyMigrations(client), /MIGRATION_CHECKSUM_MISMATCH:001_initial_schema/);
+  assert.equal(unlocked, true);
 });
