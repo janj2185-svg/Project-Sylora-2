@@ -1,6 +1,6 @@
 import { createPersonalAgent, createActivityEntry, permissionDashboard, contextRole } from './personal-ai.mjs';
 import { mergeAiPermissions as mergePerms, ACTION_LEVELS, DEFAULT_AI_PERMISSIONS } from './permissions.mjs';
-import { defaultIdentity, patchIdentity, publicIdentityView } from './identity.mjs';
+import { defaultIdentity, patchIdentity, publicIdentityView, sanitizeIdentityRecord } from './identity.mjs';
 import { createNode, createEdge, visibleNodes, graphSummary, KG_NODE_TYPES, KG_EDGE_TYPES } from './knowledge-graph.mjs';
 import { createActionRecord, canExecute, markConfirmed, markCompleted, markFailed, validateToolInput, BUILTIN_ACTIONS } from './action-engine.mjs';
 import { createAgentManifest, installRecord, STARTER_CATALOG } from './agents.mjs';
@@ -117,6 +117,28 @@ import { AIDirectorEngine, directorStatus } from './ai-director.mjs';
 import { createClipJob, processClipJob } from './clip-jobs.mjs';
 import { capabilityDependencyGraph, nextImplementableCapability } from '../capability-graph.mjs';
 import { emitPlatformEvent } from '../platform-events.mjs';
+
+function canReadMemory(agent) {
+  const permissions = mergePerms(agent?.permissions || {});
+  return agent?.privacyControls?.memory !== false && permissions.memory_read !== false;
+}
+
+function canProposeMemory(agent) {
+  const permissions = mergePerms(agent?.permissions || {});
+  return agent?.privacyControls?.memory !== false && permissions.memory_propose !== false;
+}
+
+function publicDeveloperKey(key) {
+  return {
+    id: key.id,
+    appId: key.appId,
+    prefix: key.prefix,
+    label: key.label,
+    lastUsedAt: key.lastUsedAt || null,
+    revokedAt: key.revokedAt || null,
+    createdAt: key.createdAt
+  };
+}
 
 function ensureCollections(store) {
   const d = store.data;
@@ -366,7 +388,6 @@ export class EcosystemService {
       agent = createPersonalAgent({ id: this.store.id(), userId: user.id, locale: user.locale || 'uk' });
       this.store.data.personalAgents.push(agent);
       this.store.save();
-      if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
       audit(this.store, user.id, 'personal_ai.created', 'personal_agent', agent.id);
     }
     return agent;
@@ -382,8 +403,13 @@ export class EcosystemService {
         return existing;
       }
     }
-    const agent = this.ensurePersonalAgent(user);
-    if (this.pg) await this.pg.upsertPersonalAgent(agent);
+    let agent = this.ensurePersonalAgent(user);
+    if (this.pg) {
+      agent = await this.pg.upsertPersonalAgent(agent);
+      const index = this.store.data.personalAgents.findIndex(item => item.userId === user.id && item.kind === 'personal');
+      if (index >= 0) this.store.data.personalAgents[index] = agent;
+      else this.store.data.personalAgents.push(agent);
+    }
     return agent;
   }
 
@@ -392,9 +418,24 @@ export class EcosystemService {
     agent.permissions = mergePerms({ ...agent.permissions, ...patch });
     agent.updatedAt = this.store.now();
     this.store.save();
-    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
     audit(this.store, user.id, 'personal_ai.permissions_updated', 'personal_agent', agent.id, { permissions: agent.permissions });
     return agent;
+  }
+
+  async updateAiPermissionsAsync(user, patch = {}) {
+    if (!this.pg) return this.updateAiPermissions(user, patch);
+    const agent = await this.ensurePersonalAgentAsync(user);
+    const permissionPatch = Object.fromEntries(
+      Object.keys(DEFAULT_AI_PERMISSIONS)
+        .filter(key => typeof patch[key] === 'boolean')
+        .map(key => [key, patch[key]])
+    );
+    const saved = await this.pg.patchPersonalAgent(user.id, { permissions: permissionPatch, updatedAt: this.store.now() });
+    const index = this.store.data.personalAgents.findIndex(item => item.id === agent.id);
+    if (index >= 0) this.store.data.personalAgents[index] = saved;
+    else this.store.data.personalAgents.push(saved);
+    audit(this.store, user.id, 'personal_ai.permissions_updated', 'personal_agent', agent.id, { permissions: saved.permissions });
+    return saved;
   }
 
   dashboard(user, pendingActions = [], source = {}) {
@@ -441,14 +482,17 @@ export class EcosystemService {
   // —— Identity ——
   ensureIdentity(user) {
     ensureCollections(this.store);
-    let identity = this.store.data.identities.find(x => x.userId === user.id);
+    const existingIndex = this.store.data.identities.findIndex(x => x.userId === user.id);
+    let identity = existingIndex >= 0 ? this.store.data.identities[existingIndex] : null;
     if (!identity) {
       identity = defaultIdentity(user);
       const agent = this.ensurePersonalAgent(user);
       identity.agentId = agent.id;
       this.store.data.identities.push(identity);
       this.store.save();
-      if (this.pg) this.pg.upsertIdentity(identity).catch(() => {});
+    } else {
+      identity = sanitizeIdentityRecord(identity, user);
+      this.store.data.identities[existingIndex] = identity;
     }
     identity.username = user.username;
     identity.displayName = user.displayName;
@@ -479,16 +523,14 @@ export class EcosystemService {
     const idx = this.store.data.identities.findIndex(x => x.userId === user.id);
     this.store.data.identities[idx] = next;
     this.store.save();
-    if (this.pg) this.pg.upsertIdentity(next).catch(() => {});
     audit(this.store, user.id, 'identity.updated', 'identity', user.id);
     return next;
   }
 
   async updateIdentityAsync(user, patch) {
     if (!this.pg) return this.updateIdentity(user, patch);
-    const current = await this.ensureIdentityAsync(user);
-    let next = patchIdentity(current, patch);
-    next = await this.pg.upsertIdentity(next);
+    await this.ensureIdentityAsync(user);
+    const next = await this.pg.patchIdentity(user, patch);
     next.username = user.username;
     next.displayName = user.displayName;
     const index = this.store.data.identities.findIndex(item => item.userId === user.id);
@@ -1050,13 +1092,24 @@ export class EcosystemService {
   async setMemoryEnabledAsync(user, enabled) {
     if (!this.pg) return this.setMemoryEnabled(user, enabled);
     const agent = await this.ensurePersonalAgentAsync(user);
-    agent.privacyControls = { ...(agent.privacyControls || {}), memory: !!enabled };
-    agent.updatedAt = this.store.now();
-    const saved = await this.pg.upsertPersonalAgent(agent);
+    const saved = await this.pg.patchPersonalAgent(user.id, {
+      privacyControls: { memory: !!enabled },
+      updatedAt: this.store.now()
+    });
     const index = this.store.data.personalAgents.findIndex(item => item.id === agent.id);
     if (index >= 0) this.store.data.personalAgents[index] = saved;
     else this.store.data.personalAgents.push(saved);
     return { enabled: !!enabled };
+  }
+
+  async memoryAccessEnabled(user) {
+    const agent = await this.ensurePersonalAgentAsync(user);
+    return canReadMemory(agent);
+  }
+
+  async memoryProposalEnabled(user) {
+    const agent = await this.ensurePersonalAgentAsync(user);
+    return canProposeMemory(agent);
   }
 
   // —— Events / Calendar / Projects / Spaces ——
@@ -1411,8 +1464,32 @@ export class EcosystemService {
     return app;
   }
 
+  async createAppAsync(user, input) {
+    if (!this.pg) return this.createApp(user, input);
+    const app = createDeveloperApp({
+      id: this.store.id(),
+      ownerId: user.id,
+      name: input.name,
+      description: input.description,
+      scopes: input.scopes,
+      redirectUris: input.redirectUris,
+      webhookUrl: input.webhookUrl
+    });
+    const saved = await this.pg.createDeveloperApp(app);
+    this.store.data.developerApps.push(saved);
+    audit(this.store, user.id, 'developer.app_created', 'developer_app', saved.id);
+    return saved;
+  }
+
   listApps(user) {
     return this.store.data.developerApps.filter(a => a.ownerId === user.id);
+  }
+
+  async listAppsAsync(user) {
+    if (!this.pg) return this.listApps(user);
+    const apps = await this.pg.listDeveloperApps(user.id);
+    this.store.data.developerApps = this.store.data.developerApps.filter(app => app.ownerId !== user.id).concat(apps);
+    return apps;
   }
 
   createKey(user, appId, label) {
@@ -1433,6 +1510,37 @@ export class EcosystemService {
     return { ok: true, key: { id: record.id, prefix: record.prefix, label: record.label, createdAt: record.createdAt }, raw: generated.raw, oauth: OAUTH_DOC };
   }
 
+  async createKeyAsync(user, appId, label) {
+    if (!this.pg) return this.createKey(user, appId, label);
+    const app = await this.pg.findDeveloperApp(appId, user.id);
+    if (!app) return { ok: false, error: 'APP_NOT_FOUND' };
+    const generated = generateApiKey();
+    const record = createApiKeyRecord({
+      id: this.store.id(),
+      appId,
+      ownerId: user.id,
+      prefix: generated.prefix,
+      hash: generated.hash,
+      label
+    });
+    const saved = await this.pg.createDeveloperApiKey(record);
+    this.store.data.apiKeys.push(saved);
+    audit(this.store, user.id, 'developer.api_key_created', 'api_key', saved.id, { prefix: saved.prefix });
+    return { ok: true, key: publicDeveloperKey(saved), raw: generated.raw, oauth: OAUTH_DOC };
+  }
+
+  async listKeysAsync(user, appId) {
+    if (!this.pg) {
+      const app = this.store.data.developerApps.find(item => item.id === appId && item.ownerId === user.id);
+      if (!app) return { ok: false, error: 'APP_NOT_FOUND' };
+      return { ok: true, keys: this.store.data.apiKeys.filter(key => key.appId === appId && key.ownerId === user.id).map(publicDeveloperKey) };
+    }
+    const app = await this.pg.findDeveloperApp(appId, user.id);
+    if (!app) return { ok: false, error: 'APP_NOT_FOUND' };
+    const keys = await this.pg.listDeveloperApiKeys(user.id, appId);
+    return { ok: true, keys: keys.map(publicDeveloperKey) };
+  }
+
   resolveApiKey(raw) {
     if (!raw) return null;
     const hash = hashApiKey(raw);
@@ -1443,6 +1551,29 @@ export class EcosystemService {
     key.lastUsedAt = this.store.now();
     this.store.save();
     return { key, app };
+  }
+
+  async resolveApiKeyAsync(raw) {
+    if (!this.pg) return this.resolveApiKey(raw);
+    if (!raw) return null;
+    return this.pg.resolveDeveloperApiKey(hashApiKey(raw));
+  }
+
+  async revokeKeyAsync(user, appId, keyId) {
+    if (!this.pg) {
+      const key = this.store.data.apiKeys.find(item => item.id === keyId && item.appId === appId && item.ownerId === user.id && !item.revokedAt);
+      if (!key) return false;
+      key.revokedAt = this.store.now();
+      this.store.save();
+      audit(this.store, user.id, 'developer.api_key_revoked', 'api_key', key.id, { appId });
+      return true;
+    }
+    const revoked = await this.pg.revokeDeveloperApiKey(user.id, appId, keyId);
+    if (!revoked) return false;
+    const cached = this.store.data.apiKeys.find(item => item.id === keyId);
+    if (cached) Object.assign(cached, revoked);
+    audit(this.store, user.id, 'developer.api_key_revoked', 'api_key', keyId, { appId });
+    return true;
   }
 
   // —— Translation ——
@@ -1564,10 +1695,10 @@ export class EcosystemService {
     return row;
   }
 
-  securityCenter(user, { sessions = [], blocks = [], capabilities = {} } = {}) {
+  securityCenter(user, { sessions = [], blocks = [], capabilities = {}, memories: memorySource = null, activity: activitySource = null } = {}) {
     const agent = this.ensurePersonalAgent(user);
-    const memories = (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
-    const activity = this.store.data.aiActivity.filter(a => a.userId === user.id).slice(-50);
+    const memories = memorySource || (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const activity = activitySource || this.store.data.aiActivity.filter(a => a.userId === user.id).slice(-50);
     const integrations = (this.store.data.agentInstalls || [])
       .filter(x => x.userId === user.id && !x.removedAt)
       .map(x => {
@@ -1599,7 +1730,6 @@ export class EcosystemService {
     if (patch.voicePersonality) agent.voicePersonality = String(patch.voicePersonality).slice(0, 40);
     agent.updatedAt = this.store.now();
     this.store.save();
-    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
     this.recordActivity(user, {
       kind: 'privacy_controls_updated',
       summary: 'Sylora оновила privacy / AI controls за запитом користувача',
@@ -1608,6 +1738,37 @@ export class EcosystemService {
       context: 'security'
     });
     return agent;
+  }
+
+  async updatePrivacyControlsAsync(user, patch = {}) {
+    if (!this.pg) return this.updatePrivacyControls(user, patch);
+    const agent = await this.ensurePersonalAgentAsync(user);
+    const privacyControls = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => typeof value === 'boolean')
+    );
+    let proactiveLevel = null;
+    if (patch.proactiveLevel) {
+      const next = String(patch.proactiveLevel).toUpperCase();
+      if (PROACTIVE_LEVELS.includes(next)) proactiveLevel = next;
+    }
+    const voicePersonality = patch.voicePersonality ? String(patch.voicePersonality).slice(0, 40) : null;
+    const saved = await this.pg.patchPersonalAgent(user.id, {
+      privacyControls,
+      proactiveLevel,
+      voicePersonality,
+      updatedAt: this.store.now()
+    });
+    const index = this.store.data.personalAgents.findIndex(item => item.id === agent.id);
+    if (index >= 0) this.store.data.personalAgents[index] = saved;
+    else this.store.data.personalAgents.push(saved);
+    await this.recordActivityAsync(user, {
+      kind: 'privacy_controls_updated',
+      summary: 'Sylora оновила privacy / AI controls за запитом користувача',
+      dataUsed: ['personal_agent'],
+      reason: 'User changed Privacy & AI Control Center',
+      context: 'security'
+    });
+    return saved;
   }
 
   requestPrivacy(user, type, details) {
@@ -1954,10 +2115,11 @@ export class EcosystemService {
   buildContextEngine(user, { view = 'command_center', query = '', spaceId = null } = {}) {
     ensureCollections(this.store);
     const agent = this.ensurePersonalAgent(user);
-    if (agent.privacyControls?.memory === false && !query) {
+    const memoryReadable = canReadMemory(agent);
+    if (!memoryReadable && !query) {
       // still allow non-memory slices
     }
-    const memories = agent.privacyControls?.memory === false
+    const memories = !memoryReadable
       ? []
       : (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
     const docs = [
@@ -2056,7 +2218,19 @@ export class EcosystemService {
     agent.proactiveLevel = next;
     agent.updatedAt = this.store.now();
     this.store.save();
-    if (this.pg) this.pg.upsertPersonalAgent(agent).catch(() => {});
+    audit(this.store, user.id, 'personal_ai.proactive_updated', 'personal_agent', agent.id, { proactiveLevel: next });
+    return this.intelligenceProfile(user);
+  }
+
+  async setProactiveLevelAsync(user, level) {
+    if (!this.pg) return this.setProactiveLevel(user, level);
+    const next = String(level || '').toUpperCase();
+    if (!PROACTIVE_LEVELS.includes(next)) throw new Error('INVALID_PROACTIVE_LEVEL');
+    const agent = await this.ensurePersonalAgentAsync(user);
+    const saved = await this.pg.patchPersonalAgent(user.id, { proactiveLevel: next, updatedAt: this.store.now() });
+    const index = this.store.data.personalAgents.findIndex(item => item.id === agent.id);
+    if (index >= 0) this.store.data.personalAgents[index] = saved;
+    else this.store.data.personalAgents.push(saved);
     audit(this.store, user.id, 'personal_ai.proactive_updated', 'personal_agent', agent.id, { proactiveLevel: next });
     return this.intelligenceProfile(user);
   }

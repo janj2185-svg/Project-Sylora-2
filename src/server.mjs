@@ -30,6 +30,7 @@ import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.m
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
 import { createPlatformEvent } from './platform-event-spine.mjs';
 import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
+import { httpErrorResponse } from './http-errors.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -52,7 +53,6 @@ const rateBuckets = new Map();
 const port = runtimeConfig.port;
 const ttlDays = runtimeConfig.sessionTtlDays;
 const creatorGiftShareBps = runtimeConfig.creatorGiftShareBps;
-const adminEmails = runtimeConfig.adminEmails;
 const openaiModel = runtimeConfig.ai.model;
 const openaiRealtimeModel = runtimeConfig.ai.realtimeModel;
 const openaiRealtimeVoice = runtimeConfig.ai.realtimeVoice;
@@ -74,8 +74,17 @@ const callPeerRegistry=new LivePeerRegistry(redis,'call');
 const callStreams=new Map();
 const realtimeFanout=new RealtimeFanout({redis,dispatch:dispatchOutboxLocal});
 const authSocial=new PostgresAuthSocialRepository(postgres.pool);
-const authService=new AuthService({repository:authSocial,store,ttlDays,adminEmails,now:()=>store.now(),id:()=>store.id()});
 const walletRepo=new PostgresWalletRepository(postgres.pool);
+const authService=new AuthService({
+  repository:authSocial,
+  store,
+  ttlDays,
+  provisionAccount:authSocial.enabled
+    ? ({client,user})=>walletRepo.ensureWallet(user.id,10000,{client})
+    : null,
+  now:()=>store.now(),
+  id:()=>store.id()
+});
 const aiRepo=new PostgresAiRepository(postgres.pool);
 const liveRepo=new PostgresLiveRepository(postgres.pool);
 const outboxRepo=new PostgresOutboxRepository(postgres.pool);
@@ -266,7 +275,8 @@ async function createActionPost(user,text){const post=await createTextPost(user,
 async function sendActionMessage(user,input={}){const text=safeText(input.text,2000),otherId=safeText(input.userId,80);if(!text||!otherId)return null;const other=await authService.findUserById(otherId);if(!other||other.id===user.id||(other.status||'active')!=='active'||await isBlockedBetween(user.id,other.id))return null;let conversation,message;if(authSocial.enabled){conversation=await authSocial.getOrCreateConversation(user.id,other.id,store.id(),store.now());message=await authSocial.createMessage({id:store.id(),conversationId:conversation.id,userId:user.id,text,createdAt:store.now(),editedAt:null})}else{conversation=store.data.conversations.find(item=>item.memberIds.length===2&&item.memberIds.includes(user.id)&&item.memberIds.includes(other.id));if(!conversation){conversation={id:store.id(),memberIds:[user.id,other.id],createdAt:store.now()};store.data.conversations.push(conversation)}message={id:store.id(),conversationId:conversation.id,userId:user.id,text,createdAt:store.now(),editedAt:null};store.data.messages.push(message);store.save()}await notifyUser(other.id,'message',user.id,{conversationId:conversation.id});emitUser(other.id,'message',{message,actor:toPublicUser(user)});return{message,conversationId:conversation.id}}
 async function inviteActionUser(user,input={}){const username=safeText(input.username,30).replace(/^@/,'');const target=await authService.findUserByUsername(username);if(!target||target.id===user.id||(target.status||'active')!=='active')return null;await notifyUser(target.id,'invite',user.id,{targetType:safeText(input.targetType||'space',40),targetId:input.targetId||null});return{invitedUserId:target.id,username:target.username}}
 async function aiContext(user){
-  const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},memories=(await aiListMemories(user.id,30)).map(({label,value})=>({label,value}));
+  const memoryEnabled=await ecosystem.memoryAccessEnabled(user);
+  const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},memories=memoryEnabled?(await aiListMemories(user.id,30)).map(({label,value})=>({label,value})):[];
   return {profile:{id:user.id,username:user.username,displayName:user.displayName,bio:user.bio,locale:user.locale},stats:{...social,creatorEarnings:wallet?.earnings||0},communities:store.data.communityMembers.filter(x=>x.userId===user.id).map(m=>store.data.communities.find(c=>c.id===m.communityId)).filter(Boolean).slice(0,20).map(c=>({id:c.id,name:c.name})),courses:store.data.enrollments.filter(x=>x.userId===user.id).map(e=>{const c=store.data.courses.find(x=>x.id===e.courseId);return c?{id:c.id,title:c.title,progress:e.progress}:null}).filter(Boolean).slice(0,20),memories};
 }
 const aiTools=[
@@ -287,6 +297,9 @@ async function aiDeleteMemory(userId,id){if(aiRepo.enabled){const deleted=await 
 async function aiClearMemories(userId){if(aiRepo.enabled){const removed=await aiRepo.clearMemories(userId);store.data.aiMemories=store.data.aiMemories.filter(item=>item.userId!==userId);return removed}const before=store.data.aiMemories.length;store.data.aiMemories=store.data.aiMemories.filter(item=>item.userId!==userId);store.save();return before-store.data.aiMemories.length}
 async function aiListActivity(userId,limit=100){if(ecosystemRepo.enabled)return replaceUserCache('aiActivity',userId,await ecosystemRepo.listActivity(userId,limit));return store.data.aiActivity.filter(item=>item.userId===userId).slice(-limit)}
 async function aiClearActivity(userId){if(ecosystemRepo.enabled){const removed=await ecosystemRepo.clearActivity(userId);store.data.aiActivity=store.data.aiActivity.filter(item=>item.userId!==userId);return removed}const before=store.data.aiActivity.length;store.data.aiActivity=store.data.aiActivity.filter(item=>item.userId!==userId);store.save();return before-store.data.aiActivity.length}
+async function listHomePosts(user){if(!authSocial.enabled)return store.data.posts.slice(0,30).map(post=>({...post,author:store.publicUser(store.data.users.find(item=>item.id===post.userId))}));const [rows,blockedIds]=await Promise.all([authSocial.listPosts(30),authSocial.blockedUserIds(user.id)]),blocked=new Set(blockedIds);return rows.filter(({post})=>!blocked.has(post.userId)).map(({post,author})=>{cachePost(post);cacheUser(author);return{...post,author:store.publicUser(author)}})}
+async function listHomeConversations(user){if(!authSocial.enabled)return store.data.conversations.filter(conversation=>(conversation.memberIds||[]).includes(user.id)&&!conversation.memberIds.some(id=>id!==user.id&&blockedBetween(user.id,id))).slice(0,8).map(conversation=>({...conversation,members:conversation.memberIds.map(id=>store.publicUser(store.data.users.find(item=>item.id===id))).filter(Boolean),lastMessage:[...store.data.messages].reverse().find(message=>message.conversationId===conversation.id)||null}));const [source,blockedIds]=await Promise.all([authSocial.listConversations(user.id),authSocial.blockedUserIds(user.id)]),blocked=new Set(blockedIds);return source.filter(conversation=>!conversation.memberIds.some(id=>id!==user.id&&blocked.has(id))).slice(0,8).map(conversation=>({...conversation,members:conversation.members.map(member=>{cacheUser(member);return store.publicUser(member)})}))}
+async function listHomeNotifications(user){return authSocial.enabled?authSocial.listNotifications(user.id):store.data.notifications.filter(notification=>notification.userId===user.id).slice(0,20)}
 async function aiCreateAction(userId,type,payload){const action={id:store.id(),userId,type,payload,status:'pending',createdAt:store.now(),expiresAt:new Date(Date.now()+24*60*60*1000).toISOString(),completedAt:null};if(aiRepo.enabled)return aiRepo.createAction(action);store.data.aiActions.push(action);store.save();return action}
 async function aiFindAction(userId,id){return aiRepo.enabled?aiRepo.findAction(userId,id):store.data.aiActions.find(x=>x.id===id&&x.userId===userId)||null}
 async function aiListPendingActions(userId,limit=20){return aiRepo.enabled?aiRepo.listPendingActions(userId,limit):store.data.aiActions.filter(x=>x.userId===userId&&x.status==='pending'&&new Date(x.expiresAt).getTime()>Date.now()).slice(-limit)}
@@ -295,10 +308,11 @@ async function executeAiTool(user,item){
   let args={};try{args=JSON.parse(item.arguments||'{}')}catch{return {ok:false,error:'INVALID_TOOL_ARGUMENTS'}}
   if(item.name==='get_my_context')return {ok:true,context:await aiContext(user)};
   if(item.name==='propose_post'){const text=safeText(args.text,4000);if(!text)return {ok:false,error:'TEXT_REQUIRED'};const action=await aiCreateAction(user.id,'publish_post',{text});return {ok:true,status:'pending_user_confirmation',actionId:action.id,preview:text}}
-  if(item.name==='propose_memory'){const label=safeText(args.label,80),value=safeText(args.value,1000);if(!label||!value)return {ok:false,error:'MEMORY_REQUIRED'};const action=await aiCreateAction(user.id,'remember',{label,value});return {ok:true,status:'pending_user_confirmation',actionId:action.id,label,value}}
+  if(item.name==='propose_memory'){if(!await ecosystem.memoryProposalEnabled(user))return {ok:false,error:'MEMORY_DISABLED',code:'MEMORY_DISABLED',message:'AI memory is disabled or memory proposals are not permitted for this account.'};const label=safeText(args.label,80),value=safeText(args.value,1000);if(!label||!value)return {ok:false,error:'MEMORY_REQUIRED'};const action=await aiCreateAction(user.id,'remember',{label,value});return {ok:true,status:'pending_user_confirmation',actionId:action.id,label,value}}
   return {ok:false,error:'TOOL_NOT_ALLOWED'};
 }
 async function runSyloraAi(user,text,view='command_center'){
+  await ecosystem.ensurePersonalAgentAsync(user);
   const history=(await aiListMessages(user.id,12)).map(x=>({role:x.role,content:x.text}));
   const input=[...history,{role:'user',content:text}];
   const pack=ecosystem.contextPack(user, view);
@@ -366,6 +380,7 @@ async function api(req, res, url) {
     req, res, url, json, body, requireUser, route, safeText, ecosystem, store,
     aiListPendingActions, aiListMemories, aiUpdateMemory, aiClearMemories,
     aiListActivity, aiClearActivity,
+    listHomePosts, listHomeConversations, listHomeNotifications,
     findUserById: id => authService.findUserById(id),
     findUserByUsername: username => authService.findUserByUsername(username),
     callPeerRegistry, callStreams, liveIceServers, hasTurnServer
@@ -396,8 +411,7 @@ async function api(req, res, url) {
   if (req.method === 'POST' && p === '/api/auth/register') {
     try {
       const result = await authService.register(await body(req));
-      if (authSocial.enabled) await walletRepo.ensureWallet(result.user.id);
-      else if (!store.data.wallets.some(wallet => wallet.userId === result.user.id)) {
+      if (!authSocial.enabled && !store.data.wallets.some(wallet => wallet.userId === result.user.id)) {
         store.data.wallets.push({ userId: result.user.id, balance: 10000, earnings: 0, currency: 'LUMEN' });
         store.save();
       }
@@ -622,9 +636,9 @@ async function api(req, res, url) {
     const user=await requireUser(req,res);if(!user)return;const input=await body(req);
     try{return json(res,200,ecosystem.gradeQuizAttempt(user,m.id,input.answers||{}))}catch(e){return json(res,404,{error:e.message})}
   }
-  if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),label=safeText(input.label,80),rawValue=safeText(input.value,1000),category=['conversation','preferences','people','projects','professional','learning'].includes(input.category)?input.category:'preferences';if(!label||!rawValue)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(rawValue)}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,category,tier:input.tier==='short'?'short':'long',createdAt,updatedAt:createdAt,source:'user'});return json(res,201,{memory})}
+  if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;if(!await ecosystem.memoryProposalEnabled(user))return json(res,409,{error:'MEMORY_DISABLED',code:'MEMORY_DISABLED',message:'AI memory is disabled or memory proposals are not permitted for this account.'});const input=await body(req),label=safeText(input.label,80),rawValue=safeText(input.value,1000),category=['conversation','preferences','people','projects','professional','learning'].includes(input.category)?input.category:'preferences';if(!label||!rawValue)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(rawValue)}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,category,tier:input.tier==='short'?'short':'long',createdAt,updatedAt:createdAt,source:'user'});return json(res,201,{memory})}
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
-  m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(safeText(action.payload?.value,1000))}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value,category:'preferences',tier:'long',createdAt,updatedAt:createdAt,source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
+  m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(!await ecosystem.memoryProposalEnabled(user))return json(res,409,{error:'MEMORY_DISABLED',code:'MEMORY_DISABLED',message:'AI memory is disabled or memory proposals are not permitted for this account.'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(safeText(action.payload?.value,1000))}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value,category:'preferences',tier:'long',createdAt,updatedAt:createdAt,source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
   if(req.method==='POST'&&p==='/api/ai/chat'){
     const user=await requireUser(req,res);if(!user)return;
@@ -637,8 +651,7 @@ async function api(req, res, url) {
       const answer=safeText(response.output_text,12000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});
       const now=store.now();await aiCreateMessages([{id:store.id(),userId:user.id,role:'user',text,source:'chat',sourceEventId:null,createdAt:now},{id:store.id(),userId:user.id,role:'assistant',text:answer,source:'chat',sourceEventId:null,createdAt:store.now()}]);
       const pack=ecosystem.contextPack(user,view);
-      ecosystem.ensurePersonalAgent(user);
-      ecosystem.recordActivity(user,{kind:'chat',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
+      await ecosystem.recordActivityAsync(user,{kind:'chat',summary:`Personal AI answered as ${pack.role}`,dataUsed:['profile_context','memory_read','knowledge_graph'],reason:'User initiated chat',context:view});
       ecosystem.trackAiUsage({userId:user.id,model:openaiModel,action:'chat'});
       return json(res,200,{message:answer,model:openaiModel,aiStatus:runtimeConfig.ai.status,responseId:response.id,pendingActions:await aiListPendingActions(user.id,10),context:{view,role:pack.role}});
     }catch(error){console.error('OpenAI request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR',aiStatus:runtimeConfig.ai.status});}
@@ -672,10 +685,9 @@ function staticFile(req, res, url) {
 export const server = http.createServer(async (req, res) => {
   try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED',code:'RATE_LIMITED',message:'Too many requests. Try again later.'}); await api(req,res,url); } else staticFile(req,res,url); }
   catch (e) {
-    const known = new Set(['BODY_TOO_LARGE', 'INVALID_JSON', 'UNSUPPORTED_MEDIA_TYPE', 'MEDIA_TOO_LARGE', 'INVALID_VIDEO_FILE']);
-    const safeCode = known.has(e?.message) ? e.message : 'BAD_REQUEST';
-    console.error(e?.name || 'error', safeCode);
-    if (!res.headersSent) json(res, e?.message === 'BODY_TOO_LARGE' ? 413 : 400, { error: safeCode });
+    const failure = httpErrorResponse(e);
+    console.error(e?.name || 'error', failure.body.code);
+    if (!res.headersSent) json(res, failure.status, failure.body);
     else res.end();
   }
 });
