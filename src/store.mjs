@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 const initial = () => ({
   users: [], sessions: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
@@ -31,23 +31,51 @@ const initial = () => ({
 });
 
 export class Store {
-  constructor(file) { this.file = path.resolve(file); this.data = initial(); }
+  constructor(file, { persistent = true } = {}) {
+    this.file = file ? path.resolve(file) : null;
+    this.persistent = !!persistent;
+    this.data = initial();
+  }
   load() {
+    if (!this.persistent) return this;
+    if (!this.file) throw new Error('STORE_FILE_REQUIRED');
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    if (fs.existsSync(this.file)) { const defaults=initial(),saved=JSON.parse(fs.readFileSync(this.file,'utf8'));this.data={...defaults,...saved,gifts:defaults.gifts}; }
+    if (fs.existsSync(this.file)) {
+      const defaults = initial();
+      const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      const users = Array.isArray(saved.users)
+        ? saved.users.map(user => ({
+          ...user,
+          status: user.status || 'active',
+          updatedAt: user.updatedAt || user.createdAt || new Date().toISOString()
+        }))
+        : [];
+      const now = Date.now();
+      const sessions = Array.isArray(saved.sessions)
+        ? saved.sessions.map(session => {
+          const { token, ...safe } = session;
+          if (!safe.tokenHash && token) safe.tokenHash = createHash('sha256').update(String(token)).digest('hex');
+          return safe;
+        }).filter(session => session.tokenHash && new Date(session.expiresAt).getTime() > now)
+        : [];
+      this.data = { ...defaults, ...saved, users, sessions, gifts: defaults.gifts };
+    }
     else this.save();
     return this;
   }
   save() {
+    if (!this.persistent) return false;
+    if (!this.file) throw new Error('STORE_FILE_REQUIRED');
     const tmp = `${this.file}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
     fs.renameSync(tmp, this.file);
+    return true;
   }
   id() { return randomUUID(); }
   now() { return new Date().toISOString(); }
   publicUser(user) {
     if (!user) return null;
-    const { passwordHash, email, role, ...safe } = user;
+    const { passwordHash, email, role, status, ...safe } = user;
     return safe;
   }
   notify(userId, type, actorId, payload = {}) {

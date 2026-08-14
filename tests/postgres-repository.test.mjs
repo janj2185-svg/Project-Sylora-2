@@ -7,7 +7,7 @@ import { PostgresAuthSocialRepository } from '../src/repositories/postgres-auth-
 test('PostgreSQL auth/social repository persists the social and messaging runtime', async () => {
   const memory = newDb();
   memory.public.none(`
-    CREATE TABLE users (id uuid PRIMARY KEY, email text UNIQUE NOT NULL, username text UNIQUE NOT NULL, password_hash text NOT NULL, display_name text NOT NULL, bio text NOT NULL DEFAULT '', locale text NOT NULL DEFAULT 'uk', avatar text NOT NULL DEFAULT '', role text NOT NULL DEFAULT 'user', created_at timestamptz NOT NULL);
+    CREATE TABLE users (id uuid PRIMARY KEY, email text UNIQUE NOT NULL, username text UNIQUE NOT NULL, password_hash text NOT NULL, display_name text NOT NULL, bio text NOT NULL DEFAULT '', locale text NOT NULL DEFAULT 'uk', avatar text NOT NULL DEFAULT '', role text NOT NULL DEFAULT 'user', status text NOT NULL DEFAULT 'active', created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE sessions (token_hash text PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL);
     CREATE TABLE posts (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), kind text NOT NULL, body text NOT NULL, created_at timestamptz NOT NULL);
     CREATE TABLE follows (follower_id uuid NOT NULL REFERENCES users(id), following_id uuid NOT NULL REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(follower_id,following_id));

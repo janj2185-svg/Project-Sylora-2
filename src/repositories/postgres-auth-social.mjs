@@ -1,7 +1,20 @@
 function iso(value) { return value instanceof Date ? value.toISOString() : String(value || ''); }
 function userFromRow(row) {
   if (!row) return null;
-  return { id: row.id, email: row.email, username: row.username, passwordHash: row.password_hash, displayName: row.display_name, bio: row.bio || '', locale: row.locale || 'uk', avatar: row.avatar || '', role: row.role || 'user', createdAt: iso(row.created_at) };
+  return {
+    id: row.id,
+    email: row.email,
+    username: row.username,
+    passwordHash: row.password_hash,
+    displayName: row.display_name,
+    bio: row.bio || '',
+    locale: row.locale || 'uk',
+    avatar: row.avatar || '',
+    role: row.role || 'user',
+    status: row.status || 'active',
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at || row.created_at)
+  };
 }
 function postFromRow(row) { return row ? { id: row.id, userId: row.user_id, text: row.body || '', kind: row.kind || 'text', createdAt: iso(row.created_at) } : null; }
 function commentFromRow(row) { return row ? { id:row.id,postId:row.post_id,userId:row.user_id,text:row.body||'',createdAt:iso(row.created_at) } : null; }
@@ -13,7 +26,7 @@ export class PostgresAuthSocialRepository {
   get enabled() { return !!this.pool; }
 
   async accountExists(email, username) {
-    const result = await this.pool.query('SELECT 1 FROM users WHERE email=$1 OR lower(username)=lower($2) LIMIT 1', [email, username]);
+    const result = await this.pool.query('SELECT 1 FROM users WHERE lower(email)=lower($1) OR lower(username)=lower($2) LIMIT 1', [email, username]);
     return result.rowCount > 0;
   }
 
@@ -21,7 +34,7 @@ export class PostgresAuthSocialRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('INSERT INTO users(id,email,username,password_hash,display_name,bio,locale,avatar,role,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [user.id,user.email,user.username,user.passwordHash,user.displayName,user.bio,user.locale,user.avatar,user.role,user.createdAt]);
+      await client.query('INSERT INTO users(id,email,username,password_hash,display_name,bio,locale,avatar,role,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [user.id,user.email,user.username,user.passwordHash,user.displayName,user.bio,user.locale,user.avatar,user.role,user.status||'active',user.createdAt,user.updatedAt||user.createdAt]);
       await client.query('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)', [session.tokenHash,user.id,session.expiresAt,session.createdAt]);
       await client.query('COMMIT');
     } catch (error) { try { await client.query('ROLLBACK'); } catch {} throw error; }
@@ -29,7 +42,7 @@ export class PostgresAuthSocialRepository {
   }
 
   async findUserByIdentity(identity) {
-    const result = await this.pool.query('SELECT * FROM users WHERE email=$1 OR lower(username)=lower($1) LIMIT 1', [identity]);
+    const result = await this.pool.query('SELECT * FROM users WHERE lower(email)=lower($1) OR lower(username)=lower($1) LIMIT 1', [identity]);
     return userFromRow(result.rows[0]);
   }
 
@@ -38,22 +51,29 @@ export class PostgresAuthSocialRepository {
     return userFromRow(result.rows[0]);
   }
 
+  async findUserByUsername(username) {
+    const result = await this.pool.query('SELECT * FROM users WHERE lower(username)=lower($1) LIMIT 1', [username]);
+    return userFromRow(result.rows[0]);
+  }
+
   async listUsers(query = '') {
     const q = String(query || '').trim();
-    const result = q ? await this.pool.query('SELECT * FROM users WHERE username ILIKE $1 OR display_name ILIKE $1 ORDER BY created_at DESC LIMIT 50', [`%${q}%`]) : await this.pool.query('SELECT * FROM users ORDER BY created_at DESC LIMIT 50');
+    const result = q ? await this.pool.query("SELECT * FROM users WHERE status='active' AND (username ILIKE $1 OR display_name ILIKE $1) ORDER BY created_at DESC LIMIT 50", [`%${q}%`]) : await this.pool.query("SELECT * FROM users WHERE status='active' ORDER BY created_at DESC LIMIT 50");
     return result.rows.map(userFromRow);
   }
 
   async createSession(session) { await this.pool.query('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)', [session.tokenHash,session.userId,session.expiresAt,session.createdAt]); }
-  async deleteSession(tokenHash) { await this.pool.query('DELETE FROM sessions WHERE token_hash=$1', [tokenHash]); }
+  async deleteSession(tokenHash) { const result=await this.pool.query('DELETE FROM sessions WHERE token_hash=$1', [tokenHash]); return result.rowCount>0; }
+
+  async deleteExpiredSessions() { const result=await this.pool.query('DELETE FROM sessions WHERE expires_at<=now()'); return result.rowCount; }
 
   async userForSession(tokenHash) {
-    const result = await this.pool.query('SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() LIMIT 1', [tokenHash]);
+    const result = await this.pool.query("SELECT u.* FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active' LIMIT 1", [tokenHash]);
     return userFromRow(result.rows[0]);
   }
 
   async updateUser(user) {
-    const result = await this.pool.query('UPDATE users SET display_name=$2,bio=$3,locale=$4,avatar=$5 WHERE id=$1 RETURNING *', [user.id,user.displayName,user.bio,user.locale,user.avatar||'']);
+    const result = await this.pool.query('UPDATE users SET display_name=$2,bio=$3,locale=$4,avatar=$5,updated_at=$6 WHERE id=$1 RETURNING *', [user.id,user.displayName,user.bio,user.locale,user.avatar||'',user.updatedAt||new Date().toISOString()]);
     return userFromRow(result.rows[0]);
   }
 

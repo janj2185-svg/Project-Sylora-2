@@ -31,6 +31,9 @@ function agentFromRow(row) {
     locale: row.locale,
     permissions: asObject(row.permissions, {}),
     contexts: asObject(row.contexts, {}),
+    privacyControls: asObject(row.privacy_controls, {}),
+    proactiveLevel: row.proactive_level || 'IMPORTANT_ONLY',
+    voicePersonality: row.voice_personality || 'warm',
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at)
   };
@@ -131,13 +134,15 @@ export class PostgresEcosystemRepository {
 
   async upsertPersonalAgent(agent) {
     const result = await this.pool.query(
-      `INSERT INTO personal_agents(id,user_id,name,kind,locale,permissions,contexts,created_at,updated_at)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `INSERT INTO personal_agents(id,user_id,name,kind,locale,permissions,contexts,privacy_controls,proactive_level,voice_personality,created_at,updated_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT(user_id,kind) DO UPDATE SET
          name=EXCLUDED.name, locale=EXCLUDED.locale, permissions=EXCLUDED.permissions,
-         contexts=EXCLUDED.contexts, updated_at=EXCLUDED.updated_at
+         contexts=EXCLUDED.contexts, privacy_controls=EXCLUDED.privacy_controls,
+         proactive_level=EXCLUDED.proactive_level, voice_personality=EXCLUDED.voice_personality,
+         updated_at=EXCLUDED.updated_at
        RETURNING *`,
-      [agent.id, agent.userId, agent.name, agent.kind, agent.locale, jsonb(agent.permissions, {}), jsonb(agent.contexts, {}), agent.createdAt, agent.updatedAt]
+      [agent.id, agent.userId, agent.name, agent.kind, agent.locale, jsonb(agent.permissions, {}), jsonb(agent.contexts, {}), jsonb(agent.privacyControls, {}), agent.proactiveLevel || 'IMPORTANT_ONLY', agent.voicePersonality || 'warm', agent.createdAt, agent.updatedAt]
     );
     return agentFromRow(result.rows[0]);
   }
@@ -363,5 +368,10 @@ export class PostgresEcosystemRepository {
       context: row.context,
       createdAt: iso(row.created_at)
     })).reverse();
+  }
+
+  async clearActivity(userId) {
+    const result = await this.pool.query('DELETE FROM ai_activity WHERE user_id=$1', [userId]);
+    return result.rowCount;
   }
 }

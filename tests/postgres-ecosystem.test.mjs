@@ -27,6 +27,7 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
       id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name text NOT NULL DEFAULT 'Sylora', kind text NOT NULL DEFAULT 'personal', locale text NOT NULL DEFAULT 'uk',
       permissions jsonb NOT NULL DEFAULT '{}', contexts jsonb NOT NULL DEFAULT '{}',
+      privacy_controls jsonb NOT NULL DEFAULT '{}', proactive_level text NOT NULL DEFAULT 'IMPORTANT_ONLY', voice_personality text NOT NULL DEFAULT 'warm',
       created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE(user_id, kind)
     );
