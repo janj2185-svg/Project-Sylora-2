@@ -42,12 +42,16 @@ function sessionExpiry(now, ttlDays) {
 }
 
 export class AuthService {
-  constructor({ repository = null, store = null, ttlDays = 30, adminEmails = new Set(), now = () => new Date().toISOString(), id = randomUUID } = {}) {
+  constructor({ repository = null, store = null, ttlDays = 30, provisionAccount = null, now = () => new Date().toISOString(), id = randomUUID } = {}) {
     if (!repository?.enabled && !store) throw new Error('AUTH_STORE_REQUIRED');
+    const normalizedTtlDays = Number(ttlDays);
+    if (!Number.isInteger(normalizedTtlDays) || normalizedTtlDays < 1 || normalizedTtlDays > 365) {
+      throw new Error('INVALID_SESSION_TTL');
+    }
     this.repository = repository?.enabled ? repository : null;
     this.store = store;
-    this.ttlDays = Math.max(1, Number(ttlDays) || 30);
-    this.adminEmails = adminEmails;
+    this.ttlDays = normalizedTtlDays;
+    this.provisionAccount = typeof provisionAccount === 'function' ? provisionAccount : null;
     this.now = now;
     this.id = id;
   }
@@ -68,7 +72,9 @@ export class AuthService {
       bio: '',
       locale: 'uk',
       avatar: '',
-      role: this.adminEmails.has(email) ? 'admin' : 'user',
+      // Public registration can never establish an elevated role. Email ownership
+      // is not verified in Phase 1, so an email allowlist would be forgeable.
+      role: 'user',
       status: 'active',
       createdAt,
       updatedAt: createdAt
@@ -82,7 +88,15 @@ export class AuthService {
     };
 
     try {
-      if (this.repository) await this.repository.register(user, session);
+      if (this.repository) {
+        await this.repository.register(
+          user,
+          session,
+          this.provisionAccount
+            ? client => this.provisionAccount({ client, user, session })
+            : null
+        );
+      }
       else {
         this.store.data.users.push(user);
         this.store.data.sessions.push(session);
@@ -113,7 +127,9 @@ export class AuthService {
       createdAt,
       expiresAt: sessionExpiry(createdAt, this.ttlDays)
     };
-    if (this.repository) await this.repository.createSession(session);
+    if (this.repository) {
+      if (!await this.repository.createSession(session)) throw new AuthServiceError('INVALID_CREDENTIALS');
+    }
     else {
       this.store.data.sessions.push(session);
       this.store.save();
@@ -146,21 +162,23 @@ export class AuthService {
 
   async updateAccount(user, patch = {}) {
     if (!user) throw new AuthServiceError('AUTH_REQUIRED');
-    const updated = {
-      ...user,
-      displayName: patch.displayName == null ? user.displayName : String(patch.displayName).trim().slice(0, 80) || user.displayName,
-      bio: patch.bio == null ? user.bio : String(patch.bio).trim().slice(0, 500),
-      locale: ['uk', 'pl', 'en'].includes(patch.locale) ? patch.locale : user.locale,
-      avatar: patch.avatar == null ? user.avatar : String(patch.avatar).trim().slice(0, 2048),
-      updatedAt: this.now()
-    };
+    const changes = {};
+    if (patch.displayName != null) {
+      const displayName = String(patch.displayName).trim().slice(0, 80);
+      if (displayName) changes.displayName = displayName;
+    }
+    if (patch.bio != null) changes.bio = String(patch.bio).trim().slice(0, 500);
+    if (['uk', 'pl', 'en'].includes(patch.locale)) changes.locale = patch.locale;
+    if (patch.avatar != null) changes.avatar = String(patch.avatar).trim().slice(0, 2048);
+    const updatedAt = this.now();
     let saved;
     if (this.repository) {
-      saved = await this.repository.updateUser(updated);
+      saved = await this.repository.patchUser(user.id, changes, updatedAt);
       if (!saved) throw new AuthServiceError('PROFILE_NOT_FOUND');
     } else {
       const index = this.store.data.users.findIndex(item => item.id === user.id);
       if (index < 0) throw new AuthServiceError('PROFILE_NOT_FOUND');
+      const updated = { ...user, ...changes, updatedAt };
       this.store.data.users[index] = updated;
       this.store.save();
       saved = updated;

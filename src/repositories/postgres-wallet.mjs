@@ -1,27 +1,31 @@
+import { randomUUID } from 'node:crypto';
+
 function iso(value){return value instanceof Date?value.toISOString():String(value||'')}
 function gift(row){return row?{id:row.id,name:row.name,tier:row.tier,price:Number(row.price),enabled:row.enabled,color:row.color}:null}
 function wallet(row){return row?{userId:row.user_id,balance:Number(row.balance),earnings:Number(row.earnings),currency:row.currency}:null}
 function transfer(row){return row?{id:row.id,correlationId:row.id,idempotencyKey:row.idempotency_key,fromUserId:row.sender_id,toUserId:row.recipient_id,giftId:row.gift_id,quantity:Number(row.quantity),amount:Number(row.gross_amount),grossAmount:Number(row.gross_amount),creatorAmount:Number(row.creator_amount),platformAmount:Number(row.platform_amount),currency:row.currency,liveId:row.live_id||null,createdAt:iso(row.created_at),type:'gift'}:null}
+function advisoryLockKeys(userId){const hex=String(userId||'').replace(/-/g,'').padEnd(16,'0');return [Number.parseInt(hex.slice(0,8),16)|0,Number.parseInt(hex.slice(8,16),16)|0]}
 
 export class PostgresWalletRepository {
   constructor(pool=null){this.pool=pool}
   get enabled(){return !!this.pool}
 
-  async ensureWallet(userId,initialBalance=10000){
-    const client=await this.pool.connect();
+  async ensureWallet(userId,initialBalance=10000,{client:externalClient=null}={}){
+    const client=externalClient||await this.pool.connect(),ownsTransaction=!externalClient;
     try{
-      await client.query('BEGIN');
+      if(ownsTransaction)await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock($1,$2)',advisoryLockKeys(userId));
       let result=await client.query('SELECT * FROM wallets WHERE user_id=$1 FOR UPDATE',[userId]);
       if(!result.rowCount){
-        result=await client.query('INSERT INTO wallets(user_id,currency,balance,earnings) VALUES($1,\'LUMEN\',$2,0) RETURNING *',[userId,initialBalance]);
+        result=await client.query("INSERT INTO wallets(user_id,currency,balance,earnings) VALUES($1,'LUMEN',$2,0) RETURNING *",[userId,initialBalance]);
         if(initialBalance>0){
           const correlationId=randomUUID();
           await client.query("INSERT INTO ledger_entries(id,wallet_user_id,direction,amount,currency,reason,correlation_id) VALUES($4,$1,'credit',$2,'LUMEN','starter_grant',$3)",[userId,initialBalance,correlationId,randomUUID()]);
           await client.query("INSERT INTO platform_ledger_entries(id,direction,amount,currency,reason,correlation_id) VALUES($3,'debit',$1,'LUMEN','starter_grant',$2)",[initialBalance,correlationId,randomUUID()]);
         }
       }
-      await client.query('COMMIT');return wallet(result.rows[0]);
-    }catch(error){try{await client.query('ROLLBACK')}catch{}throw error}finally{client.release()}
+      if(ownsTransaction)await client.query('COMMIT');return wallet(result.rows[0]);
+    }catch(error){if(ownsTransaction){try{await client.query('ROLLBACK')}catch{}}throw error}finally{if(ownsTransaction)client.release()}
   }
 
   async getWallet(userId){const result=await this.pool.query('SELECT * FROM wallets WHERE user_id=$1',[userId]);return wallet(result.rows[0])}
@@ -64,4 +68,3 @@ export class PostgresWalletRepository {
   async giftStats(userId){const result=await this.pool.query('SELECT COALESCE(sum(gross_amount),0)::bigint AS gross,COALESCE(sum(creator_amount),0)::bigint AS earnings FROM gift_transfers WHERE recipient_id=$1',[userId]);return {giftsReceived:Number(result.rows[0].gross),creatorEarnings:Number(result.rows[0].earnings)}}
   async progress(userId){const d=await this.pool.query('SELECT gift_xp FROM donor_progress WHERE user_id=$1',[userId]);return{donorXp:Number(d.rows[0]?.gift_xp||0)}}
 }
-import { randomUUID } from 'node:crypto';

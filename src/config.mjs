@@ -37,6 +37,14 @@ function parsePort(raw) {
   return port;
 }
 
+function parseSessionTtlDays(raw) {
+  const value = Number(raw ?? 30);
+  if (!Number.isInteger(value) || value < 1 || value > 365) {
+    throw new Error('Invalid SESSION_TTL_DAYS configuration; expected an integer from 1 to 365.');
+  }
+  return value;
+}
+
 function isValidDatabaseUrl(url) {
   if (!url) return false;
   return /^postgres(ql)?:\/\//i.test(url);
@@ -59,14 +67,8 @@ export function loadRuntimeConfig(env = process.env) {
     nodeEnv,
     port: parsePort(env.PORT),
     dataFile: get('SYLORA_DATA_FILE'),
-    sessionTtlDays: Math.max(1, Number(env.SESSION_TTL_DAYS || 30)),
+    sessionTtlDays: parseSessionTtlDays(env.SESSION_TTL_DAYS),
     creatorGiftShareBps: Math.max(0, Math.min(10000, Number(env.CREATOR_GIFT_SHARE_BPS || 7000))),
-    adminEmails: new Set(
-      String(env.SYLORA_ADMIN_EMAILS || '')
-        .split(',')
-        .map((x) => x.trim().toLowerCase())
-        .filter(Boolean)
-    ),
     database: {
       configured: isValidDatabaseUrl(databaseUrl)
     },

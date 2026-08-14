@@ -31,6 +31,25 @@ const initial = () => ({
   ]
 });
 
+function safeUserRecord(record = {}) {
+  const { password, password_hash, ...user } = record;
+  if (!user.passwordHash && typeof password_hash === 'string') user.passwordHash = password_hash;
+  return user;
+}
+
+function safeSessionRecord(record = {}) {
+  const { token, ...session } = record;
+  return session;
+}
+
+function persistenceSnapshot(data) {
+  return {
+    ...data,
+    users: Array.isArray(data.users) ? data.users.map(safeUserRecord) : [],
+    sessions: Array.isArray(data.sessions) ? data.sessions.map(safeSessionRecord) : []
+  };
+}
+
 export class Store {
   constructor(file, { persistent = true } = {}) {
     this.file = file ? path.resolve(file) : null;
@@ -44,22 +63,31 @@ export class Store {
     if (fs.existsSync(this.file)) {
       const defaults = initial();
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      const savedUsers = Array.isArray(saved.users) ? saved.users : [];
+      const savedSessions = Array.isArray(saved.sessions) ? saved.sessions : [];
+      const needsCredentialRewrite = savedUsers.some(record => 'password' in record || 'password_hash' in record)
+        || savedSessions.some(record => 'token' in record);
       const users = Array.isArray(saved.users)
-        ? saved.users.map(user => ({
+        ? saved.users.map(record => {
+          const user = safeUserRecord(record);
+          return {
           ...user,
           status: user.status || 'active',
           updatedAt: user.updatedAt || user.createdAt || new Date().toISOString()
-        }))
+          };
+        })
         : [];
       const now = Date.now();
       const sessions = Array.isArray(saved.sessions)
-        ? saved.sessions.map(session => {
-          const { token, ...safe } = session;
+        ? saved.sessions.map(record => {
+          const { token } = record;
+          const safe = safeSessionRecord(record);
           if (!safe.tokenHash && token) safe.tokenHash = createHash('sha256').update(String(token)).digest('hex');
           return safe;
         }).filter(session => session.tokenHash && new Date(session.expiresAt).getTime() > now)
         : [];
       this.data = { ...defaults, ...saved, users, sessions, gifts: defaults.gifts };
+      if (needsCredentialRewrite || sessions.length !== savedSessions.length) this.save();
     }
     else this.save();
     return this;
@@ -68,7 +96,7 @@ export class Store {
     if (!this.persistent) return false;
     if (!this.file) throw new Error('STORE_FILE_REQUIRED');
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
+    fs.writeFileSync(tmp, JSON.stringify(persistenceSnapshot(this.data), null, 2));
     fs.renameSync(tmp, this.file);
     return true;
   }

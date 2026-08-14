@@ -30,12 +30,13 @@ export class PostgresAuthSocialRepository {
     return result.rowCount > 0;
   }
 
-  async register(user, session) {
+  async register(user, session, provisionAccount = null) {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       await client.query('INSERT INTO users(id,email,username,password_hash,display_name,bio,locale,avatar,role,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)', [user.id,user.email,user.username,user.passwordHash,user.displayName,user.bio,user.locale,user.avatar,user.role,user.status||'active',user.createdAt,user.updatedAt||user.createdAt]);
       await client.query('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)', [session.tokenHash,user.id,session.expiresAt,session.createdAt]);
+      if (provisionAccount) await provisionAccount(client);
       await client.query('COMMIT');
     } catch (error) { try { await client.query('ROLLBACK'); } catch {} throw error; }
     finally { client.release(); }
@@ -62,7 +63,28 @@ export class PostgresAuthSocialRepository {
     return result.rows.map(userFromRow);
   }
 
-  async createSession(session) { await this.pool.query('INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)', [session.tokenHash,session.userId,session.expiresAt,session.createdAt]); }
+  async createSession(session) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const account = await client.query('SELECT status FROM users WHERE id=$1 FOR SHARE', [session.userId]);
+      if (!account.rowCount || account.rows[0].status !== 'active') {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query(
+        'INSERT INTO sessions(token_hash,user_id,expires_at,created_at) VALUES($1,$2,$3,$4)',
+        [session.tokenHash, session.userId, session.expiresAt, session.createdAt]
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   async deleteSession(tokenHash) { const result=await this.pool.query('DELETE FROM sessions WHERE token_hash=$1', [tokenHash]); return result.rowCount>0; }
 
   async deleteExpiredSessions() { const result=await this.pool.query('DELETE FROM sessions WHERE expires_at<=now()'); return result.rowCount; }
@@ -72,8 +94,24 @@ export class PostgresAuthSocialRepository {
     return userFromRow(result.rows[0]);
   }
 
-  async updateUser(user) {
-    const result = await this.pool.query('UPDATE users SET display_name=$2,bio=$3,locale=$4,avatar=$5,updated_at=$6 WHERE id=$1 RETURNING *', [user.id,user.displayName,user.bio,user.locale,user.avatar||'',user.updatedAt||new Date().toISOString()]);
+  async patchUser(userId, patch = {}, updatedAt = new Date().toISOString()) {
+    const values = [userId, updatedAt];
+    const assignments = ['updated_at=$2'];
+    const columns = [
+      ['displayName', 'display_name'],
+      ['bio', 'bio'],
+      ['locale', 'locale'],
+      ['avatar', 'avatar']
+    ];
+    for (const [field, column] of columns) {
+      if (!Object.hasOwn(patch, field)) continue;
+      values.push(patch[field]);
+      assignments.push(`${column}=$${values.length}`);
+    }
+    const result = await this.pool.query(
+      `UPDATE users SET ${assignments.join(',')} WHERE id=$1 RETURNING *`,
+      values
+    );
     return userFromRow(result.rows[0]);
   }
 
