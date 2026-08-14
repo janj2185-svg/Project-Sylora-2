@@ -397,10 +397,10 @@ export class EcosystemService {
     return agent;
   }
 
-  dashboard(user, pendingActions = []) {
+  dashboard(user, pendingActions = [], source = {}) {
     const agent = this.ensurePersonalAgent(user);
-    const memories = (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
-    const activity = this.store.data.aiActivity.filter(a => a.userId === user.id).slice(-50);
+    const memories = source.memories || (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const activity = source.activity || this.store.data.aiActivity.filter(a => a.userId === user.id).slice(-50);
     return permissionDashboard(agent, memories, activity, pendingActions);
   }
 
@@ -411,6 +411,15 @@ export class EcosystemService {
     this.store.save();
     if (this.pg) this.pg.createActivity(row).catch(() => {});
     return row;
+  }
+
+  async recordActivityAsync(user, entry) {
+    if (!this.pg) return this.recordActivity(user, entry);
+    const agent = await this.ensurePersonalAgentAsync(user);
+    const row = createActivityEntry({ id: this.store.id(), userId: user.id, agentId: agent.id, ...entry });
+    const saved = await this.pg.createActivity(row);
+    this.store.data.aiActivity.push(saved || row);
+    return saved || row;
   }
 
   exportMemory(user) {
@@ -446,6 +455,24 @@ export class EcosystemService {
     return identity;
   }
 
+  async ensureIdentityAsync(user) {
+    ensureCollections(this.store);
+    if (!this.pg) return this.ensureIdentity(user);
+    let identity = await this.pg.getIdentity(user.id);
+    if (!identity) {
+      const agent = await this.ensurePersonalAgentAsync(user);
+      identity = defaultIdentity(user);
+      identity.agentId = agent.id;
+      identity = await this.pg.upsertIdentity(identity);
+    }
+    identity.username = user.username;
+    identity.displayName = user.displayName;
+    const index = this.store.data.identities.findIndex(item => item.userId === user.id);
+    if (index >= 0) this.store.data.identities[index] = identity;
+    else this.store.data.identities.push(identity);
+    return identity;
+  }
+
   updateIdentity(user, patch) {
     const current = this.ensureIdentity(user);
     const next = patchIdentity(current, patch);
@@ -457,8 +484,25 @@ export class EcosystemService {
     return next;
   }
 
+  async updateIdentityAsync(user, patch) {
+    if (!this.pg) return this.updateIdentity(user, patch);
+    const current = await this.ensureIdentityAsync(user);
+    let next = patchIdentity(current, patch);
+    next = await this.pg.upsertIdentity(next);
+    next.username = user.username;
+    next.displayName = user.displayName;
+    const index = this.store.data.identities.findIndex(item => item.userId === user.id);
+    if (index >= 0) this.store.data.identities[index] = next;
+    else this.store.data.identities.push(next);
+    return next;
+  }
+
   getPublicIdentity(user, relation = 'public') {
     return publicIdentityView(this.ensureIdentity(user), relation);
+  }
+
+  async getPublicIdentityAsync(user, relation = 'public') {
+    return publicIdentityView(await this.ensureIdentityAsync(user), relation);
   }
 
   // —— Knowledge Graph ——
@@ -945,9 +989,9 @@ export class EcosystemService {
   }
 
   // —— Memory Center ——
-  memoryCenter(user) {
+  memoryCenter(user, source = null) {
     const agent = this.ensurePersonalAgent(user);
-    const memories = (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
+    const memories = source || (this.store.data.aiMemories || []).filter(m => m.userId === user.id);
     const byCategory = Object.fromEntries(MEMORY_CATEGORIES.map(c => [c, []]));
     for (const m of memories) {
       const cat = MEMORY_CATEGORIES.includes(m.category) ? m.category : 'preferences';
@@ -987,6 +1031,18 @@ export class EcosystemService {
     agent.privacyControls = { ...(agent.privacyControls || {}), memory: !!enabled };
     agent.updatedAt = this.store.now();
     this.store.save();
+    return { enabled: !!enabled };
+  }
+
+  async setMemoryEnabledAsync(user, enabled) {
+    if (!this.pg) return this.setMemoryEnabled(user, enabled);
+    const agent = await this.ensurePersonalAgentAsync(user);
+    agent.privacyControls = { ...(agent.privacyControls || {}), memory: !!enabled };
+    agent.updatedAt = this.store.now();
+    const saved = await this.pg.upsertPersonalAgent(agent);
+    const index = this.store.data.personalAgents.findIndex(item => item.id === agent.id);
+    if (index >= 0) this.store.data.personalAgents[index] = saved;
+    else this.store.data.personalAgents.push(saved);
     return { enabled: !!enabled };
   }
 

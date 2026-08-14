@@ -6,7 +6,8 @@ import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import OpenAI from 'openai';
 import { Store } from './store.mjs';
-import { hashPassword, makeToken, verifyPassword } from './auth.mjs';
+import { hashToken, makeToken, toAccountUser, toPublicUser } from './auth.mjs';
+import { AuthService, AuthServiceError, authErrorBody } from './services/auth-service.mjs';
 import { PostgresService } from './infra/postgres.mjs';
 import { RedisService } from './infra/redis.mjs';
 import { PostgresAuthSocialRepository } from './repositories/postgres-auth-social.mjs';
@@ -28,6 +29,7 @@ import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
 import { createPlatformEvent } from './platform-event-spine.mjs';
+import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -37,7 +39,7 @@ enforceProductionBootGuard(runtimeConfig);
 const publicDir = path.resolve(__dirname, '../public');
 const dataFile = runtimeConfig.dataFile || path.resolve(__dirname, '../data/sylora.json');
 const mediaDir = path.resolve(path.dirname(dataFile), 'media');
-const store = new Store(dataFile).load();
+const store = new Store(dataFile, { persistent: !runtimeConfig.database.configured }).load();
 fs.mkdirSync(mediaDir, { recursive: true });
 const giftStreams = new Set();
 const liveStreams = new Map();
@@ -72,6 +74,7 @@ const callPeerRegistry=new LivePeerRegistry(redis,'call');
 const callStreams=new Map();
 const realtimeFanout=new RealtimeFanout({redis,dispatch:dispatchOutboxLocal});
 const authSocial=new PostgresAuthSocialRepository(postgres.pool);
+const authService=new AuthService({repository:authSocial,store,ttlDays,adminEmails,now:()=>store.now(),id:()=>store.id()});
 const walletRepo=new PostgresWalletRepository(postgres.pool);
 const aiRepo=new PostgresAiRepository(postgres.pool);
 const liveRepo=new PostgresLiveRepository(postgres.pool);
@@ -158,13 +161,20 @@ function securityHeaders(res) {
 }
 async function allowRequest(req) {
   const ip = req.socket.remoteAddress || 'unknown';
-  const authPath = String(req.url).startsWith('/api/auth/');
-  const windowMs = 60_000, limit = authPath ? 30 : 300, now = Date.now();
-  const key = `${ip}:${authPath ? 'auth' : 'api'}`;
-  if(redis.configured){try{return await redis.rateCount(`sylora:rate:${authPath?'auth':'api'}:${ip}`,windowMs)<=limit}catch{}}
+  const pathname = String(req.url || '').split('?')[0];
+  const policy = pathname === '/api/auth/register'
+    ? { key: 'register', limit: runtimeConfig.nodeEnv === 'production' ? 5 : 30 }
+    : pathname === '/api/auth/login'
+      ? { key: 'login', limit: runtimeConfig.nodeEnv === 'production' ? 10 : 60 }
+      : pathname.startsWith('/api/auth/')
+        ? { key: 'auth', limit: runtimeConfig.nodeEnv === 'production' ? 30 : 120 }
+        : { key: 'api', limit: 300 };
+  const windowMs = 60_000, now = Date.now();
+  const key = `${ip}:${policy.key}`;
+  if(redis.configured){try{return await redis.rateCount(`sylora:rate:${policy.key}:${ip}`,windowMs)<=policy.limit}catch{}}
   const bucket = rateBuckets.get(key);
   if (!bucket || bucket.resetAt <= now) { rateBuckets.set(key, { count: 1, resetAt: now + windowMs }); return true; }
-  bucket.count += 1; return bucket.count <= limit;
+  bucket.count += 1; return bucket.count <= policy.limit;
 }
 async function allowAi(userId){const now=Date.now(),windowMs=60_000,limit=12;if(redis.configured){try{return await redis.rateCount(`sylora:rate:ai:${userId}`,windowMs)<=limit}catch{}}const b=aiBuckets.get(userId);if(!b||b.resetAt<=now){aiBuckets.set(userId,{count:1,resetAt:now+windowMs});return true}b.count+=1;return b.count<=limit}
 async function dependencyHealth() {
@@ -179,25 +189,21 @@ async function body(req) {
 }
 async function textBody(req,max=256_000){let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>max)throw new Error('BODY_TOO_LARGE')}return raw}
 function token(req) {
-  const auth = req.headers.authorization || '';
-  return auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const match = /^Bearer\s+([^\s]+)$/i.exec(String(req.headers.authorization || '').trim());
+  return match?.[1] || '';
 }
-function tokenHash(value){return createHash('sha256').update(String(value||'')).digest('hex')}
-function cacheUser(user){if(!user)return null;const idx=store.data.users.findIndex(x=>x.id===user.id);if(idx>=0)store.data.users[idx]=user;else store.data.users.push(user);return user}
+function cacheUser(user){if(!user)return null;const cached=authSocial.enabled?toAccountUser(user):user,idx=store.data.users.findIndex(x=>x.id===user.id);if(idx>=0)store.data.users[idx]=cached;else store.data.users.push(cached);return user}
 function cachePost(post){if(!post)return null;const idx=store.data.posts.findIndex(x=>x.id===post.id);if(idx>=0)store.data.posts[idx]=post;else store.data.posts.push(post);return post}
 async function sessionUser(req) {
-  const now = Date.now(),raw=token(req),hashed=tokenHash(raw);
-  if(!raw)return null;
-  if(authSocial.enabled)return cacheUser(await authSocial.userForSession(hashed));
-  const session = store.data.sessions.find(s => (s.tokenHash === hashed || s.token === raw) && new Date(s.expiresAt).getTime() > now);
-  return session ? store.data.users.find(u => u.id === session.userId) : null;
+  const user = await authService.authenticate(token(req));
+  return cacheUser(user);
 }
 async function requireUser(req, res) {
   const user = await sessionUser(req);
-  if (!user) json(res, 401, { error: 'AUTH_REQUIRED' });
+  if (!user) json(res, 401, authErrorBody('AUTH_REQUIRED'));
   return user;
 }
-async function requireAdmin(req,res){const user=await requireUser(req,res);if(!user)return null;if(user.role!=='admin'){json(res,403,{error:'ADMIN_REQUIRED'});return null}return user}
+async function requireAdmin(req,res){const user=await requireUser(req,res);if(!user)return null;if(user.role!=='admin'){json(res,403,{error:'ADMIN_REQUIRED',code:'ADMIN_REQUIRED',message:'Administrator access is required.'});return null}return user}
 function blockedBetween(a,b){return store.data.blocks.some(x=>(x.blockerId===a&&x.blockedId===b)||(x.blockerId===b&&x.blockedId===a))}
 async function isBlockedBetween(a,b){return authSocial.enabled?authSocial.isBlockedBetween(a,b):blockedBetween(a,b)}
 async function findLiveRoom(id){return liveRepo.enabled?liveRepo.findLiveRoom(id):store.data.liveRooms.find(x=>x.id===id&&x.status==='live')||null}
@@ -249,7 +255,7 @@ async function liveViewerCount(liveId){if(redis.configured){try{return await red
 async function touchLiveViewer(liveId,viewerId){if(redis.configured){try{return await redis.touchViewer(liveId,viewerId,45_000)}catch{}}return liveViewerLeases.get(liveId)?.size||0}
 async function removeLiveViewer(liveId,viewerId){if(redis.configured){try{return await redis.removeViewer(liveId,viewerId)}catch{}}return liveViewerLeases.get(liveId)?.size||0}
 function emitUser(userId,type,event){const targets=userStreams.get(userId);if(!targets)return;const payload=`event: ${type}\ndata: ${JSON.stringify(event)}\n\n`;for(const res of targets)res.write(payload)}
-async function notifyUser(userId,type,actorId,payload={}){const notification=store.notify(userId,type,actorId,payload);if(notification&&authSocial.enabled)await authSocial.createNotification(notification);if(notification)emitUser(userId,'notification',{...notification,actor:store.publicUser(store.data.users.find(u=>u.id===actorId))});return notification}
+async function notifyUser(userId,type,actorId,payload={}){if(!userId||userId===actorId)return null;const notification={id:store.id(),userId,type,actorId,payload,read:false,createdAt:store.now()};if(authSocial.enabled)await authSocial.createNotification(notification);else{store.data.notifications.unshift(notification);store.save()}const actor=authSocial.enabled&&actorId?await authSocial.findUserById(actorId):store.data.users.find(u=>u.id===actorId);cacheUser(actor);emitUser(userId,'notification',{...notification,actor:toPublicUser(actor)});return notification}
 function safeText(value, max = 2000) { return String(value ?? '').trim().slice(0, max); }
 async function createTextPost(user,text){let post={id:store.id(),userId:user.id,text:safeText(text,4000),kind:'text',createdAt:store.now()};if(authSocial.enabled)post=await authSocial.createPost(post);cachePost(post);return post}
 async function aiContext(user){
@@ -263,11 +269,17 @@ const aiTools=[
 ];
 async function aiListMessages(userId,limit=50){return aiRepo.enabled?aiRepo.listMessages(userId,limit):store.data.aiMessages.filter(x=>x.userId===userId).slice(-limit)}
 async function aiCreateMessages(messages){if(aiRepo.enabled)return aiRepo.createMessages(messages);store.data.aiMessages.push(...messages);store.save();return messages}
+async function aiClearMessages(userId){if(aiRepo.enabled){const removed=await aiRepo.clearMessages(userId);store.data.aiMessages=store.data.aiMessages.filter(item=>item.userId!==userId);return removed}const before=store.data.aiMessages.length;store.data.aiMessages=store.data.aiMessages.filter(item=>item.userId!==userId);store.save();return before-store.data.aiMessages.length}
 async function aiCreateRealtimeTranscript(message){if(aiRepo.enabled)return aiRepo.createRealtimeTranscript(message);if(message.sourceEventId&&store.data.aiMessages.some(x=>x.userId===message.userId&&x.sourceEventId===message.sourceEventId))return {saved:false,message:null};store.data.aiMessages.push(message);store.save();return {saved:true,message}}
-async function aiListMemories(userId,limit=50){return aiRepo.enabled?aiRepo.listMemories(userId,limit):store.data.aiMemories.filter(x=>x.userId===userId).slice(-limit)}
+function replaceUserCache(collection,userId,rows){store.data[collection]=store.data[collection].filter(item=>item.userId!==userId).concat(rows);return rows}
+async function aiListMemories(userId,limit=50){if(aiRepo.enabled)return replaceUserCache('aiMemories',userId,await aiRepo.listMemories(userId,limit));return store.data.aiMemories.filter(x=>x.userId===userId).slice(-limit)}
 async function aiCountMemories(userId){return aiRepo.enabled?aiRepo.countMemories(userId):store.data.aiMemories.filter(x=>x.userId===userId).length}
-async function aiCreateMemory(memory){if(aiRepo.enabled)return aiRepo.createMemory(memory);store.data.aiMemories.push(memory);store.save();return memory}
-async function aiDeleteMemory(userId,id){if(aiRepo.enabled)return aiRepo.deleteMemory(userId,id);const idx=store.data.aiMemories.findIndex(x=>x.id===id&&x.userId===userId);if(idx<0)return false;store.data.aiMemories.splice(idx,1);store.save();return true}
+async function aiCreateMemory(memory){const complete={...memory,category:memory.category||'preferences',tier:memory.tier||'long',updatedAt:memory.updatedAt||memory.createdAt};if(aiRepo.enabled){const saved=await aiRepo.createMemory(complete);store.data.aiMemories.push(saved);return saved}store.data.aiMemories.push(complete);store.save();return complete}
+async function aiUpdateMemory(userId,id,patch){const normalized={};if(patch.label!=null)normalized.label=safeText(patch.label,80);if(patch.value!=null)normalized.value=sanitizeMemoryValue(safeText(patch.value,2000));if(['conversation','preferences','people','projects','professional','learning'].includes(patch.category))normalized.category=patch.category;if(['short','long'].includes(patch.tier))normalized.tier=patch.tier;const updatedAt=store.now();if(aiRepo.enabled){const saved=await aiRepo.updateMemory(userId,id,{...normalized,updatedAt});if(saved){const idx=store.data.aiMemories.findIndex(item=>item.id===id&&item.userId===userId);if(idx>=0)store.data.aiMemories[idx]=saved;else store.data.aiMemories.push(saved)}return saved}const memory=store.data.aiMemories.find(item=>item.id===id&&item.userId===userId);if(!memory)return null;Object.assign(memory,normalized,{updatedAt});store.save();return memory}
+async function aiDeleteMemory(userId,id){if(aiRepo.enabled){const deleted=await aiRepo.deleteMemory(userId,id);if(deleted)store.data.aiMemories=store.data.aiMemories.filter(item=>!(item.id===id&&item.userId===userId));return deleted}const idx=store.data.aiMemories.findIndex(x=>x.id===id&&x.userId===userId);if(idx<0)return false;store.data.aiMemories.splice(idx,1);store.save();return true}
+async function aiClearMemories(userId){if(aiRepo.enabled){const removed=await aiRepo.clearMemories(userId);store.data.aiMemories=store.data.aiMemories.filter(item=>item.userId!==userId);return removed}const before=store.data.aiMemories.length;store.data.aiMemories=store.data.aiMemories.filter(item=>item.userId!==userId);store.save();return before-store.data.aiMemories.length}
+async function aiListActivity(userId,limit=100){if(ecosystemRepo.enabled)return replaceUserCache('aiActivity',userId,await ecosystemRepo.listActivity(userId,limit));return store.data.aiActivity.filter(item=>item.userId===userId).slice(-limit)}
+async function aiClearActivity(userId){if(ecosystemRepo.enabled){const removed=await ecosystemRepo.clearActivity(userId);store.data.aiActivity=store.data.aiActivity.filter(item=>item.userId!==userId);return removed}const before=store.data.aiActivity.length;store.data.aiActivity=store.data.aiActivity.filter(item=>item.userId!==userId);store.save();return before-store.data.aiActivity.length}
 async function aiCreateAction(userId,type,payload){const action={id:store.id(),userId,type,payload,status:'pending',createdAt:store.now(),expiresAt:new Date(Date.now()+24*60*60*1000).toISOString(),completedAt:null};if(aiRepo.enabled)return aiRepo.createAction(action);store.data.aiActions.push(action);store.save();return action}
 async function aiFindAction(userId,id){return aiRepo.enabled?aiRepo.findAction(userId,id):store.data.aiActions.find(x=>x.id===id&&x.userId===userId)||null}
 async function aiListPendingActions(userId,limit=20){return aiRepo.enabled?aiRepo.listPendingActions(userId,limit):store.data.aiActions.filter(x=>x.userId===userId&&x.status==='pending'&&new Date(x.expiresAt).getTime()>Date.now()).slice(-limit)}
@@ -328,7 +340,7 @@ async function api(req, res, url) {
     return json(res, 200, {
       ...report,
       ecosystem: 'personal-ai-identity-kg-agents-developers',
-      ecosystemPersistence: ecosystemRepo.enabled ? 'postgres+json-cache' : 'json'
+      ecosystemPersistence: ecosystemRepo.enabled ? 'postgres-primary+memory-cache' : 'json-development'
     });
   }
   if(req.method==='GET'&&p==='/api/integrations/status'){const {integrationStatus}=await import('./integrations.mjs');return json(res,200,{integrations:integrationStatus()})}
@@ -343,7 +355,14 @@ async function api(req, res, url) {
   if (req.method === 'GET' && p === '/api/ai/status') {
     return json(res, 200, publicAiDiagnostics(runtimeConfig));
   }
-  if (await handleEcosystemRoutes({ req, res, url, json, body, requireUser, route, safeText, ecosystem, store, aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer })) return;
+  if (await handleEcosystemRoutes({
+    req, res, url, json, body, requireUser, route, safeText, ecosystem, store,
+    aiListPendingActions, aiListMemories, aiUpdateMemory, aiClearMemories,
+    aiListActivity, aiClearActivity,
+    findUserById: id => authService.findUserById(id),
+    findUserByUsername: username => authService.findUserByUsername(username),
+    callPeerRegistry, callStreams, liveIceServers, hasTurnServer
+  })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
     const user=await requireUser(req,res);if(!user)return;
@@ -355,7 +374,7 @@ async function api(req, res, url) {
     const personality=ecosystem.personalityFor('ai', user);
     const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
-    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':tokenHash(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
+    try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':hashToken(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
   }
   if(req.method==='POST'&&p==='/api/ai/realtime/transcript'){
     const user=await requireUser(req,res);if(!user)return;const input=await body(req),role=input.role==='assistant'?'assistant':input.role==='user'?'user':null,text=safeText(input.text,12000),sourceEventId=safeText(input.sourceEventId,160);if(!role||!text)return json(res,400,{error:'TRANSCRIPT_REQUIRED'});
@@ -368,34 +387,48 @@ async function api(req, res, url) {
   mediaRoute=route('/api/media/jobs/:id',p);if(req.method==='GET'&&mediaRoute){const user=await requireUser(req,res);if(!user)return;const job=store.data.mediaJobs.find(x=>x.id===mediaRoute.id&&x.userId===user.id);if(!job)return json(res,404,{error:'JOB_NOT_FOUND'});return json(res,200,{job:publicJob(job)})}
 
   if (req.method === 'POST' && p === '/api/auth/register') {
-    const input = await body(req); const email = safeText(input.email, 254).toLowerCase(); const username = safeText(input.username, 30);
-    if (!/^\S+@\S+\.\S+$/.test(email) || username.length < 3 || String(input.password || '').length < 8) return json(res, 400, { error: 'INVALID_REGISTRATION' });
-    if (!/^[\p{L}\p{N}_.-]+$/u.test(username)) return json(res, 400, { error: 'INVALID_USERNAME' });
-    if (authSocial.enabled ? await authSocial.accountExists(email,username) : store.data.users.some(u => u.email === email || u.username.toLowerCase() === username.toLowerCase())) return json(res, 409, { error: 'ACCOUNT_EXISTS' });
-    const user = { id: store.id(), email, username, displayName: username, bio: '', locale: 'uk', avatar: '', role:adminEmails.has(email)?'admin':'user', passwordHash: hashPassword(String(input.password)), createdAt: store.now() };
-    const t = makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlDays*86400000).toISOString()};
-    if(authSocial.enabled){try{await authSocial.register(user,session)}catch(error){if(error?.code==='23505')return json(res,409,{error:'ACCOUNT_EXISTS'});throw error}}else store.data.sessions.push(session);
-    cacheUser(user); if(authSocial.enabled)await walletRepo.ensureWallet(user.id);if(!store.data.wallets.some(w=>w.userId===user.id))store.data.wallets.push({ userId: user.id, balance: 10000, earnings: 0, currency: 'LUMEN' }); store.save();
-    return json(res, 201, { token: t, user: {...store.publicUser(user),email:user.email,role:user.role} });
+    try {
+      const result = await authService.register(await body(req));
+      if (authSocial.enabled) await walletRepo.ensureWallet(result.user.id);
+      else if (!store.data.wallets.some(wallet => wallet.userId === result.user.id)) {
+        store.data.wallets.push({ userId: result.user.id, balance: 10000, earnings: 0, currency: 'LUMEN' });
+        store.save();
+      }
+      if (authSocial.enabled) cacheUser(result.user);
+      return json(res, 201, result);
+    } catch (error) {
+      if (error instanceof AuthServiceError) return json(res, error.status, authErrorBody(error.code));
+      throw error;
+    }
   }
   if (req.method === 'POST' && p === '/api/auth/login') {
-    const input = await body(req); const identity = safeText(input.identity, 254).toLowerCase();
-    const user = authSocial.enabled ? await authSocial.findUserByIdentity(identity) : store.data.users.find(u => u.email === identity || u.username.toLowerCase() === identity);
-    if (!user || !verifyPassword(String(input.password || ''), user.passwordHash)) return json(res, 401, { error: 'INVALID_CREDENTIALS' });
-    cacheUser(user);const t=makeToken(),session={tokenHash:tokenHash(t),userId:user.id,createdAt:store.now(),expiresAt:new Date(Date.now()+ttlDays*86400000).toISOString()};if(authSocial.enabled)await authSocial.createSession(session);else store.data.sessions.push(session);store.save();
-    return json(res, 200, { token: t, user: {...store.publicUser(user),email:user.email,role:user.role} });
+    try {
+      const result = await authService.login(await body(req));
+      if (authSocial.enabled) cacheUser(result.user);
+      return json(res, 200, result);
+    } catch (error) {
+      if (error instanceof AuthServiceError) return json(res, error.status, authErrorBody(error.code));
+      throw error;
+    }
   }
   if (req.method === 'POST' && p === '/api/auth/logout') {
-    const t=token(req),hashed=tokenHash(t);if(authSocial.enabled)await authSocial.deleteSession(hashed);else{store.data.sessions=store.data.sessions.filter(s=>s.tokenHash!==hashed&&s.token!==t);store.save()}return json(res,200,{ok:true});
+    await authService.logout(token(req));
+    return json(res,200,{ok:true});
   }
   if (req.method === 'GET' && p === '/api/me') {
     const user = await requireUser(req, res); if (!user) return; const wallet = authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w => w.userId === user.id); if(wallet&&wallet.earnings==null)wallet.earnings=0;
-    return json(res, 200, { user: {...store.publicUser(user),email:user.email,role:user.role}, wallet });
+    return json(res, 200, { user: toAccountUser(user), wallet });
   }
   if (req.method === 'PATCH' && p === '/api/me') {
-    let user = await requireUser(req, res); if (!user) return; const input = await body(req);
-    if ('displayName' in input) user.displayName = safeText(input.displayName, 60); if ('bio' in input) user.bio = safeText(input.bio, 240); if (['uk','pl','en'].includes(input.locale)) user.locale = input.locale; if(authSocial.enabled)user=await authSocial.updateUser(user);cacheUser(user);store.save();
-    return json(res, 200, { user: store.publicUser(user) });
+    const user = await requireUser(req, res); if (!user) return;
+    try {
+      const updated = await authService.updateAccount(user, await body(req));
+      if (authSocial.enabled) cacheUser(updated);
+      return json(res, 200, { user: updated });
+    } catch (error) {
+      if (error instanceof AuthServiceError) return json(res, error.status, authErrorBody(error.code));
+      throw error;
+    }
   }
   if (req.method === 'GET' && p === '/api/feed') {
     const viewer=await sessionUser(req);let posts;if(authSocial.enabled){const rows=await authSocial.listPosts(100),blocked=viewer?new Set(await authSocial.blockedUserIds(viewer.id)):new Set(),engagement=await authSocial.engagementForPosts(rows.map(x=>x.post.id),viewer?.id||null);posts=rows.filter(x=>!blocked.has(x.post.userId)).map(({post,author})=>{cachePost(post);cacheUser(author);return enrichedPost(post,viewer,author,engagement.get(post.id))})}else posts=[...store.data.posts].filter(x=>!viewer||!blockedBetween(viewer.id,x.userId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(x=>enrichedPost(x,viewer));return json(res,200,{posts});
@@ -477,8 +510,8 @@ async function api(req, res, url) {
   if(req.method==='GET'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{scenes:store.data.studioScenes.filter(x=>x.userId===user.id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))})}
   if(req.method==='POST'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet',profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720',rawGain=Number(input.micGain),micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100))),micMuted=input.micMuted===true;if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});const scene={id:store.id(),userId:user.id,name,overlayTitle:overlayTitle||'SYLORA LIVE',overlayStyle,profileId,micGain,micMuted,createdAt:store.now(),updatedAt:store.now()};store.data.studioScenes.push(scene);store.save();return json(res,201,{scene})}
   let studioRoute=route('/api/studio/scenes/:id',p);if(req.method==='PATCH'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const scene=store.data.studioScenes.find(x=>x.id===studioRoute.id&&x.userId===user.id);if(!scene)return json(res,404,{error:'SCENE_NOT_FOUND'});const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),rawGain=Number(input.micGain);if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});scene.name=name;scene.overlayTitle=overlayTitle||'SYLORA LIVE';scene.overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet';scene.profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720';scene.micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100)));scene.micMuted=input.micMuted===true;scene.updatedAt=store.now();store.save();return json(res,200,{scene})}if(req.method==='DELETE'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const index=store.data.studioScenes.findIndex(x=>x.id===studioRoute.id&&x.userId===user.id);if(index<0)return json(res,404,{error:'SCENE_NOT_FOUND'});store.data.studioScenes.splice(index,1);store.save();return json(res,200,{deleted:true})}
-  if(req.method==='POST'&&p==='/api/studio/browser-source'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),live=await findLiveRoom(input.liveId);if(!live||live.hostId!==user.id)return json(res,404,{error:'HOST_LIVE_NOT_FOUND'});const now=Date.now();for(const [key,value] of browserSourceTokens)if(value.expiresAt<=now)browserSourceTokens.delete(key);const raw=makeToken(),expiresAt=now+2*60*60*1000;browserSourceTokens.set(tokenHash(raw),{userId:user.id,liveId:live.id,expiresAt});return json(res,201,{path:`/obs-overlay.html?token=${encodeURIComponent(raw)}`,expiresAt:new Date(expiresAt).toISOString()})}
-  if(req.method==='GET'&&p==='/api/studio/browser-source/events'){const raw=safeText(url.searchParams.get('token'),512),entry=browserSourceTokens.get(tokenHash(raw)),live=entry?await findLiveRoom(entry.liveId):null;if(!raw||!entry||entry.expiresAt<=Date.now()||!live||live.hostId!==entry.userId){if(entry&&entry.expiresAt<=Date.now())browserSourceTokens.delete(tokenHash(raw));return json(res,401,{error:'BROWSER_SOURCE_EXPIRED'})}res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store',connection:'keep-alive'});res.write(`retry: 2500\nevent: presence\ndata: ${JSON.stringify({status:'connected',liveId:live.id})}\n\n`);if(!liveOverlayStreams.has(live.id))liveOverlayStreams.set(live.id,new Set());const targets=liveOverlayStreams.get(live.id);targets.add(res);req.on('close',()=>{targets.delete(res);if(!targets.size)liveOverlayStreams.delete(live.id)});return}
+  if(req.method==='POST'&&p==='/api/studio/browser-source'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),live=await findLiveRoom(input.liveId);if(!live||live.hostId!==user.id)return json(res,404,{error:'HOST_LIVE_NOT_FOUND'});const now=Date.now();for(const [key,value] of browserSourceTokens)if(value.expiresAt<=now)browserSourceTokens.delete(key);const raw=makeToken(),expiresAt=now+2*60*60*1000;browserSourceTokens.set(hashToken(raw),{userId:user.id,liveId:live.id,expiresAt});return json(res,201,{path:`/obs-overlay.html?token=${encodeURIComponent(raw)}`,expiresAt:new Date(expiresAt).toISOString()})}
+  if(req.method==='GET'&&p==='/api/studio/browser-source/events'){const raw=safeText(url.searchParams.get('token'),512),entry=browserSourceTokens.get(hashToken(raw)),live=entry?await findLiveRoom(entry.liveId):null;if(!raw||!entry||entry.expiresAt<=Date.now()||!live||live.hostId!==entry.userId){if(entry&&entry.expiresAt<=Date.now())browserSourceTokens.delete(hashToken(raw));return json(res,401,{error:'BROWSER_SOURCE_EXPIRED'})}res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store',connection:'keep-alive'});res.write(`retry: 2500\nevent: presence\ndata: ${JSON.stringify({status:'connected',liveId:live.id})}\n\n`);if(!liveOverlayStreams.has(live.id))liveOverlayStreams.set(live.id,new Set());const targets=liveOverlayStreams.get(live.id);targets.add(res);req.on('close',()=>{targets.delete(res);if(!targets.size)liveOverlayStreams.delete(live.id)});return}
   if (req.method === 'POST' && p === '/api/conversations') {
     const user=await requireUser(req,res); if(!user)return; const input=await body(req); const other=authSocial.enabled?await authSocial.findUserById(input.userId):store.data.users.find(u=>u.id===input.userId); if(!other||other.id===user.id||await isBlockedBetween(user.id,other.id))return json(res,400,{error:'INVALID_RECIPIENT'});if(authSocial.enabled){const c=await authSocial.getOrCreateConversation(user.id,other.id,store.id(),store.now());return json(res,201,{conversation:c})}let c=store.data.conversations.find(x=>x.memberIds.length===2&&x.memberIds.includes(user.id)&&x.memberIds.includes(other.id)); if(!c){c={id:store.id(),memberIds:[user.id,other.id],createdAt:store.now()};store.data.conversations.push(c);store.save()} return json(res,201,{conversation:c});
   }
@@ -555,9 +588,8 @@ async function api(req, res, url) {
   }
   if(req.method==='DELETE'&&p==='/api/ai/history'){
     const user=await requireUser(req,res);if(!user)return;
-    if(aiRepo.enabled){try{await aiRepo.clearMessages?.(user.id)}catch{}}
-    store.data.aiMessages=store.data.aiMessages.filter(x=>x.userId!==user.id);store.save();
-    ecosystem.recordActivity(user,{kind:'conversation_cleared',summary:'Sylora очистила історію розмови за запитом користувача',dataUsed:['ai_messages'],reason:'Privacy & AI Control Center',context:'security'});
+    await aiClearMessages(user.id);
+    await ecosystem.recordActivityAsync(user,{kind:'conversation_cleared',summary:'Sylora очистила історію розмови за запитом користувача',dataUsed:['ai_messages'],reason:'Privacy & AI Control Center',context:'security'});
     return json(res,200,{cleared:true});
   }
   m=route('/api/live/:id/creator-insights',p);if(req.method==='GET'&&m){
@@ -583,9 +615,9 @@ async function api(req, res, url) {
     const user=await requireUser(req,res);if(!user)return;const input=await body(req);
     try{return json(res,200,ecosystem.gradeQuizAttempt(user,m.id,input.answers||{}))}catch(e){return json(res,404,{error:e.message})}
   }
-  if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),label=safeText(input.label,80),value=safeText(input.value,1000),category=['conversation','preferences','people','projects','professional','learning'].includes(input.category)?input.category:'preferences';if(!label||!value)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,category,createdAt:store.now(),source:'user'});return json(res,201,{memory})}
+  if(req.method==='POST'&&p==='/api/ai/memory'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),label=safeText(input.label,80),rawValue=safeText(input.value,1000),category=['conversation','preferences','people','projects','professional','learning'].includes(input.category)?input.category:'preferences';if(!label||!rawValue)return json(res,400,{error:'MEMORY_REQUIRED'});if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(rawValue)}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label,value,category,tier:input.tier==='short'?'short':'long',createdAt,updatedAt:createdAt,source:'user'});return json(res,201,{memory})}
   m=route('/api/ai/memory/:id',p);if(req.method==='DELETE'&&m){const user=await requireUser(req,res);if(!user)return;if(!await aiDeleteMemory(user.id,m.id))return json(res,404,{error:'MEMORY_NOT_FOUND'});return json(res,200,{deleted:true})}
-  m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});const memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value:safeText(action.payload?.value,1000),createdAt:store.now(),source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
+  m=route('/api/ai/actions/:id/confirm',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});if(new Date(action.expiresAt).getTime()<=Date.now()){action=await aiUpdateAction(action,'expired');return json(res,409,{error:'AI_ACTION_EXPIRED'})}let result;if(action.type==='publish_post'){const text=safeText(action.payload?.text,4000);if(!text)return json(res,400,{error:'INVALID_AI_ACTION'});result={post:enrichedPost(await createTextPost(user,text),user)}}else if(action.type==='remember'){if(await aiCountMemories(user.id)>=100)return json(res,409,{error:'MEMORY_LIMIT'});let value;try{value=sanitizeMemoryValue(safeText(action.payload?.value,1000))}catch{return json(res,400,{error:'MEMORY_SECRET_REJECTED',code:'MEMORY_SECRET_REJECTED',message:'Secrets cannot be stored in AI memory.'})}const createdAt=store.now(),memory=await aiCreateMemory({id:store.id(),userId:user.id,label:safeText(action.payload?.label,80),value,category:'preferences',tier:'long',createdAt,updatedAt:createdAt,source:'ai_confirmed'});result={memory}}else return json(res,400,{error:'AI_ACTION_NOT_ALLOWED'});action=await aiUpdateAction(action,'completed');return json(res,200,{action,result})}
   m=route('/api/ai/actions/:id/cancel',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;let action=await aiFindAction(user.id,m.id);if(!action||action.status!=='pending')return json(res,404,{error:'AI_ACTION_NOT_FOUND'});action=await aiUpdateAction(action,'cancelled');return json(res,200,{action})}
   if(req.method==='POST'&&p==='/api/ai/chat'){
     const user=await requireUser(req,res);if(!user)return;
@@ -631,7 +663,7 @@ function staticFile(req, res, url) {
 }
 
 export const server = http.createServer(async (req, res) => {
-  try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED'}); await api(req,res,url); } else staticFile(req,res,url); }
+  try { securityHeaders(res); const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); if(req.method==='GET'&&(url.pathname==='/__client_error'||url.pathname==='/__client_rejection')){const phase=String(url.searchParams.get('phase')||url.pathname.slice(3)).slice(0,80),message=String(url.searchParams.get('m')||'').slice(0,1800);console.error('[SYLORA_CLIENT]',{phase,message,ip:req.socket.remoteAddress});res.writeHead(204);res.end();return;} const mediaMatch=route('/media/:id',url.pathname); if(mediaMatch&&req.method==='GET')return serveMedia(req,res,mediaMatch.id);const hlsMatch=route('/hls/:mediaId/:file',url.pathname);if(hlsMatch&&req.method==='GET')return serveHls(req,res,hlsMatch.mediaId,hlsMatch.file); if (url.pathname.startsWith('/api/')) { if (!await allowRequest(req)) return json(res,429,{error:'RATE_LIMITED',code:'RATE_LIMITED',message:'Too many requests. Try again later.'}); await api(req,res,url); } else staticFile(req,res,url); }
   catch (e) {
     const known = new Set(['BODY_TOO_LARGE', 'INVALID_JSON', 'UNSUPPORTED_MEDIA_TYPE', 'MEDIA_TOO_LARGE', 'INVALID_VIDEO_FILE']);
     const safeCode = known.has(e?.message) ? e.message : 'BAD_REQUEST';

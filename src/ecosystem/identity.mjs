@@ -37,7 +37,7 @@ export function defaultIdentity(user = {}) {
 }
 
 export function patchIdentity(current, patch = {}) {
-  const next = { ...current, ...patch, userId: current.userId, updatedAt: new Date().toISOString() };
+  const next = { ...current, updatedAt: new Date().toISOString() };
   if (patch.privacy && typeof patch.privacy === 'object') {
     next.privacy = { ...current.privacy };
     for (const [key, value] of Object.entries(patch.privacy)) {

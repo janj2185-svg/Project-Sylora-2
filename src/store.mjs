@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { toPublicUser } from './auth.mjs';
 
 const initial = () => ({
   users: [], sessions: [], posts: [], comments: [], reactions: [], follows: [], blocks: [], reports: [],
@@ -74,9 +75,7 @@ export class Store {
   id() { return randomUUID(); }
   now() { return new Date().toISOString(); }
   publicUser(user) {
-    if (!user) return null;
-    const { passwordHash, email, role, status, ...safe } = user;
-    return safe;
+    return toPublicUser(user);
   }
   notify(userId, type, actorId, payload = {}) {
     if (!userId || userId === actorId) return null;

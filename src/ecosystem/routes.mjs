@@ -5,7 +5,9 @@
 export async function handleEcosystemRoutes(ctx) {
   const {
     req, res, url, json, body, requireUser, route, safeText, ecosystem, store,
-    aiListPendingActions, callPeerRegistry, callStreams, liveIceServers, hasTurnServer
+    aiListPendingActions, aiListMemories, aiUpdateMemory, aiClearMemories,
+    aiListActivity, aiClearActivity, findUserById, findUserByUsername,
+    callPeerRegistry, callStreams, liveIceServers, hasTurnServer
   } = ctx;
   const p = url.pathname;
   let m;
@@ -13,8 +15,13 @@ export async function handleEcosystemRoutes(ctx) {
   // —— Command center / Personal AI dashboard ——
   if (req.method === 'GET' && p === '/api/ai/dashboard') {
     const user = await requireUser(req, res); if (!user) return true;
-    const pending = aiListPendingActions ? await aiListPendingActions(user.id, 20) : [];
-    return json(res, 200, ecosystem.dashboard(user, pending)), true;
+    const [, pending, memories, activity] = await Promise.all([
+      ecosystem.ensurePersonalAgentAsync(user),
+      aiListPendingActions ? aiListPendingActions(user.id, 20) : [],
+      aiListMemories ? aiListMemories(user.id, 100) : [],
+      aiListActivity ? aiListActivity(user.id, 50) : []
+    ]);
+    return json(res, 200, ecosystem.dashboard(user, pending, { memories, activity })), true;
   }
   if (req.method === 'PATCH' && p === '/api/ai/permissions') {
     const user = await requireUser(req, res); if (!user) return true;
@@ -23,24 +30,39 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/ai/memory/export') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, ecosystem.exportMemory(user)), true;
+    const [memories, activity] = await Promise.all([
+      aiListMemories ? aiListMemories(user.id, 200) : [],
+      aiListActivity ? aiListActivity(user.id, 200) : []
+    ]);
+    return json(res, 200, { exportedAt: store.now(), memories, activity }), true;
   }
   if (req.method === 'DELETE' && p === '/api/ai/memory') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, ecosystem.clearMemory(user)), true;
+    const [memoriesRemoved, activityRemoved] = await Promise.all([
+      aiClearMemories ? aiClearMemories(user.id) : 0,
+      aiClearActivity ? aiClearActivity(user.id) : 0
+    ]);
+    return json(res, 200, { cleared: true, memoriesRemoved, activityRemoved }), true;
   }
   if (req.method === 'GET' && p === '/api/ai/activity') {
     const user = await requireUser(req, res); if (!user) return true;
-    const agent = ecosystem.ensurePersonalAgent(user);
-    return json(res, 200, { agent, activity: store.data.aiActivity.filter(a => a.userId === user.id).slice(-100) }), true;
+    const [agent, activity] = await Promise.all([
+      ecosystem.ensurePersonalAgentAsync(user),
+      aiListActivity ? aiListActivity(user.id, 100) : []
+    ]);
+    return json(res, 200, { agent, activity }), true;
   }
   if (req.method === 'GET' && p === '/api/ai/command-center') {
     const user = await requireUser(req, res); if (!user) return true;
     const view = safeText(url.searchParams.get('view') || 'command_center', 40);
     const query = safeText(url.searchParams.get('q') || '', 500);
+    const [memories, activity] = await Promise.all([
+      aiListMemories ? aiListMemories(user.id, 100) : [],
+      aiListActivity ? aiListActivity(user.id, 50) : []
+    ]);
     return json(res, 200, {
       ...ecosystem.commandCenterContext(view),
-      dashboard: ecosystem.dashboard(user),
+      dashboard: ecosystem.dashboard(user, [], { memories, activity }),
       agent: ecosystem.ensurePersonalAgent(user),
       pack: ecosystem.contextPack(user, view, { query })
     }), true;
@@ -97,18 +119,19 @@ export async function handleEcosystemRoutes(ctx) {
   }
   if (req.method === 'GET' && p === '/api/ai/memory/center') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, ecosystem.memoryCenter(user)), true;
+    const memories = aiListMemories ? await aiListMemories(user.id, 200) : [];
+    return json(res, 200, ecosystem.memoryCenter(user, memories)), true;
   }
   if (req.method === 'PATCH' && p === '/api/ai/memory/enabled') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 200, ecosystem.setMemoryEnabled(user, input.enabled !== false)), true;
+    return json(res, 200, await ecosystem.setMemoryEnabledAsync(user, input.enabled !== false)), true;
   }
   m = route('/api/ai/memory/:id', p);
   if (req.method === 'PATCH' && m) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    const memory = ecosystem.updateMemory(user, m.id, input || {});
+    const memory = aiUpdateMemory ? await aiUpdateMemory(user.id, m.id, input || {}) : ecosystem.updateMemory(user, m.id, input || {});
     if (!memory) return json(res, 404, { error: 'MEMORY_NOT_FOUND' }), true;
     return json(res, 200, { memory }), true;
   }
@@ -116,19 +139,19 @@ export async function handleEcosystemRoutes(ctx) {
   // —— Identity ——
   if (req.method === 'GET' && p === '/api/identity') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { identity: ecosystem.ensureIdentity(user) }), true;
+    return json(res, 200, { identity: await ecosystem.ensureIdentityAsync(user) }), true;
   }
   if (req.method === 'PATCH' && p === '/api/identity') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 200, { identity: ecosystem.updateIdentity(user, input) }), true;
+    return json(res, 200, { identity: await ecosystem.updateIdentityAsync(user, input) }), true;
   }
   m = route('/api/identity/:userId', p);
   if (req.method === 'GET' && m) {
-    const user = store.data.users.find(u => u.id === m.userId);
-    if (!user) return json(res, 404, { error: 'USER_NOT_FOUND' }), true;
+    const user = findUserById ? await findUserById(m.userId) : store.data.users.find(u => u.id === m.userId);
+    if (!user || (user.status || 'active') !== 'active') return json(res, 404, { error: 'USER_NOT_FOUND' }), true;
     const relation = 'public';
-    return json(res, 200, { identity: ecosystem.getPublicIdentity(user, relation) }), true;
+    return json(res, 200, { identity: await ecosystem.getPublicIdentityAsync(user, relation) }), true;
   }
 
   // —— Knowledge Graph ——
@@ -226,11 +249,12 @@ export async function handleEcosystemRoutes(ctx) {
       const resolved = ecosystem.resolveApiKey(auth.slice(7));
       if (!resolved) return json(res, 401, { error: 'INVALID_API_KEY' }), true;
       if (!resolved.app.scopes.includes('identity.read')) return json(res, 403, { error: 'SCOPE_DENIED' }), true;
-      const owner = store.data.users.find(u => u.id === resolved.app.ownerId);
-      return json(res, 200, { identity: ecosystem.getPublicIdentity(owner, 'self'), app: { id: resolved.app.id, scopes: resolved.app.scopes } }), true;
+      const owner = findUserById ? await findUserById(resolved.app.ownerId) : store.data.users.find(u => u.id === resolved.app.ownerId);
+      if (!owner || (owner.status || 'active') !== 'active') return json(res, 401, { error: 'INVALID_API_KEY' }), true;
+      return json(res, 200, { identity: await ecosystem.getPublicIdentityAsync(owner, 'self'), app: { id: resolved.app.id, scopes: resolved.app.scopes } }), true;
     }
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { identity: ecosystem.ensureIdentity(user) }), true;
+    return json(res, 200, { identity: await ecosystem.ensureIdentityAsync(user) }), true;
   }
 
   // —— Translation ——
@@ -704,10 +728,10 @@ export async function handleEcosystemRoutes(ctx) {
   }
   m = route('/api/public/u/:username', p);
   if (req.method === 'GET' && m) {
-    const user = store.data.users.find(u => u.username === m.username);
-    if (!user) return json(res, 404, { error: 'USER_NOT_FOUND' }), true;
+    const user = findUserByUsername ? await findUserByUsername(m.username) : store.data.users.find(u => u.username === m.username);
+    if (!user || (user.status || 'active') !== 'active') return json(res, 404, { error: 'USER_NOT_FOUND' }), true;
     return json(res, 200, {
-      profile: ecosystem.getPublicIdentity(user, 'public'),
+      profile: await ecosystem.getPublicIdentityAsync(user, 'public'),
       web: ecosystem.publicWebMeta(user.id),
       guest: await ecosystem.guestView({ userId: user.id, visibility: 'public' })
     }), true;

@@ -139,7 +139,7 @@ export function enforceProductionBootGuard(config) {
 }
 
 export function persistenceLabel(config) {
-  if (config.database.configured) return 'postgres-social-wallet-ai-hybrid';
+  if (config.database.configured) return 'postgres-primary-memory-cache';
   if (config.nodeEnv === RuntimeMode.TEST) return 'json-test-runtime';
   return 'json-dev-runtime';
 }
