@@ -1,7 +1,9 @@
 # SYLORA Phase 1 forensic audit (baseline)
 
-Audit date: 2026-08-14  
-Baseline: `b4a994bb65bfce7b991cc80966102abdc49ae6d7`  
+Audit date: 2026-08-14
+
+Baseline: `b4a994bb65bfce7b991cc80966102abdc49ae6d7`
+
 Branch: `agent/sylora-phase1-data-auth`
 
 This document records the system as it existed before Phase 1 implementation. It is evidence for the changes in this phase, not a claim about the final state.
@@ -106,4 +108,3 @@ P0/P1 issues selected for Phase 1:
 6. Missing automated logout invalidation, cross-user profile, malformed/expired-token, safe-response, migration, and restart-persistence coverage.
 
 Out-of-scope findings (document only): media bytes can be fetched by opaque ID without a visibility check; many noncritical ecosystem features remain JSON/in-memory despite PostgreSQL tables; no post-delete endpoint exists; subscriptions and password recovery are not implemented.
-
