@@ -10,6 +10,8 @@ import { createActionRecord, canExecute } from '../src/ecosystem/action-engine.m
 import { createAgentManifest } from '../src/ecosystem/agents.mjs';
 import { localDetectLanguage } from '../src/ecosystem/translation.mjs';
 import { applyEvidence, emptyReputation } from '../src/ecosystem/reputation.mjs';
+import { handleEcosystemRoutes } from '../src/ecosystem/routes.mjs';
+import { sanitizeIdentityRecord } from '../src/ecosystem/identity.mjs';
 
 async function startServer() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sylora-eco-'));
@@ -75,6 +77,94 @@ test('reputation reasons stay transparent and bounded', () => {
   assert.match(rep.dimensions.creator.reasons[0].reason, /LIVE/);
 });
 
+test('identity read sanitizer strips sensitive legacy JSON keys', () => {
+  const safe = sanitizeIdentityRecord({
+    userId: 'user-1',
+    username: 'safe_user',
+    displayName: 'Safe User',
+    passwordHash: 'top-level-secret',
+    creatorPersona: { headline: 'Builder', passwordHash: 'nested-secret' },
+    professional: { title: 'Architect', role: 'admin', password_hash: 'nested-hash' },
+    portfolio: [{ title: 'Work', url: 'https://example.com', secret: 'hidden' }],
+    privacy: { profile: 'public', password: 'hidden' },
+    reputationRefs: { trust: null, secret: 'hidden' }
+  });
+  assert.equal(safe.professional.title, 'Architect');
+  assert.equal(safe.creatorPersona.headline, 'Builder');
+  assert.equal(safe.portfolio[0].title, 'Work');
+  assert.doesNotMatch(JSON.stringify(safe), /password|nested-secret|nested-hash|"role"|"secret"/i);
+});
+
+test('async ecosystem routes expose only known validation errors', async () => {
+  const user = { id: 'user-1' };
+  const routeContext = ({ pathname, method, input, ecosystem, responses = [] }) => ({
+    req: { method },
+    res: {},
+    url: new URL(`http://localhost${pathname}`),
+    json: (_res, status, payload) => { responses.push({ status, payload }); },
+    body: async () => input,
+    requireUser: async () => user,
+    route: () => null,
+    safeText: value => String(value || ''),
+    ecosystem,
+    store: { now: () => new Date().toISOString() }
+  });
+
+  const proactiveResponses = [];
+  const proactiveContext = routeContext({
+    pathname: '/api/ai/proactive',
+    method: 'PATCH',
+    input: { level: 'always' },
+    responses: proactiveResponses,
+    ecosystem: { setProactiveLevelAsync: async () => { throw new Error('INVALID_PROACTIVE_LEVEL'); } }
+  });
+  assert.equal(await handleEcosystemRoutes(proactiveContext), true);
+  assert.deepEqual(proactiveResponses[0], {
+    status: 400,
+    payload: {
+      error: 'INVALID_PROACTIVE_LEVEL',
+      code: 'INVALID_PROACTIVE_LEVEL',
+      message: 'Unsupported proactive level.'
+    }
+  });
+
+  const scopeResponses = [];
+  const scopeContext = routeContext({
+    pathname: '/api/developer/apps',
+    method: 'POST',
+    input: { scopes: ['database.drop'] },
+    responses: scopeResponses,
+    ecosystem: { createAppAsync: async () => { throw new Error('INVALID_SCOPES:database.drop'); } }
+  });
+  assert.equal(await handleEcosystemRoutes(scopeContext), true);
+  assert.deepEqual(scopeResponses[0], {
+    status: 400,
+    payload: {
+      error: 'INVALID_SCOPES',
+      code: 'INVALID_SCOPES',
+      message: 'One or more requested scopes are invalid.'
+    }
+  });
+  assert.doesNotMatch(JSON.stringify(scopeResponses[0]), /database\.drop/);
+
+  const repositoryError = new Error('SELECT password_hash FROM users; /srv/private; secret=abc');
+  await assert.rejects(() => handleEcosystemRoutes(routeContext({
+    pathname: '/api/developer/apps',
+    method: 'POST',
+    input: { scopes: ['identity.read'] },
+    ecosystem: { createAppAsync: async () => { throw repositoryError; } }
+  })), error => error === repositoryError);
+  await assert.rejects(() => handleEcosystemRoutes(routeContext({
+    pathname: '/api/ai/command',
+    method: 'POST',
+    input: { text: 'show my messages' },
+    ecosystem: {
+      ensurePersonalAgentAsync: async () => ({}),
+      universalCommand: async () => { throw repositoryError; }
+    }
+  })), error => error === repositoryError);
+});
+
 test('ecosystem APIs: identity, kg, agents, developer keys, translate, orgs', async () => {
   const { server, base, dir } = await startServer();
   try {
@@ -127,6 +217,14 @@ test('ecosystem APIs: identity, kg, agents, developer keys, translate, orgs', as
 
     const v1 = await fetch(`${base}/api/v1/identity/me`, { headers: { authorization: `Bearer ${key.data.raw}` } });
     assert.equal(v1.status, 200);
+    const keys = await req(base, `/api/developer/apps/${app.data.app.id}/keys`, { token });
+    assert.equal(keys.status, 200);
+    assert.equal(keys.data.keys.length, 1);
+    assert.equal('hash' in keys.data.keys[0], false);
+    const revoked = await req(base, `/api/developer/apps/${app.data.app.id}/keys/${key.data.key.id}`, { method: 'DELETE', token });
+    assert.equal(revoked.status, 200);
+    const afterRevoke = await fetch(`${base}/api/v1/identity/me`, { headers: { authorization: `Bearer ${key.data.raw}` } });
+    assert.equal(afterRevoke.status, 401);
 
     const tr = await req(base, '/api/translate', { method: 'POST', token, body: { text: 'привіт світе', targetLang: 'en' } });
     assert.equal(tr.status, 200);

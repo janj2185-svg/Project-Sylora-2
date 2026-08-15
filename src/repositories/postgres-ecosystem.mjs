@@ -1,3 +1,5 @@
+import { patchIdentity as applyIdentityPatch, sanitizeIdentityRecord } from '../ecosystem/identity.mjs';
+
 function iso(value) {
   return value instanceof Date ? value.toISOString() : (value ? String(value) : null);
 }
@@ -31,6 +33,9 @@ function agentFromRow(row) {
     locale: row.locale,
     permissions: asObject(row.permissions, {}),
     contexts: asObject(row.contexts, {}),
+    privacyControls: asObject(row.privacy_controls, {}),
+    proactiveLevel: row.proactive_level || 'IMPORTANT_ONLY',
+    voicePersonality: row.voice_personality || 'warm',
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at)
   };
@@ -38,7 +43,7 @@ function agentFromRow(row) {
 
 function identityFromRow(row, user = {}) {
   if (!row) return null;
-  return {
+  return sanitizeIdentityRecord({
     userId: row.user_id,
     username: user.username,
     displayName: user.displayName,
@@ -51,7 +56,7 @@ function identityFromRow(row, user = {}) {
     reputationRefs: asObject(row.reputation_refs, {}),
     agentId: row.agent_id || null,
     updatedAt: iso(row.updated_at)
-  };
+  }, user);
 }
 
 function nodeFromRow(row) {
@@ -120,6 +125,38 @@ function orgFromRow(row) {
   };
 }
 
+function developerAppFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    name: row.name,
+    description: row.description || '',
+    scopes: asArray(row.scopes, []),
+    redirectUris: asArray(row.redirect_uris, []),
+    webhookUrl: row.webhook_url || '',
+    status: row.status || 'sandbox',
+    rateLimitPerMinute: Number(row.rate_limit_per_minute || 60),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at)
+  };
+}
+
+function developerApiKeyFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    appId: row.app_id,
+    ownerId: row.owner_id,
+    prefix: row.prefix,
+    hash: row.hash,
+    label: row.label || 'default',
+    lastUsedAt: row.last_used_at ? iso(row.last_used_at) : null,
+    revokedAt: row.revoked_at ? iso(row.revoked_at) : null,
+    createdAt: iso(row.created_at)
+  };
+}
+
 export class PostgresEcosystemRepository {
   constructor(pool = null) { this.pool = pool; }
   get enabled() { return !!this.pool; }
@@ -131,15 +168,56 @@ export class PostgresEcosystemRepository {
 
   async upsertPersonalAgent(agent) {
     const result = await this.pool.query(
-      `INSERT INTO personal_agents(id,user_id,name,kind,locale,permissions,contexts,created_at,updated_at)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-       ON CONFLICT(user_id,kind) DO UPDATE SET
-         name=EXCLUDED.name, locale=EXCLUDED.locale, permissions=EXCLUDED.permissions,
-         contexts=EXCLUDED.contexts, updated_at=EXCLUDED.updated_at
+      `INSERT INTO personal_agents(id,user_id,name,kind,locale,permissions,contexts,privacy_controls,proactive_level,voice_personality,created_at,updated_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       -- This is the create-if-missing path. A stale cold-start must never
+       -- overwrite privacy or permission changes made by another instance.
+       ON CONFLICT(user_id,kind) DO UPDATE SET user_id=EXCLUDED.user_id
        RETURNING *`,
-      [agent.id, agent.userId, agent.name, agent.kind, agent.locale, jsonb(agent.permissions, {}), jsonb(agent.contexts, {}), agent.createdAt, agent.updatedAt]
+      [agent.id, agent.userId, agent.name, agent.kind, agent.locale, jsonb(agent.permissions, {}), jsonb(agent.contexts, {}), jsonb(agent.privacyControls, {}), agent.proactiveLevel || 'IMPORTANT_ONLY', agent.voicePersonality || 'warm', agent.createdAt, agent.updatedAt]
     );
     return agentFromRow(result.rows[0]);
+  }
+
+  async patchPersonalAgent(userId, {
+    permissions = null,
+    privacyControls = null,
+    proactiveLevel = null,
+    voicePersonality = null,
+    updatedAt = new Date().toISOString()
+  } = {}) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const currentResult = await client.query(
+        "SELECT * FROM personal_agents WHERE user_id=$1 AND kind='personal' FOR UPDATE",
+        [userId]
+      );
+      const current = agentFromRow(currentResult.rows[0]);
+      if (!current) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const result = await client.query(
+        `UPDATE personal_agents SET permissions=$2,privacy_controls=$3,proactive_level=$4,voice_personality=$5,updated_at=$6
+         WHERE user_id=$1 AND kind='personal' RETURNING *`,
+        [
+          userId,
+          jsonb(permissions == null ? current.permissions : { ...current.permissions, ...permissions }, {}),
+          jsonb(privacyControls == null ? current.privacyControls : { ...current.privacyControls, ...privacyControls }, {}),
+          proactiveLevel || current.proactiveLevel,
+          voicePersonality || current.voicePersonality,
+          updatedAt
+        ]
+      );
+      await client.query('COMMIT');
+      return agentFromRow(result.rows[0]);
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getIdentity(userId) {
@@ -151,11 +229,9 @@ export class PostgresEcosystemRepository {
     const result = await this.pool.query(
       `INSERT INTO identity_profiles(user_id,verified_person,creator_persona,professional,portfolio,interests,privacy,reputation_refs,agent_id,updated_at)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       ON CONFLICT(user_id) DO UPDATE SET
-         verified_person=EXCLUDED.verified_person, creator_persona=EXCLUDED.creator_persona,
-         professional=EXCLUDED.professional, portfolio=EXCLUDED.portfolio, interests=EXCLUDED.interests,
-         privacy=EXCLUDED.privacy, reputation_refs=EXCLUDED.reputation_refs, agent_id=EXCLUDED.agent_id,
-         updated_at=EXCLUDED.updated_at
+       -- Creation is conflict-preserving so a stale cold-start cannot erase a
+       -- profile already updated by another application instance.
+       ON CONFLICT(user_id) DO UPDATE SET user_id=EXCLUDED.user_id
        RETURNING *`,
       [
         identity.userId, !!identity.verifiedPerson, jsonb(identity.creatorPersona, {}), jsonb(identity.professional, {}),
@@ -164,6 +240,42 @@ export class PostgresEcosystemRepository {
       ]
     );
     return identityFromRow(result.rows[0], identity);
+  }
+
+  async patchIdentity(user, patch = {}) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const currentResult = await client.query(
+        'SELECT * FROM identity_profiles WHERE user_id=$1 FOR UPDATE',
+        [user.id]
+      );
+      if (!currentResult.rowCount) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const next = applyIdentityPatch(identityFromRow(currentResult.rows[0], user), patch);
+      const result = await client.query(
+        `UPDATE identity_profiles SET creator_persona=$2,professional=$3,portfolio=$4,interests=$5,privacy=$6,updated_at=$7
+         WHERE user_id=$1 RETURNING *`,
+        [
+          user.id,
+          jsonb(next.creatorPersona, {}),
+          jsonb(next.professional, {}),
+          jsonb(next.portfolio, []),
+          jsonb(next.interests, []),
+          jsonb(next.privacy, {}),
+          next.updatedAt
+        ]
+      );
+      await client.query('COMMIT');
+      return identityFromRow(result.rows[0], user);
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async createKgNode(node) {
@@ -269,6 +381,84 @@ export class PostgresEcosystemRepository {
     await this.pool.query('UPDATE agent_catalog SET installs=installs+1, updated_at=now() WHERE id=$1', [agentId]);
   }
 
+  async createDeveloperApp(app) {
+    const result = await this.pool.query(
+      `INSERT INTO developer_apps(id,owner_id,name,description,scopes,redirect_uris,webhook_url,status,rate_limit_per_minute,created_at,updated_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [app.id, app.ownerId, app.name, app.description, jsonb(app.scopes, []), jsonb(app.redirectUris, []), app.webhookUrl, app.status, app.rateLimitPerMinute, app.createdAt, app.updatedAt]
+    );
+    return developerAppFromRow(result.rows[0]);
+  }
+
+  async listDeveloperApps(ownerId) {
+    const result = await this.pool.query('SELECT * FROM developer_apps WHERE owner_id=$1 ORDER BY created_at DESC', [ownerId]);
+    return result.rows.map(developerAppFromRow);
+  }
+
+  async findDeveloperApp(appId, ownerId = null) {
+    const result = ownerId
+      ? await this.pool.query('SELECT * FROM developer_apps WHERE id=$1 AND owner_id=$2 LIMIT 1', [appId, ownerId])
+      : await this.pool.query('SELECT * FROM developer_apps WHERE id=$1 LIMIT 1', [appId]);
+    return developerAppFromRow(result.rows[0]);
+  }
+
+  async createDeveloperApiKey(key) {
+    const result = await this.pool.query(
+      `INSERT INTO developer_api_keys(id,app_id,owner_id,prefix,hash,label,last_used_at,revoked_at,created_at)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [key.id, key.appId, key.ownerId, key.prefix, key.hash, key.label, key.lastUsedAt, key.revokedAt, key.createdAt]
+    );
+    return developerApiKeyFromRow(result.rows[0]);
+  }
+
+  async listDeveloperApiKeys(ownerId, appId) {
+    const result = await this.pool.query(
+      'SELECT * FROM developer_api_keys WHERE owner_id=$1 AND app_id=$2 ORDER BY created_at DESC',
+      [ownerId, appId]
+    );
+    return result.rows.map(developerApiKeyFromRow);
+  }
+
+  async resolveDeveloperApiKey(hash) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const keyResult = await client.query(
+        'SELECT * FROM developer_api_keys WHERE hash=$1 AND revoked_at IS NULL FOR UPDATE',
+        [hash]
+      );
+      const key = developerApiKeyFromRow(keyResult.rows[0]);
+      if (!key) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const appResult = await client.query('SELECT * FROM developer_apps WHERE id=$1 LIMIT 1', [key.appId]);
+      const app = developerAppFromRow(appResult.rows[0]);
+      if (!app || !['sandbox', 'active'].includes(app.status)) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      const touched = await client.query('UPDATE developer_api_keys SET last_used_at=now() WHERE id=$1 RETURNING *', [key.id]);
+      await client.query('COMMIT');
+      return { key: developerApiKeyFromRow(touched.rows[0]), app };
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async revokeDeveloperApiKey(ownerId, appId, keyId) {
+    const result = await this.pool.query(
+      `UPDATE developer_api_keys SET revoked_at=now()
+       WHERE id=$1 AND app_id=$2 AND owner_id=$3 AND revoked_at IS NULL
+       RETURNING *`,
+      [keyId, appId, ownerId]
+    );
+    return developerApiKeyFromRow(result.rows[0]);
+  }
+
   async createOrg(org) {
     const result = await this.pool.query(
       'INSERT INTO organizations(id,owner_id,name,description,created_at) VALUES($1,$2,$3,$4,$5) RETURNING *',
@@ -363,5 +553,10 @@ export class PostgresEcosystemRepository {
       context: row.context,
       createdAt: iso(row.created_at)
     })).reverse();
+  }
+
+  async clearActivity(userId) {
+    const result = await this.pool.query('DELETE FROM ai_activity WHERE user_id=$1', [userId]);
+    return result.rowCount;
   }
 }

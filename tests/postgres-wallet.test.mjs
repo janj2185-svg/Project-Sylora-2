@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { newDb } from 'pg-mem';
+import { DataType, newDb } from 'pg-mem';
 import { PostgresWalletRepository } from '../src/repositories/postgres-wallet.mjs';
 
 test('PostgreSQL wallet gift transfer is atomic, balanced and idempotent', async()=>{
   const memory=newDb();
+  memory.public.registerFunction({name:'pg_advisory_xact_lock',args:[DataType.integer,DataType.integer],returns:DataType.bool,implementation:()=>true});
   memory.public.none(`
     CREATE TABLE users(id uuid PRIMARY KEY);
     CREATE TABLE gifts(id text PRIMARY KEY,name text NOT NULL,tier text NOT NULL,price bigint NOT NULL,enabled boolean NOT NULL DEFAULT true,color text NOT NULL);
@@ -23,6 +24,11 @@ test('PostgreSQL wallet gift transfer is atomic, balanced and idempotent', async
   await pool.query("INSERT INTO gifts(id,name,tier,price,enabled,color) VALUES('pulse','Sylora Pulse','basic',25,true,'#5b5cf6')");
   assert.equal((await repo.ensureWallet(senderId)).balance,10000);
   assert.equal((await repo.ensureWallet(recipientId)).balance,10000);
+  const repeated=[];
+  for(let index=0;index<4;index++)repeated.push(await repo.ensureWallet(senderId));
+  assert.equal(repeated.every(row=>row.balance===10000),true);
+  assert.equal(Number((await pool.query("SELECT count(*) AS count FROM ledger_entries WHERE wallet_user_id=$1 AND reason='starter_grant'",[senderId])).rows[0].count),1);
+  assert.equal(Number((await pool.query("SELECT count(*) AS count FROM platform_ledger_entries WHERE reason='starter_grant'",[])).rows[0].count),2);
 
   const request={id:randomUUID(),notificationId:randomUUID(),senderId,recipientId,giftId:'pulse',quantity:1,idempotencyKey:'gift-test-0001',creatorShareBps:7000,createdAt:new Date().toISOString()};
   const first=await repo.sendGift(request);

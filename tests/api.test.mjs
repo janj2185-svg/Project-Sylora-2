@@ -5,12 +5,27 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { hashPassword } from '../src/auth.mjs';
+
+function seedAdmin(file, { email, username, password }) {
+  const id = randomUUID(), now = new Date().toISOString();
+  fs.writeFileSync(file, JSON.stringify({
+    users: [{
+      id, email, username, passwordHash: hashPassword(password), displayName: username,
+      bio: '', locale: 'uk', avatar: '', role: 'admin', status: 'active', createdAt: now, updatedAt: now
+    }],
+    wallets: [{ userId: id, balance: 10000, earnings: 0, currency: 'LUMEN' }]
+  }));
+}
 
 test('auth → post → gift → ledger works end to end', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sylora-api-'));
   process.env.NODE_ENV = 'test';
   process.env.SYLORA_DATA_FILE = path.join(dir, 'db.json');
-  process.env.SYLORA_ADMIN_EMAILS = 'alice@test.dev';
+  seedAdmin(process.env.SYLORA_DATA_FILE, {
+    email: 'alice@test.dev', username: 'alice', password: 'password123'
+  });
   process.env.SYLORA_ICE_SERVERS_JSON = JSON.stringify([{ urls: 'stun:stun.test.invalid:3478' }, { urls: 'turn:turn.test.invalid:3478', username: 'test-user', credential: 'test-credential' }]);
   const { server } = await import(`../src/server.mjs?test=${Date.now()}`);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -31,7 +46,7 @@ test('auth → post → gift → ledger works end to end', async () => {
     assert.equal((await call('/api/ready')).ready, true);
     const unauthRtc = await fetch(`${base}/api/live/rtc-config`);
     assert.equal(unauthRtc.status, 401);
-    const alice = await call('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: 'alice@test.dev', username: 'alice', password: 'password123' }) });
+    const alice = await call('/api/auth/login', { method: 'POST', body: JSON.stringify({ identity: 'alice@test.dev', password: 'password123' }) });
     const bob = await call('/api/auth/register', { method: 'POST', body: JSON.stringify({ email: 'bob@test.dev', username: 'bob', password: 'password123' }) });
     const auth = { authorization: `Bearer ${alice.token}` };
     const rtcConfig = await call('/api/live/rtc-config', { headers: auth });

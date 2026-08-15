@@ -15,7 +15,19 @@ function messageFromRow(row) {
 
 function memoryFromRow(row) {
   if (!row) return null;
-  return { id: row.id, userId: row.user_id, label: row.label, value: row.value, source: row.source, createdAt: iso(row.created_at) };
+  return {
+    id: row.id,
+    userId: row.user_id,
+    label: row.label,
+    value: row.value,
+    source: row.source,
+    category: row.category || 'preferences',
+    tier: row.tier || 'long',
+    agentId: row.agent_id || null,
+    contextSources: Array.isArray(row.context_sources) ? row.context_sources : [],
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at || row.created_at)
+  };
 }
 
 function actionFromRow(row) {
@@ -96,13 +108,34 @@ export class PostgresAiRepository {
   }
 
   async createMemory(memory) {
-    const result = await this.pool.query('INSERT INTO ai_memories(id,user_id,label,value,source,created_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *', [memory.id,memory.userId,memory.label,memory.value,memory.source,memory.createdAt]);
+    const result = await this.pool.query('INSERT INTO ai_memories(id,user_id,label,value,source,category,tier,agent_id,context_sources,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *', [memory.id,memory.userId,memory.label,memory.value,memory.source,memory.category||'preferences',memory.tier||'long',memory.agentId||null,JSON.stringify(memory.contextSources||[]),memory.createdAt,memory.updatedAt||memory.createdAt]);
+    return memoryFromRow(result.rows[0]);
+  }
+
+  async updateMemory(userId, id, patch) {
+    const result = await this.pool.query(
+      `UPDATE ai_memories SET
+        label=COALESCE($3,label),value=COALESCE($4,value),category=COALESCE($5,category),
+        tier=COALESCE($6,tier),updated_at=$7
+       WHERE id=$1 AND user_id=$2 RETURNING *`,
+      [id,userId,patch.label??null,patch.value??null,patch.category??null,patch.tier??null,patch.updatedAt]
+    );
     return memoryFromRow(result.rows[0]);
   }
 
   async deleteMemory(userId, id) {
     const result = await this.pool.query('DELETE FROM ai_memories WHERE id=$1 AND user_id=$2 RETURNING id', [id,userId]);
     return result.rowCount > 0;
+  }
+
+  async clearMemories(userId) {
+    const result = await this.pool.query('DELETE FROM ai_memories WHERE user_id=$1', [userId]);
+    return result.rowCount;
+  }
+
+  async clearMessages(userId) {
+    const result = await this.pool.query('DELETE FROM ai_messages WHERE user_id=$1', [userId]);
+    return result.rowCount;
   }
 
   async createAction(action) {

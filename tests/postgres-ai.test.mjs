@@ -9,7 +9,7 @@ test('PostgreSQL AI repository persists chat, voice transcripts, memory and appr
   memory.public.none(`
     CREATE TABLE users (id uuid PRIMARY KEY);
     CREATE TABLE ai_messages (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), role text NOT NULL, body text NOT NULL, source text NOT NULL DEFAULT 'chat', source_event_id text, created_at timestamptz NOT NULL, UNIQUE(user_id,source_event_id));
-    CREATE TABLE ai_memories (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), label text NOT NULL, value text NOT NULL, source text NOT NULL, created_at timestamptz NOT NULL);
+    CREATE TABLE ai_memories (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), label text NOT NULL, value text NOT NULL, source text NOT NULL, category text NOT NULL DEFAULT 'preferences', tier text NOT NULL DEFAULT 'long', agent_id uuid, context_sources jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL DEFAULT now());
     CREATE TABLE ai_actions (id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id), type text NOT NULL, payload jsonb NOT NULL, status text NOT NULL, created_at timestamptz NOT NULL, expires_at timestamptz NOT NULL, completed_at timestamptz);
   `);
   const adapter = memory.adapters.createPg(), pool = new adapter.Pool(), repo = new PostgresAiRepository(pool), userId = randomUUID();
