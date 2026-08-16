@@ -1,5 +1,6 @@
 services:
   sylora:
+    restart: unless-stopped
     build: .
     ports: ["127.0.0.1:8787:8787"]
     env_file:
@@ -26,6 +27,7 @@ services:
       retries: 5
       start_period: 15s
   postgres:
+    restart: unless-stopped
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: sylora
@@ -39,6 +41,7 @@ services:
       timeout: 3s
       retries: 10
   redis:
+    restart: unless-stopped
     image: redis:8-alpine
     command: ["redis-server", "--appendonly", "yes"]
     volumes:

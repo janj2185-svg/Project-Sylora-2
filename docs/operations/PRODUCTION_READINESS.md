@@ -19,6 +19,10 @@ Production startup blocked: DATABASE_URL is required.
 
 No secrets are printed in boot error messages.
 
+### Container recovery
+
+The Compose definition sets `restart: unless-stopped` on the application, PostgreSQL, and Redis services. After a host reboot, Docker restores the core stack without a manual `docker compose up` **only when the Docker service is enabled to start at boot and the containers were not intentionally stopped or removed**. Dependency health gates still control application startup, and `/api/ready` remains the authoritative traffic-readiness signal.
+
 ### Liveness — `GET /api/health`
 
 Process is alive. Always returns HTTP 200 when the server responds.

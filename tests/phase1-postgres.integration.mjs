@@ -213,7 +213,7 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
       migrationClient.release();
       concurrentMigrationClient.release();
     }
-    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 14);
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 16);
 
     provider = await startProviderStub();
     firstServer = await startProductionServer({ databaseUrl, dataFile, openaiBaseUrl: provider.baseUrl, openaiApiKey: 'phase1-provider-test-key' });

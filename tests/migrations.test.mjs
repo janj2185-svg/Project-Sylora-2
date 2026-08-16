@@ -15,16 +15,18 @@ const EXPECTED_CHECKSUMS = Object.freeze({
   '010_ecosystem_core': '402a28216e1d88b862d436e9526a464ed659a9807abe8a21abdff1082f486b98',
   '011_ecosystem_runtime': 'e4cc689490e878634b2d47b0a9fc2d58e1efc8c6454caffffeba9d7e36d2c88a',
   '012_live_runtime_state': 'f969939234e92ccb68ed1c59f13399c14ec35e4893503267c10c71953da96a69',
+  '012_social_comment_reactions': 'e36fb2bd3543ab1cf5e7820c635f595d7fb43524fd9d2110bfbe18c4ecd6c1a4',
+  '013_dm_attachments_gift_refund': 'eebbc74b83f9ff53489f868711a4cdeff1f627609cd97a97662589ece95be3c0',
   '013_phase1_identity_auth': 'e735b7e71e50d889a3b040f3ac18b4e7de44dffe64b2709a2b5840c2e4173960',
   '014_session_status_invalidation': '85b51cdf8872c12f0a90a41fb240d528d200703f2fd7ff4f67d7cfa7493a6740'
 });
 
 test('migration manifest is ordered, immutable, and complete through Phase 1', () => {
   const migrations = loadMigrations();
-  assert.equal(migrations.length, 14);
+  assert.equal(migrations.length, 16);
   assert.deepEqual(migrations.map(item => item.name), MIGRATION_FILES.map(([name]) => name));
   assert.deepEqual(Object.fromEntries(migrations.map(item => [item.name, item.checksum])), EXPECTED_CHECKSUMS);
-  assert.deepEqual(migrations.map(item => Number(item.name.slice(0, 3))), Array.from({ length: 14 }, (_, index) => index + 1));
+  assert.deepEqual(migrations.map(item => item.name), Object.keys(EXPECTED_CHECKSUMS));
 });
 
 test('fresh schema defines critical keys, ownership cascades, identity uniqueness, timestamps, and indexes', () => {
@@ -42,6 +44,9 @@ test('fresh schema defines critical keys, ownership cascades, identity uniquenes
   assert.match(sql, /AFTER UPDATE OF status ON users/i);
   assert.match(sql, /ai_memories ADD COLUMN IF NOT EXISTS category text NOT NULL/i);
   assert.match(sql, /ai_memories_user_updated_idx ON ai_memories\(user_id,updated_at DESC\)/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS comment_reactions/i);
+  assert.match(sql, /messages ADD COLUMN IF NOT EXISTS attachment jsonb/i);
+  assert.match(sql, /gift_transfers ADD COLUMN IF NOT EXISTS refunded_at timestamptz/i);
 });
 
 test('migration runner applies every migration transactionally and is idempotent', async () => {
@@ -59,11 +64,11 @@ test('migration runner applies every migration transactionally and is idempotent
     }
   };
   await applyMigrations(client);
-  assert.equal(applied.size, 14);
+  assert.equal(applied.size, 16);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_lock($1)').length, 1);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 1);
-  assert.equal(commands.filter(command => command === 'BEGIN').length, 14);
-  assert.equal(commands.filter(command => command === 'COMMIT').length, 14);
+  assert.equal(commands.filter(command => command === 'BEGIN').length, 16);
+  assert.equal(commands.filter(command => command === 'COMMIT').length, 16);
   const before = commands.length;
   await applyMigrations(client);
   assert.equal(commands.slice(before).some(command => command === 'BEGIN'), false);
