@@ -74,7 +74,7 @@ API keys are never sent to clients or logged.
 | `DEGRADED` | Development without TURN (STUN-only or local) |
 | `NOT_READY` | Production without TURN, or with a bare TURN URL that has no usable credentials |
 
-ICE servers are exposed only via authenticated `GET /api/live/rtc-config` and `GET /api/calls/rtc-config`. Preferred shared-secret mode derives a different time-limited username/credential for each authenticated user and returns its expiry. The server-only `SYLORA_TURN_SHARED_SECRET` is never returned or retained in the public runtime configuration object. Static browser credentials remain supported as a fallback.
+ICE servers are exposed only via authenticated `GET /api/live/rtc-config` and `GET /api/calls/rtc-config`. Preferred shared-secret mode derives a different time-limited username/credential for each authenticated user and returns its expiry. The browser refreshes cached RTC config at most every five minutes, at least one minute before credential expiry, and immediately after the authenticated session changes. The server-only `SYLORA_TURN_SHARED_SECRET` is never returned or retained in the public runtime configuration object. Static browser credentials remain supported as a fallback.
 
 ### Bundled coturn baseline
 
