@@ -49,6 +49,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate Compose
+        run: docker compose --profile turn config -q
+
       - name: Test
         run: npm test
         env:
