@@ -14,7 +14,7 @@ import { PostgresAuthSocialRepository } from './repositories/postgres-auth-socia
 import { PostgresWalletRepository } from './repositories/postgres-wallet.mjs';
 import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
-import { hasTurnServer } from './rtc-config.mjs';
+import { issueIceServersForUser } from './rtc-config.mjs';
 import { loadRuntimeConfig, enforceProductionBootGuard } from './config.mjs';
 import { buildLivenessReport, buildReadinessReport, publicAiDiagnostics } from './runtime-status.mjs';
 import { LiveFanout } from './live-fanout.mjs';
@@ -57,6 +57,10 @@ const openaiModel = runtimeConfig.ai.model;
 const openaiRealtimeModel = runtimeConfig.ai.realtimeModel;
 const openaiRealtimeVoice = runtimeConfig.ai.realtimeVoice;
 const liveIceServers = runtimeConfig.iceServers;
+const issueRtcConfigForUser = userId => issueIceServersForUser(liveIceServers, {
+  env: process.env,
+  userId
+});
 const openai = runtimeConfig.ai.configured
   ? new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -383,7 +387,8 @@ async function api(req, res, url) {
     listHomePosts, listHomeConversations, listHomeNotifications,
     findUserById: id => authService.findUserById(id),
     findUserByUsername: username => authService.findUserByUsername(username),
-    callPeerRegistry, callStreams, liveIceServers, hasTurnServer
+    callPeerRegistry, callStreams, liveIceServers,
+    issueRtcConfigForUser, turnConfigured: runtimeConfig.turnConfigured
   })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}
   if(req.method==='POST'&&p==='/api/ai/realtime'){
@@ -572,13 +577,21 @@ async function api(req, res, url) {
     const user=await requireUser(req,res);if(!user)return;
     const { publicRealtimeDiagnostics } = await import('./runtime-status.mjs');
     const realtime = publicRealtimeDiagnostics(runtimeConfig);
+    const issued = issueRtcConfigForUser(user.id);
     return json(res,200,{
-      iceServers: liveIceServers,
-      turnConfigured: hasTurnServer(liveIceServers),
+      iceServers: issued.iceServers,
+      turnConfigured: runtimeConfig.turnConfigured,
+      turnAuthMode: issued.authMode,
+      credentialTtlSeconds: issued.credentialTtlSeconds,
+      credentialExpiresAt: issued.credentialExpiresAt,
       readiness: realtime.status,
       reason: realtime.reason,
       note: realtime.note,
-      credentialVisibility: 'TURN username/credential are browser-visible for WebRTC ICE; prefer short-lived credentials. Unrelated server secrets are never included.'
+      credentialVisibility: issued.authMode === 'shared_secret'
+        ? 'Short-lived TURN username/credential are browser-visible for WebRTC ICE. The shared secret is never included.'
+        : issued.authMode === 'static'
+          ? 'Static TURN username/credential are browser-visible for WebRTC ICE. Unrelated server secrets are never included.'
+          : 'No usable TURN client credentials are configured or returned.'
     });
   }
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}

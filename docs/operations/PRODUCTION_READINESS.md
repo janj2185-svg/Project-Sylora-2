@@ -21,7 +21,7 @@ No secrets are printed in boot error messages.
 
 ### Container recovery
 
-The Compose definition sets `restart: unless-stopped` on the application, PostgreSQL, and Redis services. After a host reboot, Docker restores the core stack without a manual `docker compose up` **only when the Docker service is enabled to start at boot and the containers were not intentionally stopped or removed**. Dependency health gates still control application startup, and `/api/ready` remains the authoritative traffic-readiness signal.
+The Compose definition sets `restart: unless-stopped` on the application, PostgreSQL, Redis, and opt-in TURN services. After a host reboot, Docker restores containers that were previously created without a manual `docker compose up` **only when the Docker service is enabled to start at boot and the containers were not intentionally stopped or removed**. Dependency health gates still control application startup, and `/api/ready` remains the authoritative traffic-readiness signal.
 
 ### Liveness — `GET /api/health`
 
@@ -70,11 +70,34 @@ API keys are never sent to clients or logged.
 
 | Status | When |
 |--------|------|
-| `READY` | TURN server configured in ICE list |
+| `READY` | TURN URL plus either short-lived shared-secret auth or complete static client credentials |
 | `DEGRADED` | Development without TURN (STUN-only or local) |
-| `NOT_READY` | Production LIVE capability without TURN |
+| `NOT_READY` | Production without TURN, or with a bare TURN URL that has no usable credentials |
 
-ICE servers are exposed only via authenticated `GET /api/live/rtc-config`. TURN username/credential are client WebRTC credentials (browser uses them with the TURN server).
+ICE servers are exposed only via authenticated `GET /api/live/rtc-config` and `GET /api/calls/rtc-config`. Preferred shared-secret mode derives a different time-limited username/credential for each authenticated user and returns its expiry. The browser refreshes cached RTC config at most every five minutes, at least one minute before credential expiry, and immediately after the authenticated session changes. The server-only `SYLORA_TURN_SHARED_SECRET` is never returned or retained in the public runtime configuration object. Static browser credentials remain supported as a fallback.
+
+Coturn checks the REST credential expiry during authentication; an already authenticated allocation remains active through its normal refresh lifecycle. Before any later WebRTC re-offer/answer on an existing peer, the browser reapplies a current RTC configuration, so a future ICE restart does not reuse credentials captured when a long session began.
+
+### Bundled coturn baseline
+
+The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host networking on Linux, and appends validated runtime-only authentication/address settings to a permission-restricted container-local config at startup. The committed base config:
+
+- listens on UDP/TCP `3478`;
+- bounds relay ports to `49160..49259`;
+- enables coturn REST API authentication, fingerprints, quotas, and unauthorized challenge rate limiting;
+- denies private/link-local/multicast IPv4 peers so the public relay cannot reach internal services;
+- hides the software attribute and writes logs to stdout;
+- intentionally disables TLS. A future `turns:` listener needs dedicated DNS and certificate lifecycle.
+
+Before first start, place the same 32–512 character `SYLORA_TURN_SHARED_SECRET` in `.env.local` (hex recommended), configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service:
+
+```bash
+docker compose --env-file .env.local --profile turn up -d
+```
+
+If the TURN host directly owns the public IPv4 address, leave `SYLORA_TURN_EXTERNAL_IP` and `SYLORA_TURN_RELAY_IP` empty. For a host behind 1:1 NAT, set both variables to its public and private IPv4 addresses. The NAT gateway must forward the listener and the complete relay range above for both TCP and UDP with identical external/internal port numbers. Startup rejects partial or malformed mappings; because Compose cannot detect an upstream NAT, topology verification remains an operator preflight. Only these TURN-specific values—not the rest of the application environment—are passed to coturn.
+
+Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.
 
 ### Redis policy
 
@@ -100,7 +123,7 @@ Diagnostics: `checks.redis.expectation` and `redis.capabilities` in config modul
 | PostgreSQL persistence | **CODE READY / EXTERNAL INFRA REQUIRED** | Boot guard enforces URL; cluster must be provisioned |
 | Redis scaling | **CODE READY / EXTERNAL INFRA REQUIRED** | Readiness reports when absent |
 | OpenAI AI | **CODE READY / EXTERNAL INFRA REQUIRED** | Honest unavailable state without key |
-| TURN / WebRTC NAT | **CODE READY / EXTERNAL INFRA REQUIRED** | Config layer only; no TURN server in Node app |
+| TURN / WebRTC NAT | **CODE + COMPOSE READY / HOST NETWORK CHANGE REQUIRED** | Pinned opt-in coturn profile; production still needs a shared secret, firewall rules, deployment, and an authenticated allocation check |
 | Payments | **BLOCKED_EXTERNAL** | Sandbox LUMEN; real provider keys needed |
 | Google OAuth | **BLOCKED_EXTERNAL** | See `/api/integrations/status` |
 

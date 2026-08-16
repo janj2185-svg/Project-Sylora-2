@@ -49,6 +49,25 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate Compose
+        run: docker compose --profile turn config -q
+
+      - name: Smoke test coturn profile
+        run: |
+          turn_smoke_secret='ci-only-not-a-secret-0000000000000000'
+          printf '%s\n' "SYLORA_TURN_SHARED_SECRET=$turn_smoke_secret" > .env.local
+          trap 'docker compose --env-file .env.local --profile turn logs turn; docker compose --env-file .env.local --profile turn down --remove-orphans' EXIT
+          docker compose --env-file .env.local --profile turn up -d turn
+          status=starting
+          for attempt in $(seq 1 30); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose --env-file .env.local --profile turn ps -q turn)")"
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          [ "$status" = healthy ]
+          docker compose --env-file .env.local --profile turn exec -T turn turnutils_stunclient -p 3478 127.0.0.1
+          SYLORA_TURN_SHARED_SECRET="$turn_smoke_secret" node .github/scripts/turn-allocation-smoke.mjs 127.0.0.1 3478
+
       - name: Test
         run: npm test
         env:

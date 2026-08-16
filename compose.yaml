@@ -51,6 +51,72 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  turn:
+    restart: unless-stopped
+    profiles: ["turn"]
+    image: coturn/coturn:4.17.2-r0
+    network_mode: host
+    # Deliberately pass only TURN-specific values. Do not expose the
+    # application's database, OpenAI, payment, or other .env.local values.
+    environment:
+      SYLORA_TURN_SHARED_SECRET: ${SYLORA_TURN_SHARED_SECRET:-}
+      SYLORA_TURN_EXTERNAL_IP: ${SYLORA_TURN_EXTERNAL_IP:-}
+      SYLORA_TURN_RELAY_IP: ${SYLORA_TURN_RELAY_IP:-}
+    volumes:
+      - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver-base.conf:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ "$${#SYLORA_TURN_SHARED_SECRET}" -lt 32 ] || [ "$${#SYLORA_TURN_SHARED_SECRET}" -gt 512 ]; then
+          echo "SYLORA_TURN_SHARED_SECRET must contain 32 to 512 characters" >&2
+          exit 1
+        fi
+        case "$$SYLORA_TURN_SHARED_SECRET" in
+          *[!A-Za-z0-9._~+/=-]*)
+            echo "SYLORA_TURN_SHARED_SECRET contains unsupported characters" >&2
+            exit 1
+            ;;
+        esac
+        valid_ipv4() {
+          value="$$1"
+          case "$$value" in
+            ''|*[!0-9.]*|.*|*..*|*.) return 1 ;;
+          esac
+          old_ifs="$$IFS"
+          IFS=.
+          set -- $$value
+          IFS="$$old_ifs"
+          [ "$$#" -eq 4 ] || return 1
+          for octet in "$$@"; do
+            [ "$$octet" -le 255 ] || return 1
+          done
+        }
+        external_ip="$${SYLORA_TURN_EXTERNAL_IP:-}"
+        relay_ip="$${SYLORA_TURN_RELAY_IP:-}"
+        if [ -n "$$external_ip" ] || [ -n "$$relay_ip" ]; then
+          if [ -z "$$external_ip" ] || [ -z "$$relay_ip" ]; then
+            echo "SYLORA_TURN_EXTERNAL_IP and SYLORA_TURN_RELAY_IP must be set together" >&2
+            exit 1
+          fi
+          if ! valid_ipv4 "$$external_ip" || ! valid_ipv4 "$$relay_ip"; then
+            echo "SYLORA_TURN_EXTERNAL_IP and SYLORA_TURN_RELAY_IP must be valid IPv4 addresses" >&2
+            exit 1
+          fi
+        fi
+        umask 077
+        cp /etc/coturn/turnserver-base.conf /tmp/turnserver.conf
+        printf '\nstatic-auth-secret=%s\n' "$$SYLORA_TURN_SHARED_SECRET" >> /tmp/turnserver.conf
+        if [ -n "$$external_ip" ]; then
+          printf 'relay-ip=%s\nexternal-ip=%s/%s\n' "$$relay_ip" "$$external_ip" "$$relay_ip" >> /tmp/turnserver.conf
+        fi
+        unset SYLORA_TURN_SHARED_SECRET SYLORA_TURN_EXTERNAL_IP SYLORA_TURN_RELAY_IP
+        exec turnserver -c /tmp/turnserver.conf
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 volumes:
   sylora-data:
   sylora-postgres:

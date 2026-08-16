@@ -1,9 +1,78 @@
-const ALLOWED_ICE_SCHEMES = /^(stun|stuns|turn|turns):/i;
+import { createHmac } from 'node:crypto';
+import { isIP } from 'node:net';
 
-function cleanUrl(value) {
+const ALLOWED_ICE_SCHEMES = new Set(['stun', 'stuns', 'turn', 'turns']);
+const STUN_SCHEMES = new Set(['stun', 'stuns']);
+const TURN_SCHEMES = new Set(['turn', 'turns']);
+const MIN_TURN_TTL_SECONDS = 300;
+const MAX_TURN_TTL_SECONDS = 86_400;
+const MIN_TURN_SHARED_SECRET_LENGTH = 32;
+const MAX_TURN_SHARED_SECRET_LENGTH = 512;
+const TURN_SHARED_SECRET_PATTERN = /^[A-Za-z0-9._~+/=-]+$/;
+
+export const DEFAULT_TURN_TTL_SECONDS = 3_600;
+
+function validIceEndpoint(endpoint) {
+  let host;
+  let port;
+  if (endpoint.startsWith('[')) {
+    const match = /^\[([0-9a-f:.]+)\](?::([0-9]{1,5}))?$/i.exec(endpoint);
+    if (!match || isIP(match[1]) !== 6) return false;
+    [, host, port] = match;
+  } else {
+    const match = /^([a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?)(?::([0-9]{1,5}))?$/i.exec(endpoint);
+    if (!match) return false;
+    [, host, port] = match;
+    if (host.includes('..') || host.split('.').some(label => label.length > 63)) return false;
+  }
+  if (port && (Number(port) < 1 || Number(port) > 65_535)) return false;
+  return true;
+}
+
+function cleanUrl(value, schemes = ALLOWED_ICE_SCHEMES) {
   const url = String(value || '').trim();
-  if (!url || url.length > 512 || !ALLOWED_ICE_SCHEMES.test(url)) return null;
+  if (!url || url.length > 512 || /[\u0000-\u0020\u007f]/.test(url)) return null;
+  const match = /^(stun|stuns|turn|turns):([^?]+)(?:\?(.+))?$/i.exec(url);
+  if (!match) return null;
+  const scheme = match[1].toLowerCase();
+  if (!schemes.has(scheme) || !validIceEndpoint(match[2])) return null;
+  if (match[3] && (!TURN_SCHEMES.has(scheme) || !/^transport=(udp|tcp)$/i.test(match[3]))) return null;
   return url;
+}
+
+function cleanClientCredential(value, maxLength) {
+  const credential = String(value || '').trim();
+  if (!credential || credential.length > maxLength) return null;
+  return credential;
+}
+
+function cleanTurnSharedSecret(value) {
+  const secret = String(value || '');
+  if (secret.length < MIN_TURN_SHARED_SECRET_LENGTH
+    || secret.length > MAX_TURN_SHARED_SECRET_LENGTH
+    || secret !== secret.trim()
+    || !TURN_SHARED_SECRET_PATTERN.test(secret)) return null;
+  return secret;
+}
+
+function urlsFor(server) {
+  return Array.isArray(server?.urls) ? server.urls : [server?.urls];
+}
+
+function serverHasTurn(server) {
+  return urlsFor(server).some(url => {
+    const scheme = /^([a-z]+):/i.exec(String(url || ''))?.[1]?.toLowerCase();
+    return TURN_SCHEMES.has(scheme);
+  });
+}
+
+export function parseTurnTtlSeconds(raw) {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return DEFAULT_TURN_TTL_SECONDS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < MIN_TURN_TTL_SECONDS || value > MAX_TURN_TTL_SECONDS) {
+    throw new Error(`Invalid SYLORA_TURN_TTL_SECONDS configuration; expected an integer from ${MIN_TURN_TTL_SECONDS} to ${MAX_TURN_TTL_SECONDS}.`);
+  }
+  return value;
 }
 
 export function parseIceServers(raw) {
@@ -15,11 +84,13 @@ export function parseIceServers(raw) {
   for (const item of input.slice(0, 8)) {
     if (!item || typeof item !== 'object') continue;
     const sourceUrls = Array.isArray(item.urls) ? item.urls.slice(0, 8) : [item.urls];
-    const urls = sourceUrls.map(cleanUrl).filter(Boolean);
+    const urls = sourceUrls.map(value => cleanUrl(value)).filter(Boolean);
     if (!urls.length) continue;
     const server = { urls: Array.isArray(item.urls) ? urls : urls[0] };
-    if (typeof item.username === 'string' && item.username.length <= 256) server.username = item.username;
-    if (typeof item.credential === 'string' && item.credential.length <= 512) server.credential = item.credential;
+    const username = cleanClientCredential(item.username, 256);
+    const credential = cleanClientCredential(item.credential, 512);
+    if (username) server.username = username;
+    if (credential) server.credential = credential;
     result.push(server);
   }
   return result;
@@ -28,25 +99,25 @@ export function parseIceServers(raw) {
 function parseStunUrls(raw) {
   return String(raw || '')
     .split(/[,\s]+/)
-    .map(cleanUrl)
+    .map(value => cleanUrl(value, STUN_SCHEMES))
     .filter(Boolean)
     .slice(0, 8);
 }
 
 function turnFromEnv(env = process.env) {
-  const url = cleanUrl(env.SYLORA_TURN_URL);
+  const url = cleanUrl(env.SYLORA_TURN_URL, TURN_SCHEMES);
   if (!url) return null;
   const server = { urls: url };
-  const username = String(env.SYLORA_TURN_USERNAME || '').trim();
-  const credential = String(env.SYLORA_TURN_CREDENTIAL || '').trim();
-  if (username && username.length <= 256) server.username = username;
-  if (credential && credential.length <= 512) server.credential = credential;
+  const username = cleanClientCredential(env.SYLORA_TURN_USERNAME, 256);
+  const credential = cleanClientCredential(env.SYLORA_TURN_CREDENTIAL, 512);
+  if (username) server.username = username;
+  if (credential) server.credential = credential;
   return server;
 }
 
 /**
  * Build ICE server list from JSON blob and/or discrete STUN/TURN env vars.
- * TURN username/credential are client-side WebRTC credentials when exposed via rtc-config endpoint.
+ * Static TURN username/credential values are client-side WebRTC credentials.
  */
 export function buildIceServersFromEnv(env = process.env) {
   const fromJson = parseIceServers(env.SYLORA_ICE_SERVERS_JSON);
@@ -61,5 +132,89 @@ export function buildIceServersFromEnv(env = process.env) {
 }
 
 export function hasTurnServer(iceServers = []) {
-  return iceServers.some(server => (Array.isArray(server.urls) ? server.urls : [server.urls]).some(url => /^turns?:/i.test(String(url || ''))));
+  return iceServers.some(serverHasTurn);
+}
+
+export function hasStaticTurnCredentials(iceServers = []) {
+  return iceServers.some(server => serverHasTurn(server)
+    && cleanClientCredential(server.username, 256)
+    && cleanClientCredential(server.credential, 512));
+}
+
+/**
+ * Resolve TURN readiness without retaining the shared secret in runtime config.
+ */
+export function resolveTurnConfiguration(iceServers = [], env = process.env) {
+  const urlConfigured = hasTurnServer(iceServers);
+  const sharedSecretConfigured = !!cleanTurnSharedSecret(env.SYLORA_TURN_SHARED_SECRET);
+  const staticCredentialsConfigured = hasStaticTurnCredentials(iceServers);
+  const authMode = !urlConfigured
+    ? null
+    : sharedSecretConfigured
+      ? 'shared_secret'
+      : staticCredentialsConfigured
+        ? 'static'
+        : null;
+  return {
+    urlConfigured,
+    configured: urlConfigured && !!authMode,
+    authMode,
+    credentialTtlSeconds: parseTurnTtlSeconds(env.SYLORA_TURN_TTL_SECONDS)
+  };
+}
+
+function credentialSubject(userId) {
+  const subject = String(userId || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .slice(0, 128);
+  if (!subject) throw new Error('TURN credentials require an authenticated user id.');
+  return subject;
+}
+
+function epochSeconds(value) {
+  const milliseconds = value instanceof Date ? value.getTime() : Number(value);
+  if (!Number.isFinite(milliseconds)) throw new Error('Invalid TURN credential issue time.');
+  return Math.floor(milliseconds / 1_000);
+}
+
+/**
+ * Issue coturn TURN REST API credentials for one authenticated user.
+ * The shared secret is used only for HMAC generation and is never returned.
+ */
+export function issueIceServersForUser(iceServers = [], {
+  env = process.env,
+  userId,
+  now = Date.now()
+} = {}) {
+  const turn = resolveTurnConfiguration(iceServers, env);
+  const clonedServers = iceServers.map(server => ({
+    ...server,
+    urls: Array.isArray(server.urls) ? [...server.urls] : server.urls
+  }));
+
+  if (turn.authMode !== 'shared_secret') {
+    return {
+      iceServers: clonedServers,
+      authMode: turn.authMode,
+      credentialTtlSeconds: null,
+      credentialExpiresAt: null,
+      credentialExpiresAtEpochSeconds: null
+    };
+  }
+
+  const secret = cleanTurnSharedSecret(env.SYLORA_TURN_SHARED_SECRET);
+  const expiresAtEpochSeconds = epochSeconds(now) + turn.credentialTtlSeconds;
+  const username = `${expiresAtEpochSeconds}:${credentialSubject(userId)}`;
+  const credential = createHmac('sha1', secret).update(username).digest('base64');
+  const issuedServers = clonedServers.map(server => serverHasTurn(server)
+    ? { ...server, username, credential }
+    : server);
+
+  return {
+    iceServers: issuedServers,
+    authMode: turn.authMode,
+    credentialTtlSeconds: turn.credentialTtlSeconds,
+    credentialExpiresAt: new Date(expiresAtEpochSeconds * 1_000).toISOString(),
+    credentialExpiresAtEpochSeconds: expiresAtEpochSeconds
+  };
 }
