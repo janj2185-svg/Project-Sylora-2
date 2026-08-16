@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
@@ -10,6 +11,13 @@ import {
   validateProductionConfig
 } from '../src/config.mjs';
 import { buildReadinessReport } from '../src/runtime-status.mjs';
+
+test('Docker Compose restarts every core service after a host reboot', () => {
+  const compose = readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
+  for (const service of ['sylora', 'postgres', 'redis']) {
+    assert.match(compose, new RegExp(`^  ${service}:\n    restart: unless-stopped$`, 'm'));
+  }
+});
 
 test('TEST 1: development without DATABASE_URL allows startup config', () => {
   const config = loadRuntimeConfig({ NODE_ENV: 'development', DATABASE_URL: '' });
