@@ -41,7 +41,7 @@ export function publicRealtimeDiagnostics(config) {
       : null,
     iceServerCount: config.iceServers.length,
     note: config.turnAuthMode === 'shared_secret'
-      ? 'Short-lived TURN credentials are delivered to authenticated browsers via /api/live/rtc-config.'
+      ? 'Short-lived TURN credentials are delivered to authenticated browsers via the LIVE and call RTC config endpoints.'
       : config.turnConfigured
         ? 'Static TURN credentials are delivered to authenticated browsers via /api/live/rtc-config.'
         : config.turnUrlConfigured

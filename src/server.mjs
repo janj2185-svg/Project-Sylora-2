@@ -589,7 +589,9 @@ async function api(req, res, url) {
       note: realtime.note,
       credentialVisibility: issued.authMode === 'shared_secret'
         ? 'Short-lived TURN username/credential are browser-visible for WebRTC ICE. The shared secret is never included.'
-        : 'Static TURN username/credential are browser-visible for WebRTC ICE. Unrelated server secrets are never included.'
+        : issued.authMode === 'static'
+          ? 'Static TURN username/credential are browser-visible for WebRTC ICE. Unrelated server secrets are never included.'
+          : 'No usable TURN client credentials are configured or returned.'
     });
   }
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
