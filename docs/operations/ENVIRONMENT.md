@@ -48,13 +48,21 @@ Without Redis, LIVE works on a single instance with in-memory fallbacks. Missing
 
 | Variable | Required | Dev | Test | Production | Notes |
 |----------|----------|-----|------|------------|-------|
-| `SYLORA_ICE_SERVERS_JSON` | Optional | empty | test JSON | **Required for production LIVE WebRTC** | JSON array of ICE server objects |
+| `SYLORA_ICE_SERVERS_JSON` | Optional | empty | test JSON | optional | JSON array of ICE server objects; when non-empty it takes precedence over the discrete URL variables |
 | `SYLORA_STUN_URLS` | Optional | empty | — | optional | Comma-separated STUN URLs (used when JSON empty) |
-| `SYLORA_TURN_URL` | Optional | empty | — | **Required for production LIVE** | TURN URL (`turn:` or `turns:`) |
-| `SYLORA_TURN_USERNAME` | With TURN | — | — | with TURN | Client WebRTC credential (exposed to browser via `/api/live/rtc-config`) |
-| `SYLORA_TURN_CREDENTIAL` | With TURN | — | — | with TURN | Client WebRTC credential (browser-side; not a server secret in the WebRTC sense) |
+| `SYLORA_TURN_URL` | Optional | empty | — | **Required for production LIVE unless JSON contains TURN** | TURN URL (`turn:` or `turns:`) |
+| `SYLORA_TURN_SHARED_SECRET` | Preferred with TURN | — | test secret | **Preferred** | Server-only coturn REST API secret, 32–512 characters. Shared by the app and coturn; never returned to browsers |
+| `SYLORA_TURN_TTL_SECONDS` | Optional | `3600` | test value | `3600` | Short-lived credential TTL; whole seconds in the inclusive range `300..86400` |
+| `SYLORA_TURN_USERNAME` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
+| `SYLORA_TURN_CREDENTIAL` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
 
-TURN is external infrastructure. Configuration support does not deploy a TURN server.
+Production readiness requires both a TURN URL and usable authentication. A bare `turn:` URL now reports `TURN_CREDENTIALS_NOT_CONFIGURED`; it does not create false readiness. Shared-secret mode takes precedence over static credentials and derives per-user coturn REST credentials as `<expiry>:<userId>` plus Base64 HMAC-SHA1. Only the derived username/password and expiry are returned by the authenticated `/api/live/rtc-config` and `/api/calls/rtc-config` endpoints.
+
+The repository includes an opt-in, pinned `turn` Compose profile using `coturn/coturn:4.17.2-r0`. Its baseline listener is plain TURN over UDP/TCP `3478`, with TCP/UDP relay ports `49160..49259`; TLS/`turns:` requires a separate certificate deployment. Start it only after adding the shared secret to `.env.local` and opening exactly those listener/relay ports:
+
+```bash
+docker compose --profile turn up -d
+```
 
 ## Payments
 

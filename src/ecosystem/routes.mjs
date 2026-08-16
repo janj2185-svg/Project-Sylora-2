@@ -8,7 +8,8 @@ export async function handleEcosystemRoutes(ctx) {
     aiListPendingActions, aiListMemories, aiUpdateMemory, aiClearMemories,
     aiListActivity, aiClearActivity, findUserById, findUserByUsername,
     listHomePosts, listHomeConversations, listHomeNotifications,
-    callPeerRegistry, callStreams, liveIceServers, hasTurnServer
+    callPeerRegistry, callStreams, liveIceServers, hasTurnServer,
+    issueRtcConfigForUser, turnConfigured
   } = ctx;
   const p = url.pathname;
   let m;
@@ -897,9 +898,22 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'GET' && p === '/api/calls/rtc-config') {
     const user = await requireUser(req, res); if (!user) return true;
     const iceServers = liveIceServers || [];
+    const issued = typeof issueRtcConfigForUser === 'function'
+      ? issueRtcConfigForUser(user.id)
+      : {
+        iceServers,
+        authMode: null,
+        credentialTtlSeconds: null,
+        credentialExpiresAt: null
+      };
     return json(res, 200, {
-      iceServers,
-      turnConfigured: typeof hasTurnServer === 'function' ? hasTurnServer(iceServers) : false,
+      iceServers: issued.iceServers,
+      turnConfigured: typeof turnConfigured === 'boolean'
+        ? turnConfigured
+        : typeof hasTurnServer === 'function' && hasTurnServer(iceServers),
+      turnAuthMode: issued.authMode,
+      credentialTtlSeconds: issued.credentialTtlSeconds,
+      credentialExpiresAt: issued.credentialExpiresAt,
       engine: 'call_engine_shared_webrtc'
     }), true;
   }

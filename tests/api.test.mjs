@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { hashPassword } from '../src/auth.mjs';
 
 function seedAdmin(file, { email, username, password }) {
@@ -27,6 +27,9 @@ test('auth → post → gift → ledger works end to end', async () => {
     email: 'alice@test.dev', username: 'alice', password: 'password123'
   });
   process.env.SYLORA_ICE_SERVERS_JSON = JSON.stringify([{ urls: 'stun:stun.test.invalid:3478' }, { urls: 'turn:turn.test.invalid:3478', username: 'test-user', credential: 'test-credential' }]);
+  const turnSharedSecret = 'test-only-shared-secret-0123456789abcdef';
+  process.env.SYLORA_TURN_SHARED_SECRET = turnSharedSecret;
+  process.env.SYLORA_TURN_TTL_SECONDS = '600';
   const { server } = await import(`../src/server.mjs?test=${Date.now()}`);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
@@ -52,6 +55,24 @@ test('auth → post → gift → ledger works end to end', async () => {
     const rtcConfig = await call('/api/live/rtc-config', { headers: auth });
     assert.equal(rtcConfig.iceServers.length, 2);
     assert.equal(rtcConfig.turnConfigured, true);
+    assert.equal(rtcConfig.turnAuthMode, 'shared_secret');
+    assert.equal(rtcConfig.credentialTtlSeconds, 600);
+    const issuedTurn = rtcConfig.iceServers.find(server => String(server.urls).startsWith('turn:'));
+    assert.equal(issuedTurn.username.endsWith(`:${alice.user.id}`), true);
+    assert.equal(
+      issuedTurn.credential,
+      createHmac('sha1', turnSharedSecret).update(issuedTurn.username).digest('base64')
+    );
+    assert.equal(Date.parse(rtcConfig.credentialExpiresAt) > Date.now(), true);
+    assert.equal(JSON.stringify(rtcConfig).includes(turnSharedSecret), false);
+    const callsRtcConfig = await call('/api/calls/rtc-config', { headers: auth });
+    assert.equal(callsRtcConfig.turnAuthMode, 'shared_secret');
+    const callsTurn = callsRtcConfig.iceServers.find(server => String(server.urls).startsWith('turn:'));
+    assert.equal(callsTurn.username.endsWith(`:${alice.user.id}`), true);
+    assert.equal(
+      callsTurn.credential,
+      createHmac('sha1', turnSharedSecret).update(callsTurn.username).digest('base64')
+    );
     const persistedAuth = JSON.parse(fs.readFileSync(process.env.SYLORA_DATA_FILE, 'utf8'));
     assert.equal(persistedAuth.sessions.every(s => !('token' in s) && typeof s.tokenHash === 'string' && s.tokenHash.length === 64), true);
     assert.equal(alice.user.role, 'admin');
@@ -210,6 +231,8 @@ test('auth → post → gift → ledger works end to end', async () => {
     const filteredFeed = await call('/api/feed', { headers: auth });
     assert.equal(filteredFeed.posts.some(p => p.id === bobPost.post.id), false);
   } finally {
+    delete process.env.SYLORA_TURN_SHARED_SECRET;
+    delete process.env.SYLORA_TURN_TTL_SECONDS;
     await new Promise(resolve => server.close(resolve));
   }
 });

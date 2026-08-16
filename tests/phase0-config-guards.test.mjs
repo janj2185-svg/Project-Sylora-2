@@ -14,7 +14,7 @@ import { buildReadinessReport } from '../src/runtime-status.mjs';
 
 test('Docker Compose restarts every core service after a host reboot', () => {
   const compose = readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
-  for (const service of ['sylora', 'postgres', 'redis']) {
+  for (const service of ['sylora', 'postgres', 'redis', 'turn']) {
     assert.match(compose, new RegExp(`^  ${service}:\n    restart: unless-stopped$`, 'm'));
   }
 });

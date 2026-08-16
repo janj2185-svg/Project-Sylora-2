@@ -21,7 +21,7 @@ No secrets are printed in boot error messages.
 
 ### Container recovery
 
-The Compose definition sets `restart: unless-stopped` on the application, PostgreSQL, and Redis services. After a host reboot, Docker restores the core stack without a manual `docker compose up` **only when the Docker service is enabled to start at boot and the containers were not intentionally stopped or removed**. Dependency health gates still control application startup, and `/api/ready` remains the authoritative traffic-readiness signal.
+The Compose definition sets `restart: unless-stopped` on the application, PostgreSQL, Redis, and opt-in TURN services. After a host reboot, Docker restores containers that were previously created without a manual `docker compose up` **only when the Docker service is enabled to start at boot and the containers were not intentionally stopped or removed**. Dependency health gates still control application startup, and `/api/ready` remains the authoritative traffic-readiness signal.
 
 ### Liveness — `GET /api/health`
 
@@ -70,11 +70,30 @@ API keys are never sent to clients or logged.
 
 | Status | When |
 |--------|------|
-| `READY` | TURN server configured in ICE list |
+| `READY` | TURN URL plus either short-lived shared-secret auth or complete static client credentials |
 | `DEGRADED` | Development without TURN (STUN-only or local) |
-| `NOT_READY` | Production LIVE capability without TURN |
+| `NOT_READY` | Production without TURN, or with a bare TURN URL that has no usable credentials |
 
-ICE servers are exposed only via authenticated `GET /api/live/rtc-config`. TURN username/credential are client WebRTC credentials (browser uses them with the TURN server).
+ICE servers are exposed only via authenticated `GET /api/live/rtc-config` and `GET /api/calls/rtc-config`. Preferred shared-secret mode derives a different time-limited username/credential for each authenticated user and returns its expiry. The server-only `SYLORA_TURN_SHARED_SECRET` is never returned or retained in the public runtime configuration object. Static browser credentials remain supported as a fallback.
+
+### Bundled coturn baseline
+
+The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host networking on Linux, and appends the shared secret to a permission-restricted container-local config at startup. The committed base config:
+
+- listens on UDP/TCP `3478`;
+- bounds relay ports to `49160..49259`;
+- enables coturn REST API authentication, fingerprints, quotas, and unauthorized challenge rate limiting;
+- denies private/link-local/multicast IPv4 peers so the public relay cannot reach internal services;
+- hides the software attribute and writes logs to stdout;
+- intentionally disables TLS. A future `turns:` listener needs dedicated DNS and certificate lifecycle.
+
+Before first start, place the same 32+ character `SYLORA_TURN_SHARED_SECRET` in the application/coturn `.env.local`, configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service:
+
+```bash
+docker compose --profile turn up -d
+```
+
+Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.
 
 ### Redis policy
 
@@ -100,7 +119,7 @@ Diagnostics: `checks.redis.expectation` and `redis.capabilities` in config modul
 | PostgreSQL persistence | **CODE READY / EXTERNAL INFRA REQUIRED** | Boot guard enforces URL; cluster must be provisioned |
 | Redis scaling | **CODE READY / EXTERNAL INFRA REQUIRED** | Readiness reports when absent |
 | OpenAI AI | **CODE READY / EXTERNAL INFRA REQUIRED** | Honest unavailable state without key |
-| TURN / WebRTC NAT | **CODE READY / EXTERNAL INFRA REQUIRED** | Config layer only; no TURN server in Node app |
+| TURN / WebRTC NAT | **CODE + COMPOSE READY / HOST NETWORK CHANGE REQUIRED** | Pinned opt-in coturn profile; production still needs a shared secret, firewall rules, deployment, and an authenticated allocation check |
 | Payments | **BLOCKED_EXTERNAL** | Sandbox LUMEN; real provider keys needed |
 | Google OAuth | **BLOCKED_EXTERNAL** | See `/api/integrations/status` |
 

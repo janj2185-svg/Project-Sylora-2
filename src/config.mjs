@@ -3,7 +3,7 @@
  * never logs secret values.
  */
 
-import { buildIceServersFromEnv, hasTurnServer } from './rtc-config.mjs';
+import { buildIceServersFromEnv, resolveTurnConfiguration } from './rtc-config.mjs';
 
 export const RuntimeMode = Object.freeze({
   DEVELOPMENT: 'development',
@@ -60,6 +60,7 @@ export function loadRuntimeConfig(env = process.env) {
   const databaseUrl = get('DATABASE_URL');
   const paymentProvider = get('PAYMENT_PROVIDER') || get('SYLORA_PAYMENT_PROVIDER');
   const iceServers = buildIceServersFromEnv(env);
+  const turn = resolveTurnConfiguration(iceServers, env);
 
   // Secret values are intentionally NOT stored on the config object.
   // Callers that need them must read process.env / provided env directly.
@@ -95,7 +96,10 @@ export function loadRuntimeConfig(env = process.env) {
       enableHsts: env.SYLORA_ENABLE_HSTS === '1'
     },
     iceServers,
-    turnConfigured: hasTurnServer(iceServers)
+    turnUrlConfigured: turn.urlConfigured,
+    turnConfigured: turn.configured,
+    turnAuthMode: turn.authMode,
+    turnCredentialTtlSeconds: turn.credentialTtlSeconds
   };
 
   config.ai.status = resolveAiStatus(config, env);
@@ -117,10 +121,13 @@ export function resolveAiStatus(config, env = process.env) {
 
 export function resolveRealtimeStatus(config) {
   if (config.turnConfigured) return { status: REALTIME_STATUS.READY, reason: 'TURN_CONFIGURED' };
+  const reason = config.turnUrlConfigured
+    ? 'TURN_CREDENTIALS_NOT_CONFIGURED'
+    : 'TURN_NOT_CONFIGURED';
   if (config.nodeEnv === RuntimeMode.PRODUCTION) {
-    return { status: REALTIME_STATUS.NOT_READY, reason: 'TURN_NOT_CONFIGURED' };
+    return { status: REALTIME_STATUS.NOT_READY, reason };
   }
-  return { status: REALTIME_STATUS.DEGRADED, reason: 'TURN_NOT_CONFIGURED' };
+  return { status: REALTIME_STATUS.DEGRADED, reason };
 }
 
 export function validateProductionConfig(config) {

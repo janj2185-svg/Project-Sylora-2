@@ -51,6 +51,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  turn:
+    restart: unless-stopped
+    profiles: ["turn"]
+    image: coturn/coturn:4.17.2-r0
+    network_mode: host
+    env_file:
+      - path: .env.local
+        required: false
+    volumes:
+      - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver-base.conf:ro
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ "$${#SYLORA_TURN_SHARED_SECRET}" -lt 32 ]; then
+          echo "SYLORA_TURN_SHARED_SECRET must contain at least 32 characters" >&2
+          exit 1
+        fi
+        umask 077
+        cp /etc/coturn/turnserver-base.conf /tmp/turnserver.conf
+        printf '\nstatic-auth-secret=%s\n' "$$SYLORA_TURN_SHARED_SECRET" >> /tmp/turnserver.conf
+        unset SYLORA_TURN_SHARED_SECRET
+        exec turnserver -c /tmp/turnserver.conf
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 volumes:
   sylora-data:
   sylora-postgres:
