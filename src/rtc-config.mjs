@@ -1,8 +1,9 @@
 import { createHmac } from 'node:crypto';
+import { isIP } from 'node:net';
 
-const ALLOWED_ICE_SCHEMES = /^(stun|stuns|turn|turns):/i;
-const STUN_SCHEMES = /^stuns?:/i;
-const TURN_SCHEMES = /^turns?:/i;
+const ALLOWED_ICE_SCHEMES = new Set(['stun', 'stuns', 'turn', 'turns']);
+const STUN_SCHEMES = new Set(['stun', 'stuns']);
+const TURN_SCHEMES = new Set(['turn', 'turns']);
 const MIN_TURN_TTL_SECONDS = 300;
 const MAX_TURN_TTL_SECONDS = 86_400;
 const MIN_TURN_SHARED_SECRET_LENGTH = 32;
@@ -11,9 +12,31 @@ const TURN_SHARED_SECRET_PATTERN = /^[A-Za-z0-9._~+/=-]+$/;
 
 export const DEFAULT_TURN_TTL_SECONDS = 3_600;
 
+function validIceEndpoint(endpoint) {
+  let host;
+  let port;
+  if (endpoint.startsWith('[')) {
+    const match = /^\[([0-9a-f:.]+)\](?::([0-9]{1,5}))?$/i.exec(endpoint);
+    if (!match || isIP(match[1]) !== 6) return false;
+    [, host, port] = match;
+  } else {
+    const match = /^([a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?)(?::([0-9]{1,5}))?$/i.exec(endpoint);
+    if (!match) return false;
+    [, host, port] = match;
+    if (host.includes('..') || host.split('.').some(label => label.length > 63)) return false;
+  }
+  if (port && (Number(port) < 1 || Number(port) > 65_535)) return false;
+  return true;
+}
+
 function cleanUrl(value, schemes = ALLOWED_ICE_SCHEMES) {
   const url = String(value || '').trim();
-  if (!url || url.length > 512 || !schemes.test(url)) return null;
+  if (!url || url.length > 512 || /[\u0000-\u0020\u007f]/.test(url)) return null;
+  const match = /^(stun|stuns|turn|turns):([^?]+)(?:\?(.+))?$/i.exec(url);
+  if (!match) return null;
+  const scheme = match[1].toLowerCase();
+  if (!schemes.has(scheme) || !validIceEndpoint(match[2])) return null;
+  if (match[3] && (!TURN_SCHEMES.has(scheme) || !/^transport=(udp|tcp)$/i.test(match[3]))) return null;
   return url;
 }
 
@@ -37,7 +60,10 @@ function urlsFor(server) {
 }
 
 function serverHasTurn(server) {
-  return urlsFor(server).some(url => TURN_SCHEMES.test(String(url || '')));
+  return urlsFor(server).some(url => {
+    const scheme = /^([a-z]+):/i.exec(String(url || ''))?.[1]?.toLowerCase();
+    return TURN_SCHEMES.has(scheme);
+  });
 }
 
 export function parseTurnTtlSeconds(raw) {

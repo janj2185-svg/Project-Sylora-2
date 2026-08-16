@@ -62,6 +62,18 @@ test('RTC config accepts only bounded STUN/TURN server definitions', () => {
 test('RTC config fails closed for malformed input', () => {
   assert.deepEqual(parseIceServers('{bad json'), []);
   assert.deepEqual(parseIceServers(JSON.stringify({ urls: 'stun:x' })), []);
+  for (const url of [
+    'turn:',
+    'turn://turn.example.test:3478',
+    'turn:turn.example.test:0',
+    'turn:turn.example.test:65536',
+    'turn:turn.example.test:3478?transport=sctp',
+    'stun:stun.example.test:3478?transport=udp',
+    'turn:[::::]:3478',
+    'turn:turn.example.test:3478\nno-auth'
+  ]) {
+    assert.deepEqual(parseIceServers(JSON.stringify([{ urls: url }])), []);
+  }
   assert.equal(hasTurnServer([]), false);
 });
 
