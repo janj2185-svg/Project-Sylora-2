@@ -17,6 +17,11 @@ import {
 } from '../src/config.mjs';
 import { integrationStatus } from '../src/integrations.mjs';
 import { buildReadinessReport } from '../src/runtime-status.mjs';
+import {
+  RTC_CONFIG_CACHE_MAX_MS,
+  RTC_CONFIG_EXPIRY_SAFETY_MS,
+  isRtcConfigCacheFresh
+} from '../public/rtc-config-cache.js';
 
 const DATABASE_URL = 'postgresql://sylora:test@postgres:5432/sylora';
 const TURN_URL = 'turn:turn.example.test:3478?transport=udp';
@@ -169,6 +174,26 @@ test('TURN credential TTL is bounded', () => {
       /Invalid SYLORA_TURN_TTL_SECONDS configuration/
     );
   }
+});
+
+test('browser RTC cache refreshes before credential expiry and across long sessions', () => {
+  const now = Date.UTC(2026, 7, 16, 12, 0, 0);
+  const staticConfig = { iceServers: [{ urls: 'turn:turn.example.test:3478' }] };
+  const expiringConfig = {
+    ...staticConfig,
+    credentialExpiresAt: new Date(now + RTC_CONFIG_EXPIRY_SAFETY_MS + 1_000).toISOString()
+  };
+  const nearExpiryConfig = {
+    ...staticConfig,
+    credentialExpiresAt: new Date(now + RTC_CONFIG_EXPIRY_SAFETY_MS).toISOString()
+  };
+
+  assert.equal(isRtcConfigCacheFresh(staticConfig, { fetchedAt: now - 1_000, now }), true);
+  assert.equal(isRtcConfigCacheFresh(expiringConfig, { fetchedAt: now - 1_000, now }), true);
+  assert.equal(isRtcConfigCacheFresh(nearExpiryConfig, { fetchedAt: now - 1_000, now }), false);
+  assert.equal(isRtcConfigCacheFresh(staticConfig, { fetchedAt: now - RTC_CONFIG_CACHE_MAX_MS, now }), false);
+  assert.equal(isRtcConfigCacheFresh(staticConfig, { fetchedAt: now + 1, now }), false);
+  assert.equal(isRtcConfigCacheFresh(null, { fetchedAt: now, now }), false);
 });
 
 test('discrete STUN and TURN variables reject the wrong URL schemes', () => {
