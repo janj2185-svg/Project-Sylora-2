@@ -14,7 +14,7 @@ import { PostgresAuthSocialRepository } from './repositories/postgres-auth-socia
 import { PostgresWalletRepository } from './repositories/postgres-wallet.mjs';
 import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
-import { hasTurnServer, issueIceServersForUser } from './rtc-config.mjs';
+import { issueIceServersForUser } from './rtc-config.mjs';
 import { loadRuntimeConfig, enforceProductionBootGuard } from './config.mjs';
 import { buildLivenessReport, buildReadinessReport, publicAiDiagnostics } from './runtime-status.mjs';
 import { LiveFanout } from './live-fanout.mjs';
@@ -387,7 +387,7 @@ async function api(req, res, url) {
     listHomePosts, listHomeConversations, listHomeNotifications,
     findUserById: id => authService.findUserById(id),
     findUserByUsername: username => authService.findUserByUsername(username),
-    callPeerRegistry, callStreams, liveIceServers, hasTurnServer,
+    callPeerRegistry, callStreams, liveIceServers,
     issueRtcConfigForUser, turnConfigured: runtimeConfig.turnConfigured
   })) return;
   if(req.method==='GET'&&p==='/api/events'){const user=await requireUser(req,res);if(!user)return;res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: ready\ndata: ${JSON.stringify({userId:user.id})}\n\n`);if(!userStreams.has(user.id))userStreams.set(user.id,new Set());const targets=userStreams.get(user.id);targets.add(res);const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25000);req.on('close',()=>{clearInterval(heartbeat);targets.delete(res);if(!targets.size)userStreams.delete(user.id)});return;}

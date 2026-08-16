@@ -8,7 +8,7 @@ export async function handleEcosystemRoutes(ctx) {
     aiListPendingActions, aiListMemories, aiUpdateMemory, aiClearMemories,
     aiListActivity, aiClearActivity, findUserById, findUserByUsername,
     listHomePosts, listHomeConversations, listHomeNotifications,
-    callPeerRegistry, callStreams, liveIceServers, hasTurnServer,
+    callPeerRegistry, callStreams, liveIceServers,
     issueRtcConfigForUser, turnConfigured
   } = ctx;
   const p = url.pathname;
@@ -908,9 +908,7 @@ export async function handleEcosystemRoutes(ctx) {
       };
     return json(res, 200, {
       iceServers: issued.iceServers,
-      turnConfigured: typeof turnConfigured === 'boolean'
-        ? turnConfigured
-        : typeof hasTurnServer === 'function' && hasTurnServer(iceServers),
+      turnConfigured: turnConfigured === true,
       turnAuthMode: issued.authMode,
       credentialTtlSeconds: issued.credentialTtlSeconds,
       credentialExpiresAt: issued.credentialExpiresAt,

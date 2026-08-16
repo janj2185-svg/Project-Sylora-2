@@ -43,7 +43,7 @@ export function publicRealtimeDiagnostics(config) {
     note: config.turnAuthMode === 'shared_secret'
       ? 'Short-lived TURN credentials are delivered to authenticated browsers via the LIVE and call RTC config endpoints.'
       : config.turnConfigured
-        ? 'Static TURN credentials are delivered to authenticated browsers via /api/live/rtc-config.'
+        ? 'Static TURN credentials are delivered to authenticated browsers via the LIVE and call RTC config endpoints.'
         : config.turnUrlConfigured
           ? 'TURN URL is present but usable client credentials are not configured.'
           : 'NAT traversal degraded without TURN; STUN-only may fail on restrictive networks.'
