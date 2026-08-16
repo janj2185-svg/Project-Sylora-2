@@ -57,7 +57,9 @@ test('auth → post → gift → ledger works end to end', async () => {
     assert.equal(rtcConfig.turnConfigured, true);
     assert.equal(rtcConfig.turnAuthMode, 'shared_secret');
     assert.equal(rtcConfig.credentialTtlSeconds, 600);
-    const issuedTurn = rtcConfig.iceServers.find(server => String(server.urls).startsWith('turn:'));
+    const hasTurnUrl = server => [server.urls].flat().some(url => /^turns?:/i.test(String(url)));
+    const issuedTurn = rtcConfig.iceServers.find(hasTurnUrl);
+    assert.ok(issuedTurn, 'live RTC config should include a TURN server');
     assert.equal(issuedTurn.username.endsWith(`:${alice.user.id}`), true);
     assert.equal(
       issuedTurn.credential,
@@ -67,7 +69,8 @@ test('auth → post → gift → ledger works end to end', async () => {
     assert.equal(JSON.stringify(rtcConfig).includes(turnSharedSecret), false);
     const callsRtcConfig = await call('/api/calls/rtc-config', { headers: auth });
     assert.equal(callsRtcConfig.turnAuthMode, 'shared_secret');
-    const callsTurn = callsRtcConfig.iceServers.find(server => String(server.urls).startsWith('turn:'));
+    const callsTurn = callsRtcConfig.iceServers.find(hasTurnUrl);
+    assert.ok(callsTurn, 'calls RTC config should include a TURN server');
     assert.equal(callsTurn.username.endsWith(`:${alice.user.id}`), true);
     assert.equal(
       callsTurn.credential,

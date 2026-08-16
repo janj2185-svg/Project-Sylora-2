@@ -17,7 +17,9 @@ export function integrationStatus(env = process.env) {
       authMode: config.turnAuthMode,
       note: config.turnAuthMode === 'shared_secret'
         ? 'Short-lived TURN credentials are issued to authenticated browsers; the shared secret remains server-only.'
-        : 'Set a TURN URL plus SYLORA_TURN_SHARED_SECRET, or complete static username/credential values.'
+        : config.turnAuthMode === 'static'
+          ? 'Static TURN username/credential are configured; rotate them manually.'
+          : 'Set a TURN URL plus SYLORA_TURN_SHARED_SECRET, or complete static username/credential values.'
     },
     payments: {
       status: config.payments.configured || env.PAYMENT_PROVIDER_API_KEY ? 'CONFIGURED' : 'BLOCKED_EXTERNAL',

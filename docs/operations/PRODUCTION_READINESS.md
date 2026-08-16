@@ -76,9 +76,11 @@ API keys are never sent to clients or logged.
 
 ICE servers are exposed only via authenticated `GET /api/live/rtc-config` and `GET /api/calls/rtc-config`. Preferred shared-secret mode derives a different time-limited username/credential for each authenticated user and returns its expiry. The browser refreshes cached RTC config at most every five minutes, at least one minute before credential expiry, and immediately after the authenticated session changes. The server-only `SYLORA_TURN_SHARED_SECRET` is never returned or retained in the public runtime configuration object. Static browser credentials remain supported as a fallback.
 
+Coturn checks the REST credential expiry during authentication; an already authenticated allocation remains active through its normal refresh lifecycle. Before any later WebRTC re-offer/answer on an existing peer, the browser reapplies a current RTC configuration, so a future ICE restart does not reuse credentials captured when a long session began.
+
 ### Bundled coturn baseline
 
-The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host networking on Linux, and appends the shared secret to a permission-restricted container-local config at startup. The committed base config:
+The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host networking on Linux, and appends validated runtime-only authentication/address settings to a permission-restricted container-local config at startup. The committed base config:
 
 - listens on UDP/TCP `3478`;
 - bounds relay ports to `49160..49259`;
@@ -87,11 +89,13 @@ The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host netw
 - hides the software attribute and writes logs to stdout;
 - intentionally disables TLS. A future `turns:` listener needs dedicated DNS and certificate lifecycle.
 
-Before first start, place the same 32–512 character `SYLORA_TURN_SHARED_SECRET` in `.env.local` (hex recommended), configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service. Compose passes only that secret—not the rest of the application environment—to coturn:
+Before first start, place the same 32–512 character `SYLORA_TURN_SHARED_SECRET` in `.env.local` (hex recommended), configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service:
 
 ```bash
 docker compose --env-file .env.local --profile turn up -d
 ```
+
+If the TURN host directly owns the public IPv4 address, leave `SYLORA_TURN_EXTERNAL_IP` and `SYLORA_TURN_RELAY_IP` empty. For a host behind 1:1 NAT, set both variables to its public and private IPv4 addresses. The NAT gateway must forward the listener and the complete relay range above for both TCP and UDP with identical external/internal port numbers. Startup rejects partial or malformed mappings; because Compose cannot detect an upstream NAT, topology verification remains an operator preflight. Only these TURN-specific values—not the rest of the application environment—are passed to coturn.
 
 Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.
 

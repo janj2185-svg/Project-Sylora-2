@@ -53,6 +53,8 @@ Without Redis, LIVE works on a single instance with in-memory fallbacks. Missing
 | `SYLORA_TURN_URL` | Optional | empty | — | **Required for production LIVE unless JSON contains TURN** | TURN URL (`turn:` or `turns:`) |
 | `SYLORA_TURN_SHARED_SECRET` | Preferred with TURN | — | test secret | **Preferred** | Server-only coturn REST API secret, 32–512 characters using letters, digits, `._~+/=-` (hex recommended). Shared by the app and coturn; never returned to browsers |
 | `SYLORA_TURN_TTL_SECONDS` | Optional | `3600` | test value | `3600` | Short-lived credential TTL; whole seconds in the inclusive range `300..86400` |
+| `SYLORA_TURN_EXTERNAL_IP` | 1:1 NAT only | — | — | public IPv4 | Public address advertised by coturn; set together with `SYLORA_TURN_RELAY_IP` only when the host is behind 1:1 NAT |
+| `SYLORA_TURN_RELAY_IP` | 1:1 NAT only | — | — | private IPv4 | Address owned by the TURN host behind NAT; set together with `SYLORA_TURN_EXTERNAL_IP` |
 | `SYLORA_TURN_USERNAME` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
 | `SYLORA_TURN_CREDENTIAL` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
 
@@ -64,7 +66,9 @@ The repository includes an opt-in, pinned `turn` Compose profile using `coturn/c
 docker compose --env-file .env.local --profile turn up -d
 ```
 
-The TURN service receives only `SYLORA_TURN_SHARED_SECRET`; the rest of the application's `.env.local` is not exposed to the coturn container.
+When the host interface directly owns its public IPv4 address, leave `SYLORA_TURN_EXTERNAL_IP` and `SYLORA_TURN_RELAY_IP` empty. Behind 1:1 NAT, set both to the public and host-private IPv4 addresses respectively, and forward `3478/tcp`, `3478/udp`, plus every TCP/UDP relay port in `49160..49259` without port translation. The container rejects a partial or malformed pair. Compose cannot infer whether an upstream NAT exists, so the operator must verify this topology before rollout.
+
+The TURN service receives only the shared secret and the two optional TURN address values; the rest of the application's `.env.local` is not exposed to the coturn container.
 
 ## Payments
 

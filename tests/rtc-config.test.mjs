@@ -110,21 +110,25 @@ test('integration status uses strict TURN auth readiness', () => {
   assert.equal(bare.turn.authMode, null);
   assert.equal(shared.turn.status, 'CONFIGURED');
   assert.equal(shared.turn.authMode, 'shared_secret');
+  assert.match(shared.turn.note, /Short-lived TURN credentials/);
 });
 
 test('static TURN credentials remain supported and satisfy readiness', () => {
-  const config = loadRuntimeConfig({
+  const env = {
     NODE_ENV: 'production',
     DATABASE_URL,
     SYLORA_TURN_URL: TURN_URL,
     SYLORA_TURN_USERNAME: 'static-user',
     SYLORA_TURN_CREDENTIAL: 'static-password'
-  });
+  };
+  const config = loadRuntimeConfig(env);
+  const status = integrationStatus(env);
 
   assert.equal(config.turnConfigured, true);
   assert.equal(config.turnAuthMode, 'static');
   assert.equal(config.realtime.status, REALTIME_STATUS.READY);
   assert.equal(buildReadinessReport(config, healthyDependencies()).ready, true);
+  assert.match(status.turn.note, /Static TURN username\/credential are configured/);
 });
 
 test('shared-secret mode issues deterministic coturn REST credentials with an expiry', () => {
@@ -238,15 +242,22 @@ test('discrete STUN and TURN variables reject the wrong URL schemes', () => {
 test('coturn deployment is pinned, opt-in, bounded, and contains no committed secret', () => {
   const compose = readFileSync(new URL('../compose.yaml', import.meta.url), 'utf8');
   const turnserver = readFileSync(new URL('../infra/coturn/turnserver.conf', import.meta.url), 'utf8');
+  const turnService = compose.match(/^  turn:\n[\s\S]*?(?=^  [A-Za-z0-9_-]+:\n|^volumes:\n)/m)?.[0];
 
+  assert.ok(turnService, 'turn service should exist');
   assert.match(compose, /image: coturn\/coturn:4\.17\.2-r0/);
   assert.match(compose, /profiles: \["turn"\]/);
   assert.match(compose, /network_mode: host/);
-  assert.match(compose, /SYLORA_TURN_SHARED_SECRET/);
-  assert.doesNotMatch(compose, /turn:\s+[\s\S]*?env_file:/);
-  assert.match(compose, /environment:\s+SYLORA_TURN_SHARED_SECRET:/);
+  assert.doesNotMatch(turnService, /^    env_file:/m);
+  assert.match(turnService, /^    environment:/m);
+  assert.match(turnService, /^      SYLORA_TURN_SHARED_SECRET:/m);
+  assert.match(turnService, /^      SYLORA_TURN_EXTERNAL_IP:/m);
+  assert.match(turnService, /^      SYLORA_TURN_RELAY_IP:/m);
+  assert.match(turnService, /external-ip=%s\/%s/);
+  assert.match(turnService, /must be set together/);
   assert.match(turnserver, /^use-auth-secret$/m);
   assert.match(turnserver, /^min-port=49160$/m);
   assert.match(turnserver, /^max-port=49259$/m);
   assert.doesNotMatch(turnserver, /^static-auth-secret=/m);
+  assert.doesNotMatch(turnserver, /^external-ip=/m);
 });
