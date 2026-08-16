@@ -164,6 +164,22 @@ test('short shared secret is rejected instead of producing false readiness', () 
   assert.equal(turn.authMode, null);
 });
 
+test('shared secret rejects whitespace and config-injection characters', () => {
+  const iceServers = buildIceServersFromEnv({ SYLORA_TURN_URL: TURN_URL });
+  for (const secret of [
+    ` ${SHARED_SECRET}`,
+    `${SHARED_SECRET} `,
+    `${SHARED_SECRET}\nno-auth`,
+    `${SHARED_SECRET}:unsupported`
+  ]) {
+    const turn = resolveTurnConfiguration(iceServers, {
+      SYLORA_TURN_SHARED_SECRET: secret
+    });
+    assert.equal(turn.configured, false);
+    assert.equal(turn.authMode, null);
+  }
+});
+
 test('TURN credential TTL is bounded', () => {
   assert.equal(parseTurnTtlSeconds(undefined), DEFAULT_TURN_TTL_SECONDS);
   assert.equal(parseTurnTtlSeconds('300'), 300);
@@ -215,6 +231,8 @@ test('coturn deployment is pinned, opt-in, bounded, and contains no committed se
   assert.match(compose, /profiles: \["turn"\]/);
   assert.match(compose, /network_mode: host/);
   assert.match(compose, /SYLORA_TURN_SHARED_SECRET/);
+  assert.doesNotMatch(compose, /turn:\s+[\s\S]*?env_file:/);
+  assert.match(compose, /environment:\s+SYLORA_TURN_SHARED_SECRET:/);
   assert.match(turnserver, /^use-auth-secret$/m);
   assert.match(turnserver, /^min-port=49160$/m);
   assert.match(turnserver, /^max-port=49259$/m);

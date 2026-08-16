@@ -51,7 +51,7 @@ Without Redis, LIVE works on a single instance with in-memory fallbacks. Missing
 | `SYLORA_ICE_SERVERS_JSON` | Optional | empty | test JSON | optional | JSON array of ICE server objects; when non-empty it takes precedence over the discrete URL variables |
 | `SYLORA_STUN_URLS` | Optional | empty | — | optional | Comma-separated STUN URLs (used when JSON empty) |
 | `SYLORA_TURN_URL` | Optional | empty | — | **Required for production LIVE unless JSON contains TURN** | TURN URL (`turn:` or `turns:`) |
-| `SYLORA_TURN_SHARED_SECRET` | Preferred with TURN | — | test secret | **Preferred** | Server-only coturn REST API secret, 32–512 characters. Shared by the app and coturn; never returned to browsers |
+| `SYLORA_TURN_SHARED_SECRET` | Preferred with TURN | — | test secret | **Preferred** | Server-only coturn REST API secret, 32–512 characters using letters, digits, `._~+/=-` (hex recommended). Shared by the app and coturn; never returned to browsers |
 | `SYLORA_TURN_TTL_SECONDS` | Optional | `3600` | test value | `3600` | Short-lived credential TTL; whole seconds in the inclusive range `300..86400` |
 | `SYLORA_TURN_USERNAME` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
 | `SYLORA_TURN_CREDENTIAL` | Static TURN fallback | — | — | fallback only | Static client credential exposed to authenticated browsers |
@@ -61,8 +61,10 @@ Production readiness requires both a TURN URL and usable authentication. A bare 
 The repository includes an opt-in, pinned `turn` Compose profile using `coturn/coturn:4.17.2-r0`. Its baseline listener is plain TURN over UDP/TCP `3478`, with TCP/UDP relay ports `49160..49259`; TLS/`turns:` requires a separate certificate deployment. Start it only after adding the shared secret to `.env.local` and opening exactly those listener/relay ports:
 
 ```bash
-docker compose --profile turn up -d
+docker compose --env-file .env.local --profile turn up -d
 ```
+
+The TURN service receives only `SYLORA_TURN_SHARED_SECRET`; the rest of the application's `.env.local` is not exposed to the coturn container.
 
 ## Payments
 

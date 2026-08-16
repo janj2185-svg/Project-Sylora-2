@@ -87,10 +87,10 @@ The opt-in `turn` Compose profile pins `coturn/coturn:4.17.2-r0`, uses host netw
 - hides the software attribute and writes logs to stdout;
 - intentionally disables TLS. A future `turns:` listener needs dedicated DNS and certificate lifecycle.
 
-Before first start, place the same 32+ character `SYLORA_TURN_SHARED_SECRET` in the application/coturn `.env.local`, configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service:
+Before first start, place the same 32–512 character `SYLORA_TURN_SHARED_SECRET` in `.env.local` (hex recommended), configure a public `turn:` URL, and open only `3478/tcp`, `3478/udp`, `49160:49259/tcp`, and `49160:49259/udp`. Then create the optional service. Compose passes only that secret—not the rest of the application environment—to coturn:
 
 ```bash
-docker compose --profile turn up -d
+docker compose --env-file .env.local --profile turn up -d
 ```
 
 Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.

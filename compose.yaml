@@ -56,18 +56,25 @@ services:
     profiles: ["turn"]
     image: coturn/coturn:4.17.2-r0
     network_mode: host
-    env_file:
-      - path: .env.local
-        required: false
+    # Deliberately pass only the TURN secret. Do not expose the application's
+    # database, OpenAI, payment, or other .env.local values to coturn.
+    environment:
+      SYLORA_TURN_SHARED_SECRET: ${SYLORA_TURN_SHARED_SECRET:-}
     volumes:
       - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver-base.conf:ro
     entrypoint: ["/bin/sh", "-ec"]
     command:
       - |
-        if [ "$${#SYLORA_TURN_SHARED_SECRET}" -lt 32 ]; then
-          echo "SYLORA_TURN_SHARED_SECRET must contain at least 32 characters" >&2
+        if [ "$${#SYLORA_TURN_SHARED_SECRET}" -lt 32 ] || [ "$${#SYLORA_TURN_SHARED_SECRET}" -gt 512 ]; then
+          echo "SYLORA_TURN_SHARED_SECRET must contain 32 to 512 characters" >&2
           exit 1
         fi
+        case "$$SYLORA_TURN_SHARED_SECRET" in
+          *[!A-Za-z0-9._~+/=-]*)
+            echo "SYLORA_TURN_SHARED_SECRET contains unsupported characters" >&2
+            exit 1
+            ;;
+        esac
         umask 077
         cp /etc/coturn/turnserver-base.conf /tmp/turnserver.conf
         printf '\nstatic-auth-secret=%s\n' "$$SYLORA_TURN_SHARED_SECRET" >> /tmp/turnserver.conf

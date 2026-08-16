@@ -6,6 +6,8 @@ const TURN_SCHEMES = /^turns?:/i;
 const MIN_TURN_TTL_SECONDS = 300;
 const MAX_TURN_TTL_SECONDS = 86_400;
 const MIN_TURN_SHARED_SECRET_LENGTH = 32;
+const MAX_TURN_SHARED_SECRET_LENGTH = 512;
+const TURN_SHARED_SECRET_PATTERN = /^[A-Za-z0-9._~+/=-]+$/;
 
 export const DEFAULT_TURN_TTL_SECONDS = 3_600;
 
@@ -22,8 +24,11 @@ function cleanClientCredential(value, maxLength) {
 }
 
 function cleanTurnSharedSecret(value) {
-  const secret = String(value || '').trim();
-  if (secret.length < MIN_TURN_SHARED_SECRET_LENGTH || secret.length > 512) return null;
+  const secret = String(value || '');
+  if (secret.length < MIN_TURN_SHARED_SECRET_LENGTH
+    || secret.length > MAX_TURN_SHARED_SECRET_LENGTH
+    || secret !== secret.trim()
+    || !TURN_SHARED_SECRET_PATTERN.test(secret)) return null;
   return secret;
 }
 
