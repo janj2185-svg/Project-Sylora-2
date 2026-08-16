@@ -66,7 +66,7 @@ The `users` row is the account source. Repository code maps snake-case SQL colum
 
 ## Migration contract
 
-`src/migrations.mjs` is the only migration manifest. It applies `001_initial_schema` through `014_session_status_invalidation` in a fixed order while holding a session advisory lock so concurrent deploy runners cannot race.
+`src/migrations.mjs` is the only migration manifest. It contains 16 immutable entries from `001_initial_schema` through `014_session_status_invalidation`, including the historical `012_social_comment_reactions` and `013_dm_attachments_gift_refund` entries. They are kept byte-for-byte so fresh databases and long-lived production databases converge on the same schema and checksum ledger. The runner uses a fixed order and holds a session advisory lock so concurrent deploy runners cannot race.
 
 Each migration:
 
@@ -75,14 +75,14 @@ Each migration:
 - is skipped only when the recorded checksum matches;
 - fails on a changed historical migration instead of silently applying drift.
 
-Migration 013 is additive and non-destructive. It adds account lifecycle/timestamps, case-insensitive unique indexes, session lookup indexing, persisted personal-agent settings, and AI-memory metadata. Migration 014 locks account-status writes while it removes legacy sessions belonging to non-active users and installs a status-change trigger that revokes sessions when an active account becomes disabled or blocked. The targeted session deletion is required to prevent stale credential resurrection on upgrade; it does not delete accounts or product data. The case-insensitive unique indexes intentionally fail if a legacy database contains conflicting accounts; an operator must resolve those records explicitly rather than allowing a silent merge.
+The restored historical migrations are additive and non-destructive: `012_social_comment_reactions` adds comment edit/reaction storage, while `013_dm_attachments_gift_refund` adds DM attachment metadata and the gift refund marker. `013_phase1_identity_auth` adds account lifecycle/timestamps, case-insensitive unique indexes, session lookup indexing, persisted personal-agent settings, and AI-memory metadata. Migration 014 locks account-status writes while it removes legacy sessions belonging to non-active users and installs a status-change trigger that revokes sessions when an active account becomes disabled or blocked. The targeted session deletion is required to prevent stale credential resurrection on upgrade; it does not delete accounts or product data. The case-insensitive unique indexes intentionally fail if a legacy database contains conflicting accounts; an operator must resolve those records explicitly rather than allowing a silent merge.
 
 The schema includes UUID primary keys, ownership foreign keys, targeted unique constraints, indexes on session expiry and common owner/time queries, timezone-aware timestamps, and cascades for account-owned sessions/social/AI data. Domain-specific exceptions in historical tables were not destructively rewritten.
 
 ## Verification evidence
 
 - `tests/migrations.test.mjs`: ordered manifest, fixed checksums, required schema/constraints, transactional application, idempotency, and drift rejection.
-- `tests/phase1-postgres.integration.mjs`: fresh PostgreSQL schema, all 14 migrations with concurrent runners, legacy disabled-session upgrade cleanup, atomic registration/wallet provisioning, concurrent account/profile/control patches, status/logout revocation, profile/home/API-key/AI-control persistence across instances and restart, provider-context memory gating, and proof that the configured JSON path is never created.
+- `tests/phase1-postgres.integration.mjs`: fresh PostgreSQL schema, all 16 manifest migrations with concurrent runners, legacy disabled-session upgrade cleanup, atomic registration/wallet provisioning, concurrent account/profile/control patches, status/logout revocation, profile/home/API-key/AI-control persistence across instances and restart, provider-context memory gating, and proof that the configured JSON path is never created.
 - `tests/postgres-*.test.mjs`: repository-level behavior under `pg-mem`; these complement but do not replace the PostgreSQL 16 integration test.
 
 ## Open persistence gaps

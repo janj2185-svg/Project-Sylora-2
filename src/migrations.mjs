@@ -19,6 +19,8 @@ export const MIGRATION_FILES = Object.freeze([
   ['010_ecosystem_core', 'infra/postgres/migrations/010_ecosystem_core.sql'],
   ['011_ecosystem_runtime', 'infra/postgres/migrations/011_ecosystem_runtime.sql'],
   ['012_live_runtime_state', 'infra/postgres/migrations/012_live_runtime_state.sql'],
+  ['012_social_comment_reactions', 'infra/postgres/migrations/012_social_comment_reactions.sql'],
+  ['013_dm_attachments_gift_refund', 'infra/postgres/migrations/013_dm_attachments_gift_refund.sql'],
   ['013_phase1_identity_auth', 'infra/postgres/migrations/013_phase1_identity_auth.sql'],
   ['014_session_status_invalidation', 'infra/postgres/migrations/014_session_status_invalidation.sql']
 ]);
