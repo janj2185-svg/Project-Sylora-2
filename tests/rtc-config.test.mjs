@@ -15,6 +15,7 @@ import {
   REALTIME_STATUS,
   loadRuntimeConfig
 } from '../src/config.mjs';
+import { integrationStatus } from '../src/integrations.mjs';
 import { buildReadinessReport } from '../src/runtime-status.mjs';
 
 const DATABASE_URL = 'postgresql://sylora:test@postgres:5432/sylora';
@@ -72,6 +73,26 @@ test('bare TURN URL is not production-ready without usable credentials', () => {
   assert.equal(config.realtime.status, REALTIME_STATUS.NOT_READY);
   assert.equal(config.realtime.reason, 'TURN_CREDENTIALS_NOT_CONFIGURED');
   assert.equal(buildReadinessReport(config, healthyDependencies()).ready, false);
+});
+
+test('integration status uses strict TURN auth readiness', () => {
+  const bare = integrationStatus({
+    NODE_ENV: 'production',
+    DATABASE_URL,
+    SYLORA_TURN_URL: TURN_URL
+  });
+  const shared = integrationStatus({
+    NODE_ENV: 'production',
+    DATABASE_URL,
+    SYLORA_TURN_URL: TURN_URL,
+    SYLORA_TURN_SHARED_SECRET: SHARED_SECRET
+  });
+
+  assert.equal(bare.turn.status, 'BLOCKED_EXTERNAL');
+  assert.equal(bare.turn.reason, 'TURN_CREDENTIALS_NOT_CONFIGURED');
+  assert.equal(bare.turn.authMode, null);
+  assert.equal(shared.turn.status, 'CONFIGURED');
+  assert.equal(shared.turn.authMode, 'shared_secret');
 });
 
 test('static TURN credentials remain supported and satisfy readiness', () => {
