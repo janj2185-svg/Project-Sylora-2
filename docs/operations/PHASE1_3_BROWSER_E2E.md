@@ -46,6 +46,8 @@ SYLORA_E2E_AUTH_TOKEN='<ephemeral bearer token>' \
 npm run test:e2e:production:relay
 ```
 
+For a safer remote run, configure `SYLORA_E2E_AUTH_TOKEN` as a GitHub Actions secret, then run **Actions → Production relay probe → Run workflow** on the deployed revision. The workflow is manual-only, grants `contents: read`, and exposes the secret only to the relay step. `SYLORA_E2E_SECURE_PROBE=1` disables Playwright traces, screenshots, videos, and the HTML report so authenticated request metadata is not retained as an artifact.
+
 Never print, commit, upload, or store the bearer token in a Playwright report. The test sends it only in the authenticated RTC-config request. Production registration is intentionally not automated: the read-only probe must not accumulate test accounts or content.
 
 ## CI contract

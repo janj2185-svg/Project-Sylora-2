@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const externalBaseUrl = String(process.env.SYLORA_E2E_BASE_URL || '').trim();
 const port = Number(process.env.SYLORA_E2E_PORT || 8791);
 const baseURL = externalBaseUrl || `http://127.0.0.1:${port}`;
+const secureProbe = process.env.SYLORA_E2E_SECURE_PROBE === '1';
 
 export default defineConfig({
   testDir: './e2e',
@@ -13,15 +14,17 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI
+  reporter: secureProbe
+    ? 'line'
+    : process.env.CI
     ? [['line'], ['html', { outputFolder: 'tmp/playwright-report', open: 'never' }]]
     : 'line',
   use: {
     baseURL,
     ...devices['Desktop Chrome'],
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    trace: secureProbe ? 'off' : 'retain-on-failure',
+    screenshot: secureProbe ? 'off' : 'only-on-failure',
+    video: secureProbe ? 'off' : 'retain-on-failure'
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: externalBaseUrl
