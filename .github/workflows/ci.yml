@@ -8,7 +8,7 @@ jobs:
   checks:
     name: lint-build-test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -43,6 +43,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Lint
         run: npm run lint
 
@@ -52,7 +55,18 @@ jobs:
       - name: Validate Compose
         run: docker compose --profile turn config -q
 
-      - name: Smoke test coturn profile
+      - name: Test
+        run: npm test
+        env:
+          DATABASE_URL: ''
+          REDIS_URL: ''
+
+      - name: PostgreSQL migrations and critical path
+        run: npm run test:postgres
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sylora_phase1_test
+
+      - name: Browser smoke, LIVE signaling, and coturn allocation
         run: |
           turn_smoke_secret='ci-only-not-a-secret-0000000000000000'
           printf '%s\n' "SYLORA_TURN_SHARED_SECRET=$turn_smoke_secret" > .env.local
@@ -67,14 +81,20 @@ jobs:
           [ "$status" = healthy ]
           docker compose --env-file .env.local --profile turn exec -T turn turnutils_stunclient -p 3478 127.0.0.1
           SYLORA_TURN_SHARED_SECRET="$turn_smoke_secret" node .github/scripts/turn-allocation-smoke.mjs 127.0.0.1 3478
+          SYLORA_TURN_SHARED_SECRET="$turn_smoke_secret" \
+          SYLORA_ICE_SERVERS_JSON='[{"urls":["turn:127.0.0.1:3478?transport=udp","turn:127.0.0.1:3478?transport=tcp"]}]' \
+          SYLORA_E2E_WEBRTC=1 \
+          SYLORA_E2E_REQUIRE_RELAY=0 \
+          SYLORA_E2E_DATA_FILE=./tmp/ci-playwright.json \
+          npm run test:e2e
 
-      - name: Test
-        run: npm test
-        env:
-          DATABASE_URL: ''
-          REDIS_URL: ''
-
-      - name: PostgreSQL migrations and critical path
-        run: npm run test:postgres
-        env:
-          TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sylora_phase1_test
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            tmp/playwright-results
+            tmp/playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

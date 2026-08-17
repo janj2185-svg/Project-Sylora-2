@@ -10,7 +10,13 @@
     "db:migrate": "node scripts/migrate.mjs",
     "test": "DATABASE_URL= REDIS_URL= node --test --test-force-exit tests/*.test.mjs",
     "test:postgres": "node --test --test-force-exit tests/phase1-postgres.integration.mjs",
-    "lint": "node --check src/server.mjs && node --check src/auth.mjs && node --check src/services/auth-service.mjs && node --check src/migrations.mjs && node --check scripts/generate-api-inventory.mjs && node --check src/config.mjs && node --check src/runtime-status.mjs && node --check src/rtc-config.mjs && node --check src/integrations.mjs && node --check src/ecosystem/service.mjs && node --check src/ecosystem/routes.mjs && node --check src/ecosystem/providers.mjs && node --check src/ecosystem/sylora-intelligence.mjs && node --check src/ecosystem/domain-intelligence.mjs && node --check public/app.js && node --check public/rtc-config-cache.js && node --check public/i18n.js && node --check public/create-hub.js && node --check public/command-palette.js && node --check public/sylora-motion.js",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:smoke": "playwright test e2e/production-readonly.spec.mjs e2e/auth-shell.spec.mjs --project=chromium",
+    "test:e2e:webrtc": "playwright test e2e/live-webrtc.spec.mjs --project=chromium",
+    "test:e2e:production": "playwright test e2e/production-readonly.spec.mjs --project=chromium",
+    "test:e2e:production:relay": "playwright test e2e/production-relay.spec.mjs --project=chromium",
+    "lint": "node --check src/server.mjs && node --check src/auth.mjs && node --check src/services/auth-service.mjs && node --check src/migrations.mjs && node --check scripts/generate-api-inventory.mjs && node --check src/config.mjs && node --check src/runtime-status.mjs && node --check src/rtc-config.mjs && node --check src/integrations.mjs && node --check src/ecosystem/service.mjs && node --check src/ecosystem/routes.mjs && node --check src/ecosystem/providers.mjs && node --check src/ecosystem/sylora-intelligence.mjs && node --check src/ecosystem/domain-intelligence.mjs && node --check public/app.js && node --check public/rtc-config-cache.js && node --check public/i18n.js && node --check public/create-hub.js && node --check public/command-palette.js && node --check public/sylora-motion.js && npm run lint:e2e",
+    "lint:e2e": "node --check playwright.config.mjs && node --check e2e/helpers.mjs && node --check e2e/production-readonly.spec.mjs && node --check e2e/auth-shell.spec.mjs && node --check e2e/live-webrtc.spec.mjs && node --check e2e/production-relay.spec.mjs",
     "typecheck": "node --check src/ecosystem/*.mjs",
     "build": "node --check src/server.mjs && node --check src/auth.mjs && node --check src/services/auth-service.mjs && node --check src/migrations.mjs && node --check src/config.mjs && node --check src/runtime-status.mjs && node --check public/app.js && node --check public/rtc-config-cache.js && node --check public/i18n.js && node --check public/create-hub.js"
   },
@@ -24,6 +30,7 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "pg-mem": "^3.0.14"
   }
 }

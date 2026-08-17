@@ -99,6 +99,8 @@ If the TURN host directly owns the public IPv4 address, leave `SYLORA_TURN_EXTER
 
 Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.
 
+Browser-level acceptance, including the two-context Studio host → viewer scenario and the read-only/relay-only production probes, is documented in [`PHASE1_3_BROWSER_E2E.md`](./PHASE1_3_BROWSER_E2E.md).
+
 ### Redis policy
 
 Redis is **not** required to boot in development.

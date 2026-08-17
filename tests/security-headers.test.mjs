@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -36,6 +37,14 @@ test('security headers include production HSTS/CSP upgrades when enabled', async
     const csp = res.headers.get('content-security-policy') || '';
     assert.match(csp, /upgrade-insecure-requests/);
     assert.match(csp, /https:\/\/companion\.example/);
+    for (const file of ['public/index.html', 'public/obs-overlay.html', 'public/phoenix-preview.html']) {
+      const html = fs.readFileSync(file, 'utf8');
+      const importMap = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)?.[1];
+      assert.ok(importMap, `${file} must include an import map`);
+      const importMapHash = createHash('sha256').update(importMap).digest('base64');
+      assert.ok(csp.includes(`'sha256-${importMapHash}'`), `CSP must allow the exact import map in ${file}`);
+    }
+    assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
     assert.equal(res.headers.get('strict-transport-security'), 'max-age=31536000; includeSubDomains');
     assert.equal(res.headers.get('x-frame-options'), 'DENY');
   } finally {

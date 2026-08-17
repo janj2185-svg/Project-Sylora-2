@@ -21,4 +21,6 @@ export const GIFT_V2_PASSPORTS=Object.freeze([
   ['celestial-city','Celestial City','seedgrid-erect-awaken-compress','aerial-street-window-skyline','district-awakening-perspective','city-to-glass-cube']
 ].map(([id,name,motion,camera,climax,ending])=>Object.freeze({id,name,motion,camera,climax,ending})));
 
+export const GIFT_V2_CATALOG=GIFT_V2_PASSPORTS;
+
 export const giftPassport=id=>GIFT_V2_PASSPORTS.find(x=>x.id===id)||null;
