@@ -161,7 +161,7 @@ function securityHeaders(res) {
   res.setHeader('permissions-policy', 'camera=(self), microphone=(self), geolocation=()');
   const csp = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",

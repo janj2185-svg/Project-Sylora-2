@@ -13,14 +13,26 @@ test('@production health, readiness, and shell are available without writes', as
   expect(ready.ready).toBe(true);
   expect(ready.status).toBe('ready');
 
-  const pageErrors = [];
-  page.on('pageerror', error => pageErrors.push(error.message));
+  const runtimeErrors = [];
+  page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
+  page.on('console', message => {
+    const text = message.text();
+    if (/ownRooms is not defined|Failed to resolve module specifier ["']three["']|violates the following Content Security Policy directive/.test(text)) {
+      runtimeErrors.push(`console: ${text}`);
+    }
+  });
   await page.goto('/');
   await expect(page.locator('.brand')).toBeVisible();
   await expect(page.locator('#globalSearch')).toBeVisible();
   await expect(page.locator('#signin')).toBeVisible();
   await expect(page.locator('#app')).not.toContainText('Запускаємо SYLORA');
-  expect(pageErrors).toEqual([]);
+  await expect.poll(
+    () => page.evaluate(() => window.__syloraGiftEngineState ?? 'missing'),
+    { timeout: 12_000 }
+  ).toMatch(/^(ready|failed)$/);
+  const giftEngineState = await page.evaluate(() => window.__syloraGiftEngineState);
+  expect(giftEngineState, JSON.stringify(runtimeErrors)).toBe('ready');
+  expect(runtimeErrors).toEqual([]);
 });
 
 test('@production shell has no horizontal overflow at supported breakpoints', async ({ page }) => {

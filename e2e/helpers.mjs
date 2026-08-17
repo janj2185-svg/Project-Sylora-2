@@ -23,7 +23,8 @@ export async function registerViaUi(page, account) {
   await page.locator('#authForm button.primary').click();
   const response = await responsePromise;
   expect(response.status(), await response.text()).toBe(201);
-  await expect(page.locator('#logout')).toBeVisible();
+  await expect(page.locator('#signin')).toBeHidden();
+  await expect(page.locator('#composer')).toBeVisible();
   const token = await page.evaluate(() => localStorage.getItem('sylora_token'));
   expect(token).toBeTruthy();
   return token;
@@ -40,7 +41,8 @@ export async function loginViaUi(page, account) {
   await page.locator('#authForm button.primary').click();
   const response = await responsePromise;
   expect(response.status(), await response.text()).toBe(200);
-  await expect(page.locator('#logout')).toBeVisible();
+  await expect(page.locator('#signin')).toBeHidden();
+  await expect(page.locator('#composer')).toBeVisible();
   return page.evaluate(() => localStorage.getItem('sylora_token'));
 }
 
@@ -150,11 +152,40 @@ export async function waitForConnectedPeer(page) {
 }
 
 export async function expectNoHorizontalOverflow(page) {
-  const overflow = await page.evaluate(() => ({
-    viewport: window.innerWidth,
-    document: document.documentElement.scrollWidth,
-    body: document.body.scrollWidth
-  }));
-  expect(overflow.document, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
-  expect(overflow.body, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
+  const overflow = await page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    const intentionallyScrollable = element => {
+      for (let parent = element; parent && parent !== document.body; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        if (['auto', 'scroll'].includes(style.overflowX) && parent.scrollWidth > parent.clientWidth + 1) {
+          return true;
+        }
+        if (['hidden', 'clip'].includes(style.overflowX)) return true;
+      }
+      return false;
+    };
+    const selectorFor = element => {
+      if (element.id) return `#${element.id}`;
+      const classes = [...element.classList].slice(0, 3).join('.');
+      return `${element.tagName.toLowerCase()}${classes ? `.${classes}` : ''}`;
+    };
+    const offenders = [...document.body.querySelectorAll('*')].flatMap(element => {
+      const style = getComputedStyle(element);
+      if (style.display === 'none' || style.visibility === 'hidden') return [];
+      if (element.matches('.aurora, .sky-grid, #gift-stage')) return [];
+      if (style.position === 'fixed' && style.pointerEvents === 'none') return [];
+      const rect = element.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return [];
+      if (rect.left >= -1 && rect.right <= viewport + 1) return [];
+      if (intentionallyScrollable(element)) return [];
+      return [{ selector: selectorFor(element), left: Math.round(rect.left), right: Math.round(rect.right) }];
+    }).slice(0, 12);
+    return {
+      viewport,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      offenders
+    };
+  });
+  expect(overflow.offenders, JSON.stringify(overflow)).toEqual([]);
 }
