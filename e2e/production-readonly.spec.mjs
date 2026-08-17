@@ -17,7 +17,7 @@ test('@production health, readiness, and shell are available without writes', as
   page.on('pageerror', error => runtimeErrors.push(`pageerror: ${error.message}`));
   page.on('console', message => {
     const text = message.text();
-    if (/ownRooms is not defined|Failed to resolve module specifier ["']three["']|violates the following Content Security Policy directive/.test(text)) {
+    if (/\[SYLORA:gift-runtime\]|ownRooms is not defined|Failed to resolve module specifier ["']three["']|violates the following Content Security Policy directive/.test(text)) {
       runtimeErrors.push(`console: ${text}`);
     }
   });

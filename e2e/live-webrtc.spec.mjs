@@ -58,7 +58,7 @@ test('host Studio canvas reaches an authenticated viewer through real WebRTC sig
     await host.locator('#broadcastBtn').click();
     await expect(host.locator('#broadcastStatus')).toContainText('LIVE WEBRTC');
 
-    await viewer.locator('button[data-view="live"]').first().click();
+    await viewer.locator('.mobile-dock button[data-view="live"]').click();
     const watchButton = viewer.locator(`.watch-live[data-id="${liveId}"]`);
     await expect(watchButton).toBeVisible();
     await watchButton.click();

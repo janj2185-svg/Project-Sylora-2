@@ -15,4 +15,7 @@ test('canonical gift-runtime module exists and documents catalog', async () => {
   assert.match(src, /GIFT_RUNTIME_MATRIX/);
   assert.match(src, /GiftRuntimeTelemetry/);
   assert.match(src, /GIFT_V2_CATALOG/);
+  const runtime = await import('../public/gift-runtime.js');
+  assert.equal(runtime.GIFT_V2_CATALOG.length, 20);
+  assert.equal(typeof runtime.SyloraGiftRuntime, 'function');
 });
