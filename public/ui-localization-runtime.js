@@ -5,6 +5,7 @@ import {uiCopy} from './locales/ui-runtime.js';
 // User-generated content is explicitly protected and never rewritten.
 const SOURCE_ALIASES=new Map(Object.entries({
   'Люди, яких ти можеш знати':'peopleYouMayKnow','Показати всі':'showAll','Популярні зараз':'popularNow','Дивитися':'watch','Нові люди з’являться тут.':'newPeopleHere','Очікуємо наступні LIVE.':'waitingLive','МІЙ LUMEN':'myLumen','Я поруч':'aiHere',
+  'Твій персональний центр.':'personalCenter','Your personal center.':'personalCenter',
   'Daily Brief':'dailyBrief','Continue':'continue','Message':'message','Vertical':'vertical','Long-form':'longForm','Ask Sylora':'askSylora','Підписатися':'followStatusChanged',
   'Коментар...':'comment','Коментар…':'comment','Надіслати':'send','Емоція, що оживає.':'giftEmotion','Власні подарунки SYLORA: світло, рух, звук і realtime-взаємодія.':'giftDescription','КОЛЕКЦІЯ':'collection','РІВНІ':'levels','ЕФЕКТИ':'effects','Увійти для відправлення':'signInToSend','Отримувач':'recipient','Оберіть користувача':'chooseUser',
   'Профіль':'profile','Про себе':'about','Ім’я':'name','Мова':'language','Зберегти зміни':'saveChanges','АКТИВНІСТЬ':'activity','Поки тихо.':'quiet','доступний баланс':'availableBalance','заробіток':'earnings','підписників':'followers','у SYLORA':'publications',
@@ -29,6 +30,30 @@ function protectedNode(node){
   return !!el?.closest?.(PROTECTED);
 }
 
+function directTextNode(element){
+  return [...(element?.childNodes||[])].find(node=>node.nodeType===Node.TEXT_NODE&&String(node.nodeValue||'').trim());
+}
+
+function updateTaggedCopy(root=document){
+  const nodes=[];
+  if(root.matches?.('[data-sylora-copy]'))nodes.push(root);
+  nodes.push(...(root.querySelectorAll?.('[data-sylora-copy]')||[]));
+  for(const element of nodes){
+    if(protectedNode(element))continue;
+    const key=element.dataset.syloraCopy;
+    const translated=uiCopy(getLocale(),key);
+    if(!translated)continue;
+    const textNode=directTextNode(element);
+    if(textNode){
+      const raw=textNode.nodeValue||'';
+      const trimmed=raw.trim();
+      if(trimmed!==translated)textNode.nodeValue=raw.replace(trimmed,translated);
+    }else if(!element.children.length&&element.textContent!==translated){
+      element.textContent=translated;
+    }
+  }
+}
+
 function translateTextNode(node){
   if(protectedNode(node))return false;
   const raw=node.nodeValue||'';
@@ -37,9 +62,10 @@ function translateTextNode(node){
   const key=SOURCE_ALIASES.get(trimmed);
   if(!key)return false;
   const translated=uiCopy(getLocale(),key);
+  const parent=node.parentElement;
+  if(parent)parent.dataset.syloraCopy=key;
   if(!translated||translated===trimmed)return false;
   node.nodeValue=raw.replace(trimmed,translated);
-  node.parentElement?.setAttribute('data-sylora-copy',key);
   return true;
 }
 
@@ -47,8 +73,9 @@ function translateAttributes(root){
   const nodes=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
   for(const el of nodes){
     const current=String(el.getAttribute('placeholder')||'').trim();
-    const key=PLACEHOLDER_ALIASES.get(current);
+    const key=el.dataset.syloraPlaceholder||PLACEHOLDER_ALIASES.get(current);
     if(!key)continue;
+    el.dataset.syloraPlaceholder=key;
     const next=uiCopy(getLocale(),key);
     if(next&&next!==current)el.setAttribute('placeholder',next);
   }
@@ -68,14 +95,26 @@ function normalizeProfileLocale(root=document){
   }
 }
 
+function normalizeGreetingName(value=''){
+  const clean=String(value).trim().replace(/[!]+$/,'').trim();
+  if(/^(у|в|in|w|bei)\s+SYLORA$/i.test(clean)||/^SYLORA$/i.test(clean))return 'SYLORA';
+  return clean;
+}
+
 function localizeGreeting(root=document){
   const h=root.querySelector?.('.horizon-copy h1');
   if(!h)return false;
-  const match=h.textContent.match(/^(Добрий ранок|Добрий день|Добрий вечір|Good morning|Good afternoon|Good evening|Dzień dobry|Dobry wieczór|Guten Morgen|Guten Tag|Guten Abend|Доброе утро|Добрый день|Добрый вечер),\s*(.+)$/i);
-  if(!match)return false;
+  let name=h.dataset.syloraGreetingName||'';
+  if(!name){
+    const match=h.textContent.match(/^(Добрий ранок|Добрий день|Добрий вечір|Good morning|Good afternoon|Good evening|Dzień dobry|Dobry wieczór|Guten Morgen|Guten Tag|Guten Abend|Доброе утро|Добрый день|Добрый вечер),\s*(.+)$/i);
+    if(!match)return false;
+    name=normalizeGreetingName(match[2]);
+    if(!name)return false;
+    h.dataset.syloraGreetingName=name;
+  }
   const hour=new Date().getHours();
   const key=hour<12?'goodMorning':hour<18?'goodAfternoon':'goodEvening';
-  const next=`${uiCopy(getLocale(),key)}, ${match[2]}`;
+  const next=`${uiCopy(getLocale(),key)}, ${name}!`;
   if(h.textContent===next)return false;
   h.textContent=next;
   return true;
@@ -84,6 +123,7 @@ function localizeGreeting(root=document){
 function localize(root=document){
   const target=root.nodeType===Node.DOCUMENT_NODE?root.documentElement:root;
   if(!target)return;
+  updateTaggedCopy(target);
   const walker=document.createTreeWalker(target,NodeFilter.SHOW_TEXT);
   const text=[];while(walker.nextNode())text.push(walker.currentNode);
   text.forEach(translateTextNode);
