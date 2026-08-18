@@ -16,11 +16,12 @@ function sync(){
   hero.classList.add('ai-presence-container');
   const status=sourceStatus();
   let node=hero.querySelector('.sy-ai-context-status');
-  if(!status){node?.remove();return}
+  if(!status){node?.remove();delete hero.dataset.providerState;return}
   if(!node){
     node=document.createElement('div');
-    node.className='sy-ai-context-status';
+    node.className='sylora-degraded sy-ai-context-status';
     node.setAttribute('role','status');
+    node.style.cssText='display:flex;align-items:center;gap:8px;width:max-content;max-width:min(92%,620px);margin:10px 0 0;padding:8px 11px;border-radius:999px;font-size:11px;line-height:1.35;box-shadow:none;';
     const eyebrow=hero.querySelector('.eyebrow');
     if(eyebrow)eyebrow.after(node);else hero.prepend(node);
   }
