@@ -1,17 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Sylora">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">SYLORA</title>
+  <desc id="desc">SYLORA master mark — graphite metallic four-point form with champagne core.</desc>
   <defs>
-    <linearGradient id="a" x1="20" y1="18" x2="138" y2="142" gradientUnits="userSpaceOnUse"><stop stop-color="#ffe6aa"/><stop offset=".24" stop-color="#d39a3d"/><stop offset=".47" stop-color="#b89aef"/><stop offset=".7" stop-color="#72d7db"/><stop offset=".88" stop-color="#8c70dc"/><stop offset="1" stop-color="#f1b66f"/></linearGradient>
-    <linearGradient id="b" x1="124" y1="18" x2="30" y2="142" gradientUnits="userSpaceOnUse"><stop stop-color="#fff8dd"/><stop offset=".28" stop-color="#eeae61"/><stop offset=".54" stop-color="#7bd6d4"/><stop offset=".78" stop-color="#8165d5"/><stop offset="1" stop-color="#f4caca"/></linearGradient>
-    <radialGradient id="p"><stop stop-color="#fff"/><stop offset=".55" stop-color="#fffaf2"/><stop offset="1" stop-color="#f8eef9"/></radialGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="x"/><feColorMatrix in="x" values="1 0 0 0 .3 0 1 0 0 .15 0 0 1 0 .45 0 0 0 .45 0"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="graphiteL" x1="28" y1="18" x2="138" y2="225" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#050607"/>
+      <stop offset=".28" stop-color="#4b4e52"/>
+      <stop offset=".47" stop-color="#0a0b0d"/>
+      <stop offset=".72" stop-color="#676b70"/>
+      <stop offset="1" stop-color="#030405"/>
+    </linearGradient>
+    <linearGradient id="graphiteR" x1="222" y1="31" x2="105" y2="230" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b3b6ba"/>
+      <stop offset=".24" stop-color="#44474b"/>
+      <stop offset=".5" stop-color="#070809"/>
+      <stop offset=".76" stop-color="#56595d"/>
+      <stop offset="1" stop-color="#020304"/>
+    </linearGradient>
+    <radialGradient id="champagne" cx="50%" cy="50%" r="55%">
+      <stop offset="0" stop-color="#fffdf5"/>
+      <stop offset=".22" stop-color="#fff0bc"/>
+      <stop offset=".5" stop-color="#d9a54c"/>
+      <stop offset=".78" stop-color="#8d5a18"/>
+      <stop offset="1" stop-color="#2a1704" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="coreGlow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <circle cx="80" cy="80" r="71" fill="url(#p)" stroke="#eacb91" stroke-opacity=".38"/>
-  <circle cx="80" cy="80" r="62" fill="none" stroke="url(#a)" stroke-opacity=".25" stroke-width="2"/>
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
-    <path d="M121 43C99 24 59 27 42 48 26 68 43 82 67 86l21 4c17 3 20 15 10 23-14 12-45 7-60-8" stroke="url(#a)" stroke-width="14"/>
-    <path d="M39 117c22 19 62 16 79-5 16-20-1-34-25-38l-21-4c-17-3-20-15-10-23 14-12 45-7 60 8" stroke="url(#b)" stroke-width="8"/>
-    <path d="M47 43c18-13 46-17 68-3" stroke="#fff" stroke-opacity=".78" stroke-width="2.4"/>
-    <path d="M45 117c19 13 48 15 68 1" stroke="#fff" stroke-opacity=".68" stroke-width="2"/>
+  <g fill-rule="evenodd">
+    <path d="M128 10c8 42 1 72-22 101-10 13-23 19-38 17-17-3-28-12-43-25 31-31 61-43 81-67 12-14 18-27 22-26Z" fill="url(#graphiteL)"/>
+    <path d="M139 31c-4 30 4 48 24 65 16 13 36 20 68 34-18 23-32 33-49 33-17 0-31-7-43-22-18-23-24-51-20-85 5-12 11-20 20-25Z" fill="url(#graphiteR)"/>
+    <path d="M231 130c-31 15-51 22-68 36-20 16-28 35-24 65-9-5-15-14-20-26-4-34 2-62 20-85 12-15 26-22 43-22 17 0 31 10 49 32Z" fill="url(#graphiteR)"/>
+    <path d="M128 246c-4-1-10-13-22-27-20-24-50-36-81-67 15-13 26-22 43-25 15-2 28 4 38 17 23 29 30 59 22 102Z" fill="url(#graphiteL)"/>
+    <path d="M128 75c8 18 18 28 36 36-18 8-28 18-36 36-8-18-18-28-36-36 18-8 28-18 36-36Z" fill="#fff" opacity=".96"/>
+    <circle cx="128" cy="111" r="26" fill="url(#champagne)" opacity=".62" filter="url(#coreGlow)"/>
+    <path d="M128 88c5 12 12 19 24 24-12 5-19 12-24 24-5-12-12-19-24-24 12-5 19-12 24-24Z" fill="#fff5d6" filter="url(#coreGlow)"/>
+    <path d="M128 97c3 8 8 13 16 16-8 3-13 8-16 16-3-8-8-13-16-16 8-3 13-8 16-16Z" fill="#d69b36"/>
+    <circle cx="128" cy="113" r="3.5" fill="#fff"/>
   </g>
-  <circle cx="123" cy="43" r="3" fill="#fff7cc"/><path d="M25 80h10M30 75v10" stroke="#e8b960" stroke-linecap="round" opacity=".85"/>
 </svg>
