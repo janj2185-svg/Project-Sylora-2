@@ -184,8 +184,13 @@ input,textarea,select{border-radius:var(--sy-r-md)!important;border:1px solid rg
 
 @media(max-width:900px){
   :root{--sy-header-h:66px}
-  header{padding:0 14px!important;gap:10px!important}
+  header{padding:0 12px!important;gap:8px!important}
   .brand-copy small{display:none!important}
+  #account{min-width:0!important;margin-left:auto;display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:5px!important;overflow:visible!important}
+  #localeSwitch{display:block!important;visibility:visible!important;width:52px!important;min-width:52px!important;height:38px!important;padding:0 20px 0 9px!important;border-radius:var(--sy-r-pill)!important;border:1px solid rgba(255,255,255,.92)!important;background:rgba(255,255,255,.68)!important;color:var(--sy-ink)!important;font-size:10px!important;font-weight:760!important;line-height:1!important;box-shadow:inset 0 1px 0 #fff,var(--sy-shadow-1)!important}
+  #account .header-balance,#account .header-icon,#account .header-exit{display:none!important}
+  #account .header-avatar{display:grid!important;width:38px!important;height:38px!important;min-width:38px!important;padding:0!important;place-items:center!important}
+  #account .primary{min-height:38px!important;height:38px!important;padding:0 13px!important;font-size:10px!important;white-space:nowrap!important}
   .right{display:none!important}
   .left-rail{display:none!important}
   main{display:block!important;width:100%!important;margin:0!important;padding:14px 12px calc(104px + env(safe-area-inset-bottom))!important}
@@ -210,9 +215,17 @@ input,textarea,select{border-radius:var(--sy-r-md)!important;border:1px solid rg
 }
 
 @media(max-width:480px){
+  .brand{min-width:42px!important;flex:0 0 42px!important}
   .brand-copy{display:none!important}
   .mark{width:42px!important;height:42px!important}
-  .command-search{width:42px!important;min-width:42px!important;padding:0!important;justify-content:center!important}
+  .command-search{width:42px!important;min-width:42px!important;flex:0 0 42px!important;padding:0!important;justify-content:center!important}
   .command-search span:nth-child(2),.command-search kbd{display:none!important}
   #app{min-width:0;overflow:clip}
+}
+
+@media(max-width:360px){
+  header{padding-left:8px!important;padding-right:8px!important;gap:5px!important}
+  #localeSwitch{width:48px!important;min-width:48px!important;padding-left:7px!important;padding-right:17px!important}
+  #account{gap:4px!important}
+  #account .primary{padding-left:10px!important;padding-right:10px!important;font-size:9px!important}
 }
