@@ -1,1 +1,73 @@
-body[data-view="studio"] #app{position:relative}body[data-view="studio"] :is(.studio,.studio-shell,.card,.panel){border:1px solid rgba(255,255,255,.9);box-shadow:0 20px 64px rgba(47,64,70,.07),inset 0 1px 0 #fff;backdrop-filter:blur(22px)}body[data-view="studio"] :is(.studio-preview,.preview,.stage){position:relative;overflow:hidden;border-radius:28px;background:radial-gradient(circle at 74% 22%,rgba(190,217,212,.2),transparent 25%),linear-gradient(145deg,#1f2729,#35413f 68%,#504e47);box-shadow:0 30px 88px rgba(27,36,38,.18),inset 0 1px 0 rgba(255,255,255,.14)}body[data-view="studio"] :is(.studio-preview,.preview,.stage):after{content:"";position:absolute;left:10%;right:10%;bottom:9%;height:1px;background:linear-gradient(90deg,transparent,rgba(210,232,228,.42),rgba(196,179,146,.25),transparent);pointer-events:none}body[data-view="studio"] :is(button,.btn){transition:transform .15s ease,box-shadow .18s ease,background .18s ease}body[data-view="studio"] :is(button,.btn):active{transform:scale(.975)}body[data-view="studio"] :is(input,textarea,select){background:rgba(255,255,255,.68);border:1px solid rgba(255,255,255,.92);border-radius:15px}body[data-view="studio"] :is(.meter,.level,.audio-level){overflow:hidden;border-radius:999px;background:rgba(91,107,108,.12)}body[data-view="studio"] :is(.meter,.level,.audio-level)>*{background:linear-gradient(90deg,#9bbdb7,#a18d68)}body[data-view="studio"] :focus-visible{outline:3px solid rgba(112,143,138,.24)!important;outline-offset:2px!important}@media(max-width:900px){body[data-view="studio"] :is(.studio-preview,.preview,.stage){border-radius:24px}}@media(max-width:480px){body[data-view="studio"] #app{padding-bottom:96px}body[data-view="studio"] :is(.studio-preview,.preview,.stage){border-radius:21px}}
+/* STUDIO — preview-first creator workspace. */
+body[data-view="studio"] #app{position:relative;min-width:0}
+body[data-view="studio"] #app>.hero{padding:26px 30px;margin-bottom:14px;border-radius:var(--sy-r-xl);background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(235,242,240,.66));box-shadow:var(--sy-shadow-1)!important}
+body[data-view="studio"] #app>.hero h1{font-size:clamp(32px,3.4vw,48px);margin-bottom:8px}
+body[data-view="studio"] #app>.hero p{max-width:720px}
+
+body[data-view="studio"] .studio-layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+body[data-view="studio"] .studio-stage{
+  position:sticky;top:calc(var(--sy-header-h) + 22px);min-width:0;min-height:620px;max-height:calc(100vh - var(--sy-header-h) - 44px);
+  display:grid;place-items:center;padding:18px;border-radius:var(--sy-r-xl);overflow:hidden;
+  background:radial-gradient(circle at 75% 20%,rgba(138,187,178,.15),transparent 26%),linear-gradient(145deg,#171d1f,#283235 68%,#4a4841);
+  border:1px solid rgba(255,255,255,.10);box-shadow:0 32px 96px rgba(22,30,32,.20),inset 0 1px 0 rgba(255,255,255,.12)
+}
+body[data-view="studio"] .studio-stage:before{content:"PROGRAM PREVIEW";position:absolute;left:20px;top:18px;z-index:4;font-size:9px;font-weight:800;letter-spacing:.18em;color:rgba(255,255,255,.62)}
+body[data-view="studio"] .studio-stage:after{content:"";position:absolute;left:9%;right:9%;bottom:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(205,230,225,.34),rgba(213,180,126,.22),transparent);pointer-events:none}
+body[data-view="studio"] .studio-stage canvas,body[data-view="studio"] .studio-stage video{max-width:100%;max-height:calc(100vh - var(--sy-header-h) - 82px);height:auto;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.22);background:#0d1112}
+
+body[data-view="studio"] .studio-controls{display:grid;gap:10px;max-height:calc(100vh - var(--sy-header-h) - 44px);overflow:auto;padding-right:2px;scrollbar-width:thin;scrollbar-color:rgba(80,93,95,.18) transparent}
+body[data-view="studio"] .studio-controls>.card{margin:0;padding:16px;border-radius:20px!important;background:rgba(255,255,255,.66)!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:var(--sy-shadow-1)!important;backdrop-filter:blur(18px)!important}
+body[data-view="studio"] .studio-controls>.card .eyebrow{display:block;margin-bottom:9px}
+body[data-view="studio"] .studio-controls .fields{gap:8px}
+body[data-view="studio"] .studio-controls :is(button,input,select,label.ghost){min-height:40px}
+body[data-view="studio"] .studio-controls button{transition:transform var(--sy-motion-fast) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease)}
+body[data-view="studio"] .studio-controls button:active{transform:scale(.98)}
+body[data-view="studio"] .studio-note{font-size:10px;line-height:1.5;color:var(--sy-muted)}
+body[data-view="studio"] .studio-meter{height:8px;overflow:hidden;border-radius:var(--sy-r-pill);background:rgba(91,107,108,.12)}
+body[data-view="studio"] .studio-meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--sy-mint),var(--sy-champagne));border-radius:inherit}
+
+/* AI creator intelligence is subordinate to the live production surface. */
+body[data-view="studio"] #app>section.card:not(.hero){margin-top:14px;padding:18px;border-radius:22px!important;background:rgba(255,255,255,.58)!important;box-shadow:var(--sy-shadow-1)!important}
+
+.studio-mobile-tools{display:none}
+.studio-sheet-backdrop{display:none}
+
+@media(max-width:1180px){
+  body[data-view="studio"] .studio-layout{grid-template-columns:minmax(0,1fr) 320px}
+  body[data-view="studio"] .studio-stage{min-height:560px}
+}
+
+@media(max-width:900px){
+  body[data-view="studio"] #app>.hero{padding:20px 18px;margin-bottom:10px}
+  body[data-view="studio"] #app>.hero p{font-size:12px}
+  body[data-view="studio"] .scene-readout.studio-readout{display:none}
+  body[data-view="studio"] .studio-layout{display:block}
+  body[data-view="studio"] .studio-stage{position:relative;top:auto;min-height:0;height:auto;max-height:none;padding:10px;border-radius:24px;margin-bottom:74px}
+  body[data-view="studio"] .studio-stage:before{left:16px;top:14px}
+  body[data-view="studio"] .studio-stage canvas,body[data-view="studio"] .studio-stage video{width:100%;height:auto;max-height:calc(100svh - 236px);object-fit:contain;border-radius:18px}
+  body[data-view="studio"] .studio-controls{display:block;max-height:none;overflow:visible;padding:0}
+  body[data-view="studio"] .studio-controls>.card{display:none;position:fixed;z-index:92;left:10px;right:10px;bottom:calc(92px + env(safe-area-inset-bottom));max-height:min(72svh,620px);overflow:auto;border-radius:26px!important;padding:20px 16px 18px!important;background:rgba(249,251,250,.96)!important;box-shadow:0 28px 90px rgba(21,30,32,.24),inset 0 1px 0 #fff!important;transform-origin:bottom center}
+  body[data-view="studio"] .studio-controls>.card[data-studio-open="true"]{display:block;animation:sySheetIn var(--sy-motion-ui) var(--sy-ease)}
+  body[data-view="studio"] .studio-sheet-backdrop{position:fixed;z-index:89;inset:0;display:none;background:rgba(17,23,25,.22);backdrop-filter:blur(2px)}
+  body[data-view="studio"].sy-studio-sheet-open .studio-sheet-backdrop{display:block}
+  body[data-view="studio"] .studio-mobile-tools{
+    position:fixed;z-index:88;left:12px;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));height:58px;padding:5px;
+    display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;border-radius:22px;background:rgba(249,251,250,.90);border:1px solid rgba(255,255,255,.96);box-shadow:0 18px 54px rgba(35,49,53,.14);backdrop-filter:blur(24px)
+  }
+  body[data-view="studio"] .studio-mobile-tools::-webkit-scrollbar{display:none}
+  body[data-view="studio"] .studio-mobile-tools button{flex:0 0 auto;min-width:66px;height:46px;padding:5px 10px;border:0;border-radius:17px;background:transparent;color:var(--sy-muted);font-size:10px;font-weight:700}
+  body[data-view="studio"] .studio-mobile-tools button.primary-tool{background:linear-gradient(145deg,#22292b,#3d4846);color:white}
+  body[data-view="studio"] .studio-mobile-tools button.active{background:linear-gradient(145deg,#fff,#e7efed);color:var(--sy-ink);box-shadow:var(--sy-shadow-1)}
+  body[data-view="studio"] .studio-sheet-close{position:sticky;top:0;float:right;z-index:3;width:36px;height:36px;border-radius:50%!important;padding:0!important;background:rgba(255,255,255,.86)!important}
+  body[data-view="studio"] #app>section.card:not(.hero){margin-top:10px}
+}
+
+@media(max-width:480px){
+  body[data-view="studio"] #app>.hero h1{font-size:30px}
+  body[data-view="studio"] .studio-stage{border-radius:20px;margin-left:-2px;margin-right:-2px}
+  body[data-view="studio"] .studio-mobile-tools{left:8px;right:8px}
+  body[data-view="studio"] .studio-controls>.card{left:8px;right:8px}
+}
+
+@keyframes sySheetIn{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){body[data-view="studio"] .studio-controls>.card[data-studio-open="true"]{animation:none}}
