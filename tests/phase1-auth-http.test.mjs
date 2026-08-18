@@ -154,6 +154,13 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
     assert.equal(accountUpdate.body.user.role, 'user');
     assert.equal(accountUpdate.body.user.status, 'active');
 
+    for (const locale of ['de', 'ru']) {
+      const localeUpdate = await request(base, '/api/me', { method: 'PATCH', token, payload: { locale } });
+      assert.equal(localeUpdate.status, 200);
+      assert.equal(localeUpdate.body.user.locale, locale);
+      assert.equal((await request(base, '/api/me', { token })).body.user.locale, locale);
+    }
+
     const bobMe = await request(base, '/api/me', { token: bobRegistration.body.token });
     assert.equal(bobMe.body.user.displayName, 'bob_user');
 
@@ -164,6 +171,7 @@ test('Phase 1 HTTP critical path persists profile ownership and revokes the logg
 
     const persistedFinal = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
     assert.equal(persistedFinal.users.find(user => user.id === aliceRegistration.body.user.id).displayName, 'Alice Updated');
+    assert.equal(persistedFinal.users.find(user => user.id === aliceRegistration.body.user.id).locale, 'ru');
     assert.equal(persistedFinal.identities.find(identity => identity.userId === aliceRegistration.body.user.id).professional.title, 'Architect');
   } finally {
     await new Promise(resolve => server.close(resolve));

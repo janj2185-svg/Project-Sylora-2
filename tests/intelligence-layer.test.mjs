@@ -92,7 +92,7 @@ test('science claims and empty platform stay honest', () => {
 
 test('shell exposes dashboard canvas daily brief priority inbox', () => {
   const app = fs.readFileSync('public/app.js', 'utf8');
-  assert.match(app, /Daily Brief/);
+  assert.match(app, /t\('dailyBrief'\)/);
   assert.match(app, /data-inbox-tab="priority"/);
   assert.match(app, /renderPersonalDashboard/);
   assert.match(app, /renderCanvas/);

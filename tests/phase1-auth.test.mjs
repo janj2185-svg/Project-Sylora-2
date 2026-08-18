@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { newDb } from 'pg-mem';
-import { AuthService, AuthServiceError } from '../src/services/auth-service.mjs';
+import { AuthService, AuthServiceError, SUPPORTED_ACCOUNT_LOCALES } from '../src/services/auth-service.mjs';
 import { PostgresAuthSocialRepository } from '../src/repositories/postgres-auth-social.mjs';
 import { Store } from '../src/store.mjs';
 
@@ -200,6 +200,23 @@ test('Phase 1 account update is owner-scoped and ignores identity, role, status,
     assert.equal(updated.displayName, 'Owner Updated');
     const untouched = await service.findUserById(bob.user.id);
     assert.equal(untouched.displayName, 'other_user');
+  } finally {
+    await pool.end();
+  }
+});
+
+test('authenticated account locale contract persists the canonical five UI languages', async () => {
+  assert.deepEqual(SUPPORTED_ACCOUNT_LOCALES, ['uk', 'en', 'pl', 'de', 'ru']);
+  const { pool, service } = await harness();
+  try {
+    const registered = await service.register({ email: 'locale@example.com', username: 'locale_user', password: 'password123' });
+    for (const locale of SUPPORTED_ACCOUNT_LOCALES) {
+      const updated = await service.updateAccount(await service.findUserById(registered.user.id), { locale });
+      assert.equal(updated.locale, locale);
+      assert.equal((await service.findUserById(registered.user.id)).locale, locale);
+    }
+    const unchanged = await service.updateAccount(await service.findUserById(registered.user.id), { locale: 'es' });
+    assert.equal(unchanged.locale, 'ru');
   } finally {
     await pool.end();
   }

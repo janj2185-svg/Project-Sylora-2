@@ -31,6 +31,7 @@ import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-event
 import { createPlatformEvent } from './platform-event-spine.mjs';
 import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
 import { httpErrorResponse } from './http-errors.mjs';
+import { requestRatePolicy } from './rate-limit-policy.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -179,13 +180,7 @@ function securityHeaders(res) {
 async function allowRequest(req) {
   const ip = req.socket.remoteAddress || 'unknown';
   const pathname = String(req.url || '').split('?')[0];
-  const policy = pathname === '/api/auth/register'
-    ? { key: 'register', limit: runtimeConfig.nodeEnv === 'production' ? 5 : 30 }
-    : pathname === '/api/auth/login'
-      ? { key: 'login', limit: runtimeConfig.nodeEnv === 'production' ? 10 : 60 }
-      : pathname.startsWith('/api/auth/')
-        ? { key: 'auth', limit: runtimeConfig.nodeEnv === 'production' ? 30 : 120 }
-        : { key: 'api', limit: 300 };
+  const policy = requestRatePolicy(pathname, runtimeConfig.nodeEnv);
   const windowMs = 60_000, now = Date.now();
   const key = `${ip}:${policy.key}`;
   if(redis.configured){try{return await redis.rateCount(`sylora:rate:${policy.key}:${ip}`,windowMs)<=policy.limit}catch{}}
@@ -691,7 +686,7 @@ function staticFile(req, res, url) {
     res.writeHead(404);
     return res.end('Not found');
   }
-  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml' };
+  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png' };
   res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream' }); fs.createReadStream(finalResolved).pipe(res);
 }
 

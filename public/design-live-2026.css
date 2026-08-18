@@ -1,0 +1,112 @@
+/* LIVE — immersive VOID environment inside the Living Horizon system. */
+body[data-view="live"] #app{position:relative;min-width:0}
+body[data-view="live"] #app>.hero{padding:28px 30px;border-radius:var(--sy-r-xl);background:linear-gradient(135deg,rgba(255,255,255,.86),rgba(235,242,240,.64));box-shadow:var(--sy-shadow-1)!important}
+body[data-view="live"] .live-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:4px;margin:10px 0 16px;border-radius:var(--sy-r-pill);background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.82)}
+body[data-view="live"] .live-tabs::-webkit-scrollbar{display:none}
+body[data-view="live"] .live-tabs button{flex:0 0 auto;min-height:40px;padding:0 14px;border:0;border-radius:var(--sy-r-pill);background:transparent;color:var(--sy-muted);font-weight:680}
+body[data-view="live"] .live-tabs button.active{background:linear-gradient(145deg,#fff,#e7efed);color:var(--sy-ink);box-shadow:var(--sy-shadow-1)}
+
+body[data-view="live"] #app>.hero .scene-readout{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 4px}
+body[data-view="live"] #app>.hero .scene-readout>span{min-width:88px;padding:9px 12px;border-radius:14px;background:rgba(255,255,255,.54);border:1px solid rgba(255,255,255,.90);box-shadow:inset 0 1px 0 #fff}
+body[data-view="live"] #app>.hero .scene-readout :is(small,b){display:block}
+body[data-view="live"] #app>.hero .scene-readout small{font-size:8px;letter-spacing:.12em;color:var(--sy-muted)}
+body[data-view="live"] #app>.hero .scene-readout b{margin-top:3px;font-size:16px;color:var(--sy-ink)}
+body[data-view="live"] .live-capability-details{margin:12px 0;color:var(--sy-muted);font-size:10px}
+body[data-view="live"] .live-capability-details summary{width:max-content;cursor:pointer;color:#806c4c;font-weight:720}
+body[data-view="live"] .live-capability-details p{margin:7px 0 0;line-height:1.5}
+body[data-view="live"] .live-empty-state{grid-column:1/-1;padding:30px 28px;border-radius:24px;background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(232,241,239,.65));border:1px solid rgba(255,255,255,.94);box-shadow:var(--sy-shadow-1)}
+body[data-view="live"] .live-empty-state h2{margin:8px 0 6px;font-size:clamp(22px,2.6vw,32px);letter-spacing:-.035em}
+body[data-view="live"] .live-empty-state p{max-width:620px;margin:0;color:var(--sy-muted);font-size:13px;line-height:1.6}
+body[data-view="live"] .live-empty-state :is(.primary,.ghost){margin-top:16px;min-height:42px;padding:0 18px}
+
+body[data-view="live"] .live-room-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+body[data-view="live"] .live-room-card{padding:18px;border-radius:22px!important;background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(238,244,242,.58))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:var(--sy-shadow-1)!important}
+body[data-view="live"] .live-room-card h3{font-size:17px;margin:9px 0 3px;color:var(--sy-ink)}
+body[data-view="live"] .live-room-card .badge{display:inline-flex;align-items:center;gap:4px;color:#816c4a;background:rgba(225,211,185,.40);border:1px solid rgba(168,139,94,.12);border-radius:var(--sy-r-pill);padding:5px 8px;font-size:9px;font-weight:760}
+body[data-view="live"] .live-tools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:13px}
+body[data-view="live"] .live-tools button{min-height:38px;padding:0 12px}
+
+/* Viewer room / host media is the dominant surface. */
+body[data-view="live"] #livePlayer>.card,
+body[data-view="live"] #liveChat>.card{
+  border-radius:var(--sy-r-xl)!important;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.10)!important;
+  background:radial-gradient(circle at 76% 18%,rgba(138,187,178,.15),transparent 27%),linear-gradient(145deg,var(--sy-void),var(--sy-void-2) 66%,#494840)!important;
+  color:#f7f8f7!important;
+  box-shadow:0 34px 100px rgba(20,28,30,.22),inset 0 1px 0 rgba(255,255,255,.12)!important;
+  backdrop-filter:none!important;
+}
+body[data-view="live"] #livePlayer>.card{padding:18px}
+body[data-view="live"] #livePlayer>.card :is(h1,h2,h3,strong){color:#fff!important}
+body[data-view="live"] #livePlayer>.card .muted{color:rgba(241,245,244,.62)!important}
+body[data-view="live"] #livePlayer #liveVideo{
+  display:block;width:100%!important;min-height:340px!important;max-height:72vh;aspect-ratio:16/9;object-fit:contain;
+  margin-top:14px!important;border-radius:22px!important;background:#090d0f!important;
+  border:1px solid rgba(255,255,255,.08);box-shadow:0 24px 78px rgba(0,0,0,.34)
+}
+body[data-view="live"] #livePlayer .live-tools{padding-top:2px}
+body[data-view="live"] #livePlayer .ghost{background:rgba(255,255,255,.08)!important;border-color:rgba(255,255,255,.12)!important;color:#f4f7f6!important}
+body[data-view="live"] #livePlayer .ghost:hover{background:rgba(255,255,255,.13)!important}
+
+/* Truthful realtime status: classes are assigned from the actual WebRTC status text. */
+body[data-view="live"] #webrtcStatus{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:var(--sy-r-pill);font-size:9px;font-weight:800;letter-spacing:.08em;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:rgba(255,255,255,.75)}
+body[data-view="live"] #webrtcStatus[data-connection-state="connecting"]{color:#e7d5b2;background:rgba(168,126,70,.16);border-color:rgba(213,173,112,.20)}
+body[data-view="live"] #webrtcStatus[data-connection-state="connected"]{color:#c9eee5;background:rgba(91,153,137,.18);border-color:rgba(138,187,178,.24)}
+body[data-view="live"] #webrtcStatus[data-connection-state="degraded"]{color:#f2d2a8;background:rgba(170,126,70,.20);border-color:rgba(213,173,112,.28)}
+body[data-view="live"] #webrtcStatus[data-connection-state="error"],body[data-view="live"] #webrtcStatus[data-connection-state="disconnected"]{color:#f1bfc0;background:rgba(167,95,97,.18);border-color:rgba(167,95,97,.28)}
+
+/* Gifts remain cinematic but separate from core control hierarchy. */
+body[data-view="live"] .live-gift-tray{margin-top:12px;padding:12px;border-radius:18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10)}
+body[data-view="live"] .live-gift-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+body[data-view="live"] .live-gift-scroll{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(116px,1fr);gap:8px;overflow-x:auto;scrollbar-width:none;margin-top:10px;padding-bottom:2px}
+body[data-view="live"] .live-gift-scroll::-webkit-scrollbar{display:none}
+body[data-view="live"] .live-gift{min-height:92px;padding:10px;border-radius:17px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:#fff;text-align:left}
+body[data-view="live"] .live-gift-symbol{display:block;font-size:22px;color:var(--gift-color);filter:drop-shadow(0 0 10px color-mix(in srgb,var(--gift-color) 42%,transparent))}
+body[data-view="live"] .live-gift b,body[data-view="live"] .live-gift small{display:block;margin-top:4px}
+body[data-view="live"] .live-gift small{color:rgba(255,255,255,.58)}
+
+body[data-view="live"] .resonance-panel{margin-top:12px;padding:13px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10)}
+body[data-view="live"] .resonance-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+body[data-view="live"] .resonance-meter{height:8px;margin:10px 0 7px;border-radius:999px;overflow:hidden;background:rgba(255,255,255,.10)}
+body[data-view="live"] .resonance-meter i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--sy-mint),var(--sy-champagne))}
+
+/* Chat is readable and subordinate to media. */
+body[data-view="live"] #liveChat>.card{margin-top:12px;padding:16px;background:rgba(29,37,39,.96)!important}
+body[data-view="live"] #liveMessages{max-height:300px;overflow:auto;padding:4px 2px;scrollbar-width:thin}
+body[data-view="live"] #liveMessages p{margin:0;padding:8px 2px;border-bottom:1px solid rgba(255,255,255,.06);line-height:1.45;color:rgba(255,255,255,.82)}
+body[data-view="live"] #liveChatForm{grid-template-columns:minmax(0,1fr) auto;display:grid;gap:8px;margin-top:10px}
+body[data-view="live"] #liveChatForm input{background:rgba(255,255,255,.08)!important;color:#fff!important;border-color:rgba(255,255,255,.12)!important}
+body[data-view="live"] #liveChatForm .primary{min-width:104px}
+
+@media(max-width:900px){
+  body[data-view="live"] #app>.hero{padding:20px 18px}
+  body[data-view="live"] .live-room-grid{grid-template-columns:1fr}
+  body[data-view="live"] #livePlayer>.card{margin-left:-2px;margin-right:-2px;padding:10px;border-radius:24px!important}
+  body[data-view="live"] #livePlayer #liveVideo{min-height:0!important;max-height:none;aspect-ratio:9/16;border-radius:18px!important;margin-top:10px!important}
+  body[data-view="live"] #livePlayer .row{padding:4px 4px 0}
+  body[data-view="live"] #livePlayer .live-tools{padding:0 4px}
+  body[data-view="live"] #liveChat>.card{border-radius:22px!important}
+}
+
+/* Landscape mobile uses the screen for media, controls remain reachable. */
+@media(max-width:900px) and (orientation:landscape){
+  body[data-view="live"] #livePlayer>.card{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(220px,.65fr);grid-template-areas:"head side" "video side";gap:8px;align-items:start}
+  body[data-view="live"] #livePlayer>.card>.row:first-child{grid-area:head}
+  body[data-view="live"] #livePlayer #liveVideo{grid-area:video;aspect-ratio:16/9;max-height:calc(100svh - 118px)}
+  body[data-view="live"] #livePlayer .live-tools,body[data-view="live"] #livePlayer .resonance-panel,body[data-view="live"] #livePlayer .live-gift-tray,body[data-view="live"] #livePlayer>.card>p{grid-column:2;align-self:start}
+}
+
+@media(max-width:480px){
+  body[data-view="live"] #app{padding-bottom:96px}
+  body[data-view="live"] .live-tabs{margin-left:-2px;margin-right:-2px}
+  body[data-view="live"] .live-empty-state{padding:22px 18px;border-radius:21px}
+  body[data-view="live"] .live-room-card{padding:15px;border-radius:20px!important}
+  body[data-view="live"] #livePlayer #liveVideo{width:calc(100% + 0px)!important}
+  body[data-view="live"] #livePlayer .live-tools{gap:6px}
+  body[data-view="live"] #livePlayer .live-tools .badge{width:100%;order:10}
+  body[data-view="live"] #liveChatForm{grid-template-columns:1fr}
+  body[data-view="live"] #liveChatForm .primary{width:100%}
+}
+
+@media(prefers-reduced-motion:reduce){body[data-view="live"] *{scroll-behavior:auto!important}}

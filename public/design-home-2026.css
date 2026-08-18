@@ -1,0 +1,136 @@
+/* HOME — ecosystem-first Living Horizon. AI is contextual, never the hero. */
+body[data-view="feed"] #app{position:relative;min-width:0}
+body[data-view="feed"] .living-horizon.home-compact{
+  position:relative;
+  min-height:350px;
+  padding:44px 40px 112px;
+  border-radius:var(--sy-r-2xl);
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 82% 18%,rgba(202,224,219,.72),transparent 24%),
+    radial-gradient(circle at 77% 58%,rgba(226,210,181,.22),transparent 31%),
+    radial-gradient(circle at 14% 88%,rgba(222,235,232,.55),transparent 30%),
+    linear-gradient(132deg,rgba(255,255,255,.96),rgba(238,245,243,.88) 57%,rgba(248,243,234,.82));
+  border:1px solid rgba(255,255,255,.96);
+  box-shadow:var(--sy-shadow-3),inset 0 1px 0 #fff;
+  isolation:isolate;
+}
+body[data-view="feed"] .living-horizon.home-compact:before{
+  content:"";position:absolute;left:-5%;right:-7%;bottom:70px;height:155px;border-radius:52%;
+  border-top:1px solid rgba(112,142,138,.16);border-bottom:1px solid rgba(168,139,94,.10);
+  transform:rotate(-2deg);box-shadow:0 -18px 52px rgba(196,219,214,.14),0 18px 48px rgba(168,139,94,.06);pointer-events:none;z-index:-1
+}
+body[data-view="feed"] .living-horizon.home-compact:after{
+  content:"";position:absolute;width:58%;height:96px;left:18%;bottom:88px;
+  background:linear-gradient(95deg,transparent,rgba(224,237,234,.70),rgba(226,211,183,.24),rgba(206,224,221,.55),transparent);
+  filter:blur(24px);transform:rotate(-4deg);opacity:.68;pointer-events:none;z-index:-1;animation:syHorizonDrift 18s ease-in-out infinite alternate
+}
+body[data-view="feed"] .horizon-copy{position:relative;top:auto;left:auto;max-width:620px;z-index:3;padding-right:190px}
+body[data-view="feed"] .horizon-copy .eyebrow{font-size:10px;color:#76684f;letter-spacing:.18em}
+body[data-view="feed"] .horizon-copy h1{font-size:clamp(40px,4.5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;color:var(--sy-ink);font-weight:630;overflow-wrap:anywhere}
+body[data-view="feed"] .horizon-copy p{max-width:470px;font-size:14px;line-height:1.65;color:var(--sy-muted)}
+
+/* Contextual AI entry point: no portrait on Home. */
+body[data-view="feed"] .sylora-presence{
+  position:absolute;right:28px;top:26px;width:auto;height:50px;min-width:164px;
+  display:flex;align-items:center;justify-content:flex-start;padding:7px 13px 7px 10px;gap:9px;
+  border-radius:var(--sy-r-pill);border:1px solid rgba(255,255,255,.95);
+  background:rgba(255,255,255,.72);box-shadow:var(--sy-shadow-1),inset 0 1px 0 #fff;
+  backdrop-filter:blur(18px);color:var(--sy-ink);transition:transform var(--sy-motion-fast) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease)
+}
+body[data-view="feed"] .sylora-presence:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-2),inset 0 1px 0 #fff}
+body[data-view="feed"] .sylora-presence:active{transform:scale(.985)}
+body[data-view="feed"] .sylora-presence-image{position:static;width:54px;height:32px;flex:0 0 54px;border-radius:0;background-image:url('/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png');background-size:contain;background-position:center;background-repeat:no-repeat;filter:none}
+body[data-view="feed"] .sylora-presence-copy{margin:0;padding:0;display:flex;align-items:center;gap:0}
+body[data-view="feed"] .sylora-presence-copy small,body[data-view="feed"] .sylora-presence-copy b,body[data-view="feed"] .sylora-presence-copy em{display:none}
+body[data-view="feed"] .sylora-presence-copy strong{margin:0;font-size:12px;color:var(--sy-ink);font-weight:680;white-space:nowrap}
+body[data-view="feed"] .sylora-presence-copy strong span{margin-left:4px;color:#8b7652}
+
+body[data-view="feed"] .horizon-flow{position:absolute;left:26px;right:26px;bottom:24px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px;z-index:3}
+body[data-view="feed"] .horizon-flow button{
+  min-width:0;height:72px;border-radius:19px;background:rgba(255,255,255,.64);border:1px solid rgba(255,255,255,.92);
+  box-shadow:0 10px 30px rgba(55,72,78,.045),inset 0 1px 0 #fff;color:#5d6668;
+  display:grid;place-items:center;align-content:center;gap:4px;transition:transform var(--sy-motion-fast) var(--sy-ease),background var(--sy-motion-ui) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease)
+}
+body[data-view="feed"] .horizon-flow button:hover{transform:translateY(-2px);background:rgba(255,255,255,.88);box-shadow:0 16px 40px rgba(55,72,78,.075),inset 0 1px 0 #fff;color:var(--sy-ink)}
+body[data-view="feed"] .horizon-flow button:active{transform:scale(.98)}
+body[data-view="feed"] .horizon-flow button i{font-size:18px;color:#647775;font-style:normal}
+body[data-view="feed"] .horizon-flow button span{font-size:11px;font-weight:650}
+body[data-view="feed"] .horizon-flow .horizon-create{background:linear-gradient(145deg,rgba(238,244,242,.96),rgba(232,221,202,.78));box-shadow:0 16px 38px rgba(91,91,77,.08),inset 0 1px 0 #fff}
+
+/* Ecosystem modules — lower visual weight than the main horizon. */
+body[data-view="feed"] .ecosystem-feed{display:grid;gap:14px;margin-top:16px}
+body[data-view="feed"] .eco-strip{padding:17px;border-radius:24px;background:rgba(255,255,255,.56);border:1px solid rgba(255,255,255,.88);box-shadow:var(--sy-shadow-1);backdrop-filter:blur(18px)}
+body[data-view="feed"] .eco-strip-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 12px}
+body[data-view="feed"] .eco-strip-head>b{font-size:14px;color:var(--sy-ink);letter-spacing:-.01em}
+body[data-view="feed"] .eco-strip-head>button{width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.9);background:rgba(255,255,255,.62);color:var(--sy-muted)}
+body[data-view="feed"] .eco-carousel{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(178px,1fr);gap:10px;overflow:auto;scrollbar-width:none;padding-bottom:1px;scroll-snap-type:x proximity}
+body[data-view="feed"] .eco-carousel::-webkit-scrollbar{display:none}
+body[data-view="feed"] .eco-card{min-height:88px;padding:14px 15px;text-align:left;border-radius:18px;border:1px solid rgba(255,255,255,.9);background:rgba(255,255,255,.62);box-shadow:0 8px 26px rgba(54,69,74,.035),inset 0 1px 0 #fff;color:var(--sy-ink);transition:transform var(--sy-motion-fast) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease);scroll-snap-align:start}
+body[data-view="feed"] .eco-card:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-1)}
+body[data-view="feed"] .eco-card b{display:block;font-size:13px;line-height:1.35;margin-bottom:6px}
+body[data-view="feed"] .eco-card small{display:block;font-size:10px;line-height:1.4;color:var(--sy-muted)}
+body[data-view="feed"] .eco-empty-state{padding:26px 28px;border-radius:24px;background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(232,241,239,.66) 68%,rgba(246,241,232,.72));border:1px solid rgba(255,255,255,.94);box-shadow:var(--sy-shadow-1)}
+body[data-view="feed"] .eco-empty-state h2{margin:8px 0 6px;font-size:clamp(22px,2.5vw,32px);letter-spacing:-.035em;color:var(--sy-ink)}
+body[data-view="feed"] .eco-empty-state p{max-width:640px;margin:0;color:var(--sy-muted);font-size:13px;line-height:1.6}
+body[data-view="feed"] .eco-empty-state .primary{margin-top:16px;min-height:42px;padding:0 18px}
+
+body[data-view="feed"] #composer{margin-top:16px;padding:16px;border-radius:22px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
+body[data-view="feed"] #composer textarea{min-height:72px;border-radius:17px!important;padding:13px 14px;resize:vertical}
+body[data-view="feed"] #composer .primary{min-width:108px;height:43px}
+body[data-view="feed"] #feed{display:grid;gap:13px;margin-top:14px}
+body[data-view="feed"] .post{padding:19px 20px;border-radius:22px!important;transition:transform var(--sy-motion-fast) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease)}
+body[data-view="feed"] .post:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-2)!important}
+body[data-view="feed"] .post .user{display:flex;align-items:center;gap:10px}
+body[data-view="feed"] .post .avatar{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#edf3f2,#e1e7e5)!important;color:#273033!important;border:1px solid rgba(255,255,255,.92)}
+body[data-view="feed"] .post-text{font-size:14px;line-height:1.68;margin:15px 0}
+body[data-view="feed"] .post .actions{display:flex;gap:7px;flex-wrap:wrap}
+body[data-view="feed"] .post .actions button{min-height:38px;padding:0 12px;border-radius:var(--sy-r-pill);border:1px solid rgba(255,255,255,.9);background:rgba(255,255,255,.54);color:var(--sy-muted)}
+body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.86);color:var(--sy-ink)}
+
+@keyframes syHorizonDrift{0%{transform:translate3d(-1%,0,0) rotate(-4deg);opacity:.56}100%{transform:translate3d(3%,-5px,0) rotate(-2.5deg);opacity:.76}}
+
+/* First mobile visit may feel cinematic, but the scene is still content-respectful. */
+@media(max-width:900px){
+  body[data-view="feed"] .living-horizon.home-compact{min-height:300px;padding:28px 20px 102px;border-radius:28px}
+  body[data-view="feed"] .horizon-copy{max-width:100%;padding-right:190px}
+  body[data-view="feed"] .horizon-copy h1{font-size:40px;max-width:540px}
+  body[data-view="feed"] .sylora-presence{top:22px;right:20px}
+  body[data-view="feed"] .horizon-flow{left:18px;right:18px;bottom:18px;grid-template-columns:repeat(7,minmax(76px,1fr));overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scroll-padding-inline:8px;padding:1px 18px 2px 2px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
+  body[data-view="feed"] .horizon-flow::-webkit-scrollbar{display:none}
+  body[data-view="feed"] .horizon-flow button{min-width:76px;height:68px;scroll-snap-align:start}
+}
+
+@media(max-width:620px){
+  body[data-view="feed"] .living-horizon.home-compact{min-height:270px;padding:24px 16px 98px}
+  body[data-view="feed"] .horizon-copy{padding-top:54px;padding-right:0}
+  body[data-view="feed"] .horizon-copy h1{font-size:34px;margin-top:8px}
+  body[data-view="feed"] .horizon-copy p{font-size:13px;line-height:1.55;max-width:92%}
+  body[data-view="feed"] .sylora-presence{left:16px;right:auto;top:16px;height:44px;min-width:150px;padding-top:6px;padding-bottom:6px}
+  body[data-view="feed"] .sylora-presence-image{width:28px;height:28px;flex-basis:28px}
+  body[data-view="feed"] .horizon-flow{left:12px;right:12px;bottom:12px;gap:7px}
+  body[data-view="feed"] .horizon-flow button{min-width:72px;height:64px;border-radius:17px}
+  body[data-view="feed"] .eco-strip{border-radius:20px;padding:14px}
+  body[data-view="feed"] .eco-empty-state{padding:21px 18px;border-radius:20px}
+  body[data-view="feed"] .eco-carousel{grid-auto-columns:minmax(158px,82%);scroll-snap-type:x mandatory}
+  body[data-view="feed"] #composer{grid-template-columns:1fr}
+  body[data-view="feed"] #composer .primary{width:100%}
+}
+
+/* After first engagement the mobile horizon collapses so content appears immediately. */
+@media(max-width:620px){
+  body.sy-home-engaged[data-view="feed"] .living-horizon.home-compact{min-height:188px;padding-top:64px;padding-bottom:76px}
+  body.sy-home-engaged[data-view="feed"] .horizon-copy h1{font-size:28px;margin-bottom:7px}
+  body.sy-home-engaged[data-view="feed"] .horizon-copy p{display:none}
+  body.sy-home-engaged[data-view="feed"] .horizon-flow{bottom:9px}
+  body.sy-home-engaged[data-view="feed"] .horizon-flow button{height:54px}
+}
+
+@media(max-width:390px){
+  body[data-view="feed"] .living-horizon.home-compact{border-radius:24px}
+  body[data-view="feed"] .horizon-copy h1{font-size:31px;letter-spacing:-.045em}
+  body[data-view="feed"] .post{padding:16px;border-radius:20px!important}
+  body[data-view="feed"] .post .actions button{min-height:40px}
+}
+
+@media(prefers-reduced-motion:reduce){body[data-view="feed"] .living-horizon.home-compact:after{animation:none!important}}

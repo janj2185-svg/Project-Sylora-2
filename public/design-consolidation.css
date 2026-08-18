@@ -37,12 +37,12 @@
 }
 .eco-card small{display:block;margin-top:4px;color:#8f858b;font-size:11px}
 .eco-card.live{background:linear-gradient(145deg,rgba(255,244,246,.95),rgba(255,253,250,.88))}
-.inbox-tabs,.live-hub-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
-.inbox-tabs button,.live-hub-tabs button{
+.inbox-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.inbox-tabs button{
   border:0;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;
   color:#746d71;background:rgba(255,255,255,.55)
 }
-.inbox-tabs button.active,.live-hub-tabs button.active{
+.inbox-tabs button.active{
   color:#8b672d;background:linear-gradient(120deg,rgba(244,218,168,.55),rgba(241,232,255,.6))
 }
 .inbox-panel[hidden],.live-panel[hidden]{display:none!important}
@@ -80,14 +80,6 @@
   .mobile-dock .nav{height:48px!important;gap:1px!important;font-size:7.5px!important}
   .mobile-dock .nav>span:first-child{font-size:16px!important}
   .mobile-dock .nav>span:last-child{font-size:7.5px!important;letter-spacing:0}
-  .living-horizon{min-height:auto!important;padding-bottom:12px}
-  .horizon-copy{padding-top:max(22px,env(safe-area-inset-top))!important}
-  .horizon-flow{
-    position:relative!important;left:auto!important;right:auto!important;bottom:auto!important;
-    margin:210px 14px 8px;padding-inline:4px!important;scroll-padding-inline:4px
-  }
-  .horizon-flow button:first-child{margin-left:0}.horizon-flow button:last-child{margin-right:0}
-  .sylora-presence{top:auto!important;position:relative!important;left:18px!important;right:18px!important;width:auto!important;margin-top:8px}
   .messages-shell{grid-template-columns:1fr!important;min-height:auto}
   .chat-placeholder,.chat-card{min-height:360px}
   .message-compose{padding-bottom:calc(72px + env(safe-area-inset-bottom))!important;position:sticky;bottom:0;background:rgba(255,251,248,.94);z-index:5}
@@ -114,8 +106,6 @@
   color:#6a4a1f;background:linear-gradient(90deg,rgba(255,244,214,.95),rgba(245,236,255,.92));
   border-bottom:1px solid rgba(217,168,75,.2)
 }
-.living-horizon.home-compact{min-height:280px}
-@media(max-width:720px){.living-horizon.home-compact{min-height:auto}.living-horizon.home-compact .horizon-flow{margin-top:12px}}
 .privacy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .privacy-toggle{display:flex;align-items:center;gap:8px;font-size:12px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.55)}
 @media(max-width:720px){.privacy-grid{grid-template-columns:1fr}}
