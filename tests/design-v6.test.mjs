@@ -10,6 +10,7 @@ const studioRuntime=await readFile(new URL('../public/studio-mobile-runtime.js',
 const ai=await readFile(new URL('../public/design-ai-2026.css',import.meta.url),'utf8');
 const account=await readFile(new URL('../public/design-account-2026.css',import.meta.url),'utf8');
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
+const appJs=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 
 test('canonical design system owns global tokens before route-specific composition files',()=>{
   const canonical=html.indexOf('/design-system-2026.css');
@@ -61,4 +62,9 @@ test('Studio mobile runtime keeps one current body portal across in-place rerend
   assert.match(studioRuntime,/document\.body\.append\(backdrop\)/);
   assert.match(studioRuntime,/document\.body\.append\(tools\)/);
   assert.doesNotMatch(studioRuntime,/document\.querySelector\('\.studio-(?:mobile-tools|sheet-backdrop)'\)\?\.remove\(\)/);
+});
+
+test('shell navigation uses delegation so runtime copy updates cannot orphan nav buttons',()=>{
+  assert.match(appJs,/document\.addEventListener\('click',event=>\{const button=event\.target\.closest\?\.\('\.nav\[data-view\]'\);if\(button\)nav\(button\.dataset\.view\)\}\)/);
+  assert.doesNotMatch(appJs,/document\.querySelectorAll\('\.nav'\)\.forEach\(x=>x\.onclick=/);
 });

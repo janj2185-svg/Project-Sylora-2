@@ -112,7 +112,7 @@ function showIncomingCallBanner(){
   };
 }
 function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();conferenceSessionCleanup=null}if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}if(state.view==='studio'&&view!=='studio'){stopStudioTracks();disconnectStudioObs()}if(state.view==='live'&&view!=='live')cleanupLiveViewer();if(state.view==='ai'&&view!=='ai'){stopSyloraRealtime();stopSyloraVoice()}if(liveEventSource){liveEventSource.close();liveEventSource=null}state.view=view;syncPathForView(view);document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===view));render()}
-document.querySelectorAll('.nav').forEach(x=>x.onclick=()=>nav(x.dataset.view));
+document.addEventListener('click',event=>{const button=event.target.closest?.('.nav[data-view]');if(button)nav(button.dataset.view)});
 document.querySelector('#globalSearch')?.addEventListener('click',launchCommandPalette);
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();launchCommandPalette()}});
 document.querySelectorAll('[data-create-hub]').forEach(b=>b.addEventListener('click',launchCreateHub));
