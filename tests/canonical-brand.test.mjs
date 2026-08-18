@@ -61,6 +61,14 @@ test('web UI cannot reference an unverified logo-like asset',async()=>{
   assert.deepEqual(violations,[],`unverified UI logo references:\n${violations.join('\n')}`);
 });
 
+test('Phoenix preview keeps the recording download hidden until a recording exists',async()=>{
+  const html=await readFile(path.join(PUBLIC_DIR,'phoenix-preview.html'),'utf8');
+  const css=await readFile(path.join(PUBLIC_DIR,'phoenix-preview.css'),'utf8');
+
+  assert.match(html,/id="recordingDownload"[^>]*\bhidden\b/);
+  assert.match(css,/\.download\[hidden\]\s*\{\s*display\s*:\s*none\s*\}/);
+});
+
 test('static delivery preserves canonical bytes and declares the PNG media type',async()=>{
   process.env.NODE_ENV='test';
   process.env.DATABASE_URL='';

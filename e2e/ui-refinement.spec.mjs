@@ -192,6 +192,7 @@ test('standalone Phoenix preview uses the immutable canonical brand',async({page
     await expect(brand).toHaveAttribute('src',canonicalLogo);
     await expect(brand).toHaveAttribute('data-brand-sha256',canonicalLogoSha256);
     await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href',canonicalLogo);
+    await expect(page.locator('#recordingDownload')).toBeHidden();
     await expect.poll(()=>brand.evaluate(image=>({width:image.naturalWidth,height:image.naturalHeight}))).toEqual({width:1100,height:650});
     await expectNoHorizontalOverflow(page);
     await page.screenshot({path:`${qaDir}/phoenix-preview-${width}.png`,fullPage:true,animations:'disabled'});
