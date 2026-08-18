@@ -1,13 +1,27 @@
-const TOOL_LABELS={sources:'Sources',audio:'Audio',scenes:'Scenes',broadcast:'LIVE',obs:'OBS',browser:'Overlay',record:'Record'};
+import {getLocale} from './i18n.js';
+import {uiCopy} from './locales/ui-runtime.js';
+
+const TOOL_KEYS={
+  sources:'sources',
+  audio:'audioMixer',
+  scenes:'scenes',
+  broadcast:'broadcast',
+  obs:'connectObs',
+  browser:'browserSource',
+  record:'record'
+};
+
+function toolLabel(name){return uiCopy(getLocale(),TOOL_KEYS[name]||name)}
 
 function classify(card,index){
   const label=String(card.querySelector('.eyebrow')?.textContent||'').trim().toLowerCase();
+  // Specific composite labels must be matched before generic "source" / "obs" labels.
+  if(label.includes('browser source'))return 'browser';
   if(label.includes('source'))return 'sources';
   if(label.includes('audio'))return 'audio';
   if(label.includes('scene'))return 'scenes';
   if(label.includes('broadcast'))return 'broadcast';
-  if(label.includes('browser source'))return 'browser';
-  if(label.includes('obs'))return index>4?'browser':'obs';
+  if(label.includes('obs'))return 'obs';
   if(label.includes('record'))return 'record';
   return `panel-${index}`;
 }
@@ -27,6 +41,15 @@ function openSheet(name){
   document.querySelector(`.studio-mobile-tools button[data-studio-tool="${CSS.escape(name)}"]`)?.classList.add('active');
 }
 
+function updateToolLabels(){
+  document.querySelectorAll('.studio-mobile-tools button[data-studio-tool]').forEach(button=>{
+    const next=toolLabel(button.dataset.studioTool);
+    if(button.textContent!==next)button.textContent=next;
+  });
+  document.querySelectorAll('.studio-sheet-close').forEach(button=>button.setAttribute('aria-label',uiCopy(getLocale(),'close')));
+  document.querySelector('.studio-mobile-tools')?.setAttribute('aria-label',uiCopy(getLocale(),'creatorStudio'));
+}
+
 function mount(){
   if(document.body.dataset.view!=='studio')return;
   const controls=document.querySelector('.studio-controls');
@@ -41,31 +64,43 @@ function mount(){
     card.dataset.studioOpen='false';
     if(!card.querySelector('.studio-sheet-close')){
       const close=document.createElement('button');
-      close.type='button';close.className='studio-sheet-close';close.setAttribute('aria-label','Close');close.textContent='×';
-      close.addEventListener('click',closeSheets);card.prepend(close);
+      close.type='button';
+      close.className='studio-sheet-close';
+      close.setAttribute('aria-label',uiCopy(getLocale(),'close'));
+      close.textContent='×';
+      close.addEventListener('click',closeSheets);
+      card.prepend(close);
     }
   });
 
   const tools=document.createElement('nav');
   tools.className='studio-mobile-tools';
-  tools.setAttribute('aria-label','Studio controls');
+  tools.setAttribute('aria-label',uiCopy(getLocale(),'creatorStudio'));
   const order=['sources','audio','scenes','broadcast','obs','browser','record'];
   for(const name of order){
     if(!controls.querySelector(`.card[data-studio-panel="${name}"]`))continue;
     const button=document.createElement('button');
-    button.type='button';button.dataset.studioTool=name;button.textContent=TOOL_LABELS[name]||name;
+    button.type='button';
+    button.dataset.studioTool=name;
+    button.textContent=toolLabel(name);
     if(name==='broadcast')button.classList.add('primary-tool');
-    button.addEventListener('click',()=>openSheet(name));tools.append(button);
+    button.addEventListener('click',()=>openSheet(name));
+    tools.append(button);
   }
 
   const backdrop=document.createElement('div');
-  backdrop.className='studio-sheet-backdrop';backdrop.addEventListener('click',closeSheets);
+  backdrop.className='studio-sheet-backdrop';
+  backdrop.addEventListener('click',closeSheets);
   document.body.append(backdrop);
   stage.after(tools);
 }
 
 function cleanupIfNeeded(){
-  if(document.body.dataset.view==='studio'){mount();return}
+  if(document.body.dataset.view==='studio'){
+    mount();
+    updateToolLabels();
+    return;
+  }
   closeSheets();
   document.querySelector('.studio-mobile-tools')?.remove();
   document.querySelector('.studio-sheet-backdrop')?.remove();
@@ -77,6 +112,7 @@ function boot(){
   observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['data-view']});
   cleanupIfNeeded();
   window.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheets()});
+  document.addEventListener('sylora:localechange',updateToolLabels);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
