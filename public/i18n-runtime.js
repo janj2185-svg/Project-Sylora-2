@@ -20,6 +20,12 @@ function normalizeLocaleSelector(root=document){
   return true;
 }
 
+function announceLocaleChange(){
+  document.documentElement.lang=getLocale();
+  normalizeLocaleSelector();
+  document.dispatchEvent(new CustomEvent('sylora:localechange',{detail:{locale:getLocale()}}));
+}
+
 function boot(){
   document.documentElement.lang=getLocale();
   normalizeLocaleSelector();
@@ -35,16 +41,22 @@ function boot(){
   if(account)observer.observe(account,{childList:true,subtree:true});
   else observer.observe(document.documentElement,{childList:true,subtree:true});
 
+  // The legacy app owns the selector's onchange handler. This listener runs after that
+  // target handler and publishes a stable same-tab event for all localization runtimes.
+  document.addEventListener('change',event=>{
+    if(event.target?.id!=='localeSwitch')return;
+    queueMicrotask(announceLocaleChange);
+  });
+
   window.addEventListener('storage',event=>{
     if(event.key!=='sylora_locale')return;
     const code=SUPPORTED_UI_LOCALES.includes(event.newValue)?event.newValue:'uk';
     setLocale(code,{persist:false});
-    document.documentElement.lang=code;
-    normalizeLocaleSelector();
+    announceLocaleChange();
   });
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
 else boot();
 
-export {normalizeLocaleSelector};
+export {normalizeLocaleSelector,announceLocaleChange};
