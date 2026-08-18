@@ -31,6 +31,7 @@ test('canonical production logo bytes are immutable and retain master dimensions
 
 test('web shell, favicon, and contextual presence use the canonical master directly',async()=>{
   const html=await readFile(path.join(PUBLIC_DIR,'index.html'),'utf8');
+  const phoenixPreview=await readFile(path.join(PUBLIC_DIR,'phoenix-preview.html'),'utf8');
   const homeCss=await readFile(path.join(PUBLIC_DIR,'design-home-2026.css'),'utf8');
   const brandTag=html.match(/<a class="brand"[\s\S]*?<\/a>/)?.[0]||'';
 
@@ -39,6 +40,9 @@ test('web shell, favicon, and contextual presence use the canonical master direc
   assert.ok(brandTag.includes(`data-brand-sha256="${EXPECTED_SHA256}"`),'shell brand checksum marker is missing');
   assert.doesNotMatch(brandTag,/<svg|\.svg\b/i,'shell brand must not use redrawn SVG geometry');
   assert.ok(homeCss.includes(`url('${CANONICAL_URL}')`),'Home presence is not the canonical master');
+  assert.match(phoenixPreview,new RegExp(`<link rel="icon" type="image/png" href="${CANONICAL_URL.replaceAll('/','\\/')}"`));
+  assert.match(phoenixPreview,new RegExp(`<img class="brand-mark" src="${CANONICAL_URL.replaceAll('/','\\/')}"`));
+  assert.doesNotMatch(phoenixPreview,/class="brand-mark"[^>]*>\s*S\s*</,'standalone preview must not recreate the brand with text/CSS');
 });
 
 test('web UI cannot reference an unverified logo-like asset',async()=>{

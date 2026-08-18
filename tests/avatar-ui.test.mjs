@@ -5,7 +5,8 @@ import fs from 'node:fs';
 test('assembled avatar mounts whole-character images and final CSS loads last', () => {
   const html = fs.readFileSync('public/index.html', 'utf8');
   assert.match(html, /design-avatar-assembled\.css\?v=/);
-  assert.ok(html.indexOf('design-scenes-v6.css') < html.indexOf('design-avatar-assembled.css'));
+  assert.ok(html.indexOf('design-ai-2026.css') < html.indexOf('design-avatar-assembled.css'));
+  assert.doesNotMatch(html, /design-scenes-v[56]\.css/);
   assert.match(html, /data-view="more"/);
   const dock = html.split('mobile-dock')[1].split('</nav>')[0];
   assert.match(dock, /data-view="profile"/);

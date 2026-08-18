@@ -1,6 +1,6 @@
 /* Digital Human — single-image portrait (must load last).
    No sprite sheets, no arm tubes, no clipped face layers.
-   Wins over design-scenes-v5/v6 hero:* and child position resets. */
+   Loading last gives this layer canonical ownership of AI presence geometry. */
 
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
   position:relative;

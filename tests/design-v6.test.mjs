@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
 
 const system=await readFile(new URL('../public/design-system-2026.css',import.meta.url),'utf8');
@@ -20,6 +21,7 @@ test('canonical design system owns global tokens before route-specific compositi
   }
   for(const obsolete of ['/design-v2.css','/design-reference-v3.css','/design-master-v4.css','/design-scenes-v5.css','/design-scenes-v6.css','/design-approved-2026.css']){
     assert.equal(html.includes(obsolete),false,`obsolete runtime layer still loaded: ${obsolete}`);
+    assert.equal(existsSync(new URL(`../public${obsolete}`,import.meta.url)),false,`obsolete design layer still tracked: ${obsolete}`);
   }
 });
 
