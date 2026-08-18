@@ -64,10 +64,12 @@ test('all required responsive widths have no accidental horizontal overflow',asy
     if(width<=900){
       await expect(page.locator('.mobile-dock')).toBeVisible();
       await expect(page.locator('.left-rail')).toBeHidden();
+      await expect(page.locator('#localeSwitch')).toBeVisible();
     }else{
       await expect(page.locator('.left-rail')).toBeVisible();
       await expect(page.locator('.mobile-dock')).toBeHidden();
     }
+    if(width===320)await page.screenshot({path:`${qaDir}/home-320-uk.png`,fullPage:true});
     if(width===390)await page.screenshot({path:`${qaDir}/home-390-uk.png`,fullPage:true});
     if(width===1920)await page.screenshot({path:`${qaDir}/home-1920-uk.png`,fullPage:true});
   }
@@ -91,7 +93,7 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   const account=uniqueAccount('ui');
   await page.setViewportSize({width:1366,height:900});
   await registerViaUi(page,account);
-  await page.locator('button[data-view="studio"]').first().click();
+  await page.locator('button[data-view="studio"]:visible').first().click();
   await expect(page.locator('body')).toHaveAttribute('data-view','studio');
   await expect(page.locator('.studio-stage')).toBeVisible();
   await expect(page.locator('.studio-controls')).toBeVisible();
@@ -102,9 +104,9 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('.studio-mobile-tools')).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  const tools=page.locator('.studio-mobile-tools button');
+  const tools=page.locator('.studio-mobile-tools button[data-studio-tool]');
   await expect(tools).toHaveCount(7);
-  await tools.filter({hasText:'Sources'}).click();
+  await page.locator('.studio-mobile-tools button[data-studio-tool="sources"]').click();
   await expect(page.locator('.studio-controls>.card[data-studio-panel="sources"]')).toHaveAttribute('data-studio-open','true');
   await expect(page.locator('body')).toHaveClass(/sy-studio-sheet-open/);
   await page.screenshot({path:`${qaDir}/studio-390-sheet.png`,fullPage:true});
@@ -115,13 +117,13 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await page.setViewportSize({width:390,height:844});
   await registerViaUi(page,account);
 
-  await page.locator('button[data-view="ai"]').first().click();
+  await page.locator('.mobile-dock button[data-view="ai"]').click();
   await expect(page.locator('body')).toHaveAttribute('data-view','ai');
   await expect(page.locator('.sylora-ai-hero.ai-presence-container')).toBeVisible();
   const source=page.locator('#syloraDegraded');
   await expect(source).toBeHidden();
 
-  await page.locator('button[data-view="live"]').first().click();
+  await page.locator('.mobile-dock button[data-view="live"]').click();
   await expect(page.locator('body')).toHaveAttribute('data-view','live');
   await expect(page.locator('#syloraDegraded')).toBeHidden();
   await expectNoHorizontalOverflow(page);
