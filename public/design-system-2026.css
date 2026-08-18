@@ -184,7 +184,7 @@ main{
 .shell-event small{margin-top:2px;color:var(--sy-muted);font-size:8px}
 .shell-event em{padding:4px 6px;border-radius:8px;background:rgba(213,173,112,.15);color:#7b6748;font-size:7px;font-style:normal;font-weight:800}
 .shell-empty{margin:12px 0 4px;color:var(--sy-muted);font-size:11px;line-height:1.5}
-.shell-wallet{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;background:linear-gradient(145deg,var(--sy-void),var(--sy-void-2))!important;color:#fff!important;border-color:rgba(255,255,255,.11)!important}
+.right .shell-wallet{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;background:linear-gradient(145deg,var(--sy-void),var(--sy-void-2))!important;color:#fff!important;border-color:rgba(255,255,255,.11)!important}
 .shell-wallet span :is(small,b){display:block;color:inherit}
 .shell-wallet span small{font-size:8px;letter-spacing:.13em;opacity:.68}
 .shell-wallet span b{margin-top:5px;font-size:15px}

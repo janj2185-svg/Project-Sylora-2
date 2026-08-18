@@ -26,6 +26,7 @@ test('canonical design system owns global tokens before route-specific compositi
 test('canonical material system defines Pearl Frost Crystal Metal and Void',()=>{
   for(const token of ['--sy-pearl','--sy-frost','--sy-crystal','--sy-metal','--sy-void'])assert.ok(system.includes(token),`missing ${token}`);
   for(const recipe of ['material-pearl','material-frost','material-crystal','material-metal','material-void'])assert.ok(system.includes(recipe),`missing ${recipe}`);
+  assert.match(system,/\.right \.shell-wallet\{[^}]*background:linear-gradient\(145deg,var\(--sy-void\),var\(--sy-void-2\)\)!important/);
 });
 
 test('route visual identities remain distinct without another global override layer',()=>{
