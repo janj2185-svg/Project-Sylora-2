@@ -12,32 +12,47 @@ function semanticState(text=''){
 }
 
 function syncStatus(node){
-  if(!node)return;
-  node.dataset.connectionState=semanticState(node.textContent);
+  if(!node)return false;
+  const next=semanticState(node.textContent);
+  if(node.dataset.connectionState===next)return false;
+  node.dataset.connectionState=next;
+  return true;
+}
+
+function setTextIfChanged(node,value){
+  if(!node||node.textContent===value)return false;
+  node.textContent=value;
+  return true;
 }
 
 function syncLiveLabels(){
   if(document.body.dataset.view!=='live')return;
   const chat={uk:'Чат',en:'Chat',pl:'Czat',de:'Chat',ru:'Чат'}[getLocale()]||'Chat';
-  document.querySelectorAll('.open-live').forEach(node=>node.textContent=chat);
-  document.querySelectorAll('.live-copilot').forEach(node=>node.textContent='Copilot');
+  document.querySelectorAll('.open-live').forEach(node=>setTextIfChanged(node,chat));
+  document.querySelectorAll('.live-copilot').forEach(node=>setTextIfChanged(node,'Copilot'));
 }
 
 function syncAll(){document.querySelectorAll('#webrtcStatus').forEach(syncStatus);syncLiveLabels()}
 
+let scheduled=false;
+function scheduleSync(){
+  if(scheduled)return;
+  scheduled=true;
+  requestAnimationFrame(()=>{scheduled=false;syncAll()});
+}
+
 function boot(){
   syncAll();
   const observer=new MutationObserver(records=>{
-    let labels=false;
     for(const record of records){
       const target=record.target?.nodeType===1?record.target:record.target?.parentElement;
       if(target?.id==='webrtcStatus')syncStatus(target);
       else if(target?.querySelector)target.querySelectorAll('#webrtcStatus').forEach(syncStatus);
-      if(record.type==='childList')labels=true;
     }
-    if(labels)queueMicrotask(syncLiveLabels);
+    scheduleSync();
   });
   observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  document.addEventListener('sylora:localechange',scheduleSync);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
