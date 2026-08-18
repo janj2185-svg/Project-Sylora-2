@@ -51,6 +51,8 @@ test('canonical and route layers retain responsive and reduced-motion contracts'
   assert.match(system,/\.side-nav \.nav\[data-create-hub\]::before\{content:"\+"\}/);
   assert.match(system,/\.rail-orbit\{width:100%/);
   assert.match(system,/\.rail-orbit i em\{display:block;height:100%/);
+  assert.match(system,/\.sylora-press-ripple\{[\s\S]*position:absolute!important;[\s\S]*pointer-events:none!important;/);
+  assert.match(system,/:is\(button,\.primary,\.ghost,\.module,\.gift\)\{position:relative;isolation:isolate\}/);
 });
 
 test('Studio mobile runtime keeps one current body portal across in-place rerenders',()=>{

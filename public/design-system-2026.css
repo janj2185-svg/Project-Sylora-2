@@ -203,6 +203,18 @@ main{
 
 /* Controls */
 button,input,textarea,select{font:inherit}
+:is(button,.primary,.ghost,.module,.gift){position:relative;isolation:isolate}
+.sylora-press-ripple{
+  position:absolute!important;
+  z-index:1!important;
+  border-radius:50%!important;
+  pointer-events:none!important;
+  background:radial-gradient(circle,rgba(255,255,255,.72) 0,rgba(138,187,178,.20) 38%,transparent 70%)!important;
+  transform:scale(.12);
+  opacity:.72;
+  animation:syPressRipple .66s var(--sy-ease) forwards!important;
+}
+@keyframes syPressRipple{to{transform:scale(1);opacity:0}}
 .primary,.btn-primary{
   border-radius:var(--sy-r-pill)!important;
   background:linear-gradient(135deg,#222829,#3e4846)!important;
