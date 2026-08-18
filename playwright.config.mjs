@@ -7,6 +7,7 @@ const secureProbe = process.env.SYLORA_E2E_SECURE_PROBE === '1';
 
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: 'visual-baseline.spec.mjs',
   outputDir: 'tmp/playwright-results',
   timeout: 60_000,
   expect: { timeout: 12_000 },

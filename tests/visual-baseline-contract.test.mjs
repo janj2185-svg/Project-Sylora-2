@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {mkdir,mkdtemp,readFile,rm,unlink,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {deflateSync} from 'node:zlib';
 import {verifyPassword} from '../src/auth.mjs';
 import {FIXED_VISUAL_ACCOUNT,VISUAL_FIXTURE_ID,createVisualFixtureData} from '../scripts/visual-fixture.mjs';
@@ -34,6 +36,27 @@ import {
 } from '../scripts/build-visual-manifest.mjs';
 
 const repositoryState=await inspectCandidateDirectory(DEFAULT_CANDIDATE_DIR);
+const defaultPlaywrightConfig=await readFile(new URL('../playwright.config.mjs',import.meta.url),'utf8');
+const visualPlaywrightConfig=await readFile(new URL('../playwright.visual.config.mjs',import.meta.url),'utf8');
+const repositoryRoot=fileURLToPath(new URL('..',import.meta.url));
+const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
+
+function discoverPlaywright(configFile){
+  const result=spawnSync(process.execPath,[playwrightCli,'test',`--config=${configFile}`,'--list','--reporter=json'],{
+    cwd:repositoryRoot,
+    encoding:'utf8',
+    env:{...process.env,NO_COLOR:'1'}
+  });
+  assert.equal(result.status,0,`Playwright discovery failed for ${configFile}`);
+  const report=JSON.parse(result.stdout);
+  const discovered=[];
+  const visit=suite=>{
+    for(const spec of suite.specs||[])discovered.push(spec.file);
+    for(const child of suite.suites||[])visit(child);
+  };
+  for(const suite of report.suites||[])visit(suite);
+  return discovered;
+}
 
 function crc32(buffer){
   let crc=0xffffffff;
@@ -168,6 +191,19 @@ test('visual baseline matrix is exactly eleven surfaces by four fixed viewports'
   assert.equal(paths.length,44);
   assert.equal(new Set(paths).size,44);
   for(const file of paths)assert.match(file,/^[a-z0-9-]+\/(?:390x844|768x1024|1366x900|1920x1080)\/uk\.png$/);
+});
+
+test('ordinary browser QA and deterministic visual QA have disjoint discovery',()=>{
+  assert.match(defaultPlaywrightConfig,/testIgnore:\s*['"]visual-baseline\.spec\.mjs['"]/);
+  assert.match(visualPlaywrightConfig,/testMatch:\s*['"]visual-baseline\.spec\.mjs['"]/);
+  assert.match(defaultPlaywrightConfig,/trace:\s*secureProbe \? 'off' : 'retain-on-failure'/);
+  assert.match(visualPlaywrightConfig,/trace:\s*'off'/);
+  const ordinary=discoverPlaywright('playwright.config.mjs');
+  const visual=discoverPlaywright('playwright.visual.config.mjs');
+  assert.ok(ordinary.length>0);
+  assert.ok(ordinary.every(file=>file!=='visual-baseline.spec.mjs'));
+  assert.equal(visual.length,4);
+  assert.ok(visual.every(file=>file==='visual-baseline.spec.mjs'));
 });
 
 test('visual fixture seed is deterministic and directly login-capable',()=>{
