@@ -1,8 +1,8 @@
 import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js';
 import {uiCopy} from './locales/ui-runtime.js';
 
-// Bridge for the legacy monolithic renderer. Exact UI literals are mapped into a centralized
-// namespace until each route is moved to t()/namespaced components. User content is excluded.
+// Temporary bridge for the legacy monolithic renderer. It translates only known UI literals.
+// User-generated content is explicitly protected and never rewritten.
 const SOURCE_ALIASES=new Map(Object.entries({
   'Люди, яких ти можеш знати':'peopleYouMayKnow','Показати всі':'showAll','Популярні зараз':'popularNow','Дивитися':'watch','Нові люди з’являться тут.':'newPeopleHere','Очікуємо наступні LIVE.':'waitingLive','МІЙ LUMEN':'myLumen','Я поруч':'aiHere',
   'Daily Brief':'dailyBrief','Continue':'continue','Message':'message','Vertical':'vertical','Long-form':'longForm','Ask Sylora':'askSylora','Підписатися':'followStatusChanged',
@@ -19,7 +19,7 @@ const SOURCE_ALIASES=new Map(Object.entries({
 }));
 
 const PLACEHOLDER_ALIASES=new Map(Object.entries({
-  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description'
+  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description'
 }));
 
 const PROTECTED='[data-user-content],.post-text,.comment-zone p,#liveMessages p,.message-bubble p,.ai-conversation p,.realtime-transcript p,.conference-sylora-messages,.creatorIntelOut,pre,code';
@@ -30,23 +30,27 @@ function protectedNode(node){
 }
 
 function translateTextNode(node){
-  if(protectedNode(node))return;
+  if(protectedNode(node))return false;
   const raw=node.nodeValue||'';
   const trimmed=raw.trim();
-  if(!trimmed)return;
+  if(!trimmed)return false;
   const key=SOURCE_ALIASES.get(trimmed);
-  if(!key)return;
+  if(!key)return false;
   const translated=uiCopy(getLocale(),key);
-  if(translated===trimmed)return;
+  if(!translated||translated===trimmed)return false;
   node.nodeValue=raw.replace(trimmed,translated);
   node.parentElement?.setAttribute('data-sylora-copy',key);
+  return true;
 }
 
 function translateAttributes(root){
   const nodes=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
   for(const el of nodes){
-    const key=PLACEHOLDER_ALIASES.get(String(el.getAttribute('placeholder')||'').trim());
-    if(key)el.setAttribute('placeholder',uiCopy(getLocale(),key));
+    const current=String(el.getAttribute('placeholder')||'').trim();
+    const key=PLACEHOLDER_ALIASES.get(current);
+    if(!key)continue;
+    const next=uiCopy(getLocale(),key);
+    if(next&&next!==current)el.setAttribute('placeholder',next);
   }
 }
 
@@ -60,18 +64,21 @@ function normalizeProfileLocale(root=document){
       }));
       select.dataset.syloraLocales='uk,en,pl,de,ru';
     }
-    select.value=current;
+    if(select.value!==current)select.value=current;
   }
 }
 
 function localizeGreeting(root=document){
   const h=root.querySelector?.('.horizon-copy h1');
-  if(!h)return;
+  if(!h)return false;
   const match=h.textContent.match(/^(Добрий ранок|Добрий день|Добрий вечір|Good morning|Good afternoon|Good evening|Dzień dobry|Dobry wieczór|Guten Morgen|Guten Tag|Guten Abend|Доброе утро|Добрый день|Добрый вечер),\s*(.+)$/i);
-  if(!match)return;
+  if(!match)return false;
   const hour=new Date().getHours();
   const key=hour<12?'goodMorning':hour<18?'goodAfternoon':'goodEvening';
-  h.textContent=`${uiCopy(getLocale(),key)}, ${match[2]}`;
+  const next=`${uiCopy(getLocale(),key)}, ${match[2]}`;
+  if(h.textContent===next)return false;
+  h.textContent=next;
+  return true;
 }
 
 function localize(root=document){
@@ -85,17 +92,21 @@ function localize(root=document){
   localizeGreeting(document);
 }
 
-let queued=false;
-function queueLocalize(){if(queued)return;queued=true;queueMicrotask(()=>{queued=false;localize(document)})}
+let scheduled=false;
+function scheduleLocalize(){
+  if(scheduled)return;
+  scheduled=true;
+  requestAnimationFrame(()=>{scheduled=false;localize(document)});
+}
 
 function boot(){
   localize(document);
   const observer=new MutationObserver(records=>{
-    if(records.some(r=>r.type==='childList'||r.type==='characterData'))queueLocalize();
+    if(records.some(r=>r.type==='childList'||r.type==='characterData'))scheduleLocalize();
   });
   observer.observe(document.body,{subtree:true,childList:true,characterData:true});
-  window.addEventListener('storage',event=>{if(event.key==='sylora_locale')queueLocalize()});
-  document.addEventListener('sylora:localechange',queueLocalize);
+  window.addEventListener('storage',event=>{if(event.key==='sylora_locale')scheduleLocalize()});
+  document.addEventListener('sylora:localechange',scheduleLocalize);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
