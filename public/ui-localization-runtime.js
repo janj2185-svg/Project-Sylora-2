@@ -1,4 +1,4 @@
-import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js';
+import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js?v=20260818-i18n3';
 import {uiCopy} from './locales/ui-runtime.js';
 
 // Temporary bridge for the legacy monolithic renderer. It translates only known UI literals.

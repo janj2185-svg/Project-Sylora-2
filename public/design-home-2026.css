@@ -40,7 +40,7 @@ body[data-view="feed"] .sylora-presence{
 }
 body[data-view="feed"] .sylora-presence:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-2),inset 0 1px 0 #fff}
 body[data-view="feed"] .sylora-presence:active{transform:scale(.985)}
-body[data-view="feed"] .sylora-presence-image{position:static;width:32px;height:32px;flex:0 0 32px;border-radius:50%;background-image:url('/assets/sylora-mark-v2.svg');background-size:contain;background-position:center;background-repeat:no-repeat;filter:none}
+body[data-view="feed"] .sylora-presence-image{position:static;width:54px;height:32px;flex:0 0 54px;border-radius:0;background-image:url('/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png');background-size:contain;background-position:center;background-repeat:no-repeat;filter:none}
 body[data-view="feed"] .sylora-presence-copy{margin:0;padding:0;display:flex;align-items:center;gap:0}
 body[data-view="feed"] .sylora-presence-copy small,body[data-view="feed"] .sylora-presence-copy b,body[data-view="feed"] .sylora-presence-copy em{display:none}
 body[data-view="feed"] .sylora-presence-copy strong{margin:0;font-size:12px;color:var(--sy-ink);font-weight:680;white-space:nowrap}
@@ -70,6 +70,10 @@ body[data-view="feed"] .eco-card{min-height:88px;padding:14px 15px;text-align:le
 body[data-view="feed"] .eco-card:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-1)}
 body[data-view="feed"] .eco-card b{display:block;font-size:13px;line-height:1.35;margin-bottom:6px}
 body[data-view="feed"] .eco-card small{display:block;font-size:10px;line-height:1.4;color:var(--sy-muted)}
+body[data-view="feed"] .eco-empty-state{padding:26px 28px;border-radius:24px;background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(232,241,239,.66) 68%,rgba(246,241,232,.72));border:1px solid rgba(255,255,255,.94);box-shadow:var(--sy-shadow-1)}
+body[data-view="feed"] .eco-empty-state h2{margin:8px 0 6px;font-size:clamp(22px,2.5vw,32px);letter-spacing:-.035em;color:var(--sy-ink)}
+body[data-view="feed"] .eco-empty-state p{max-width:640px;margin:0;color:var(--sy-muted);font-size:13px;line-height:1.6}
+body[data-view="feed"] .eco-empty-state .primary{margin-top:16px;min-height:42px;padding:0 18px}
 
 body[data-view="feed"] #composer{margin-top:16px;padding:16px;border-radius:22px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
 body[data-view="feed"] #composer textarea{min-height:72px;border-radius:17px!important;padding:13px 14px;resize:vertical}
@@ -89,16 +93,17 @@ body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.
 /* First mobile visit may feel cinematic, but the scene is still content-respectful. */
 @media(max-width:900px){
   body[data-view="feed"] .living-horizon.home-compact{min-height:300px;padding:28px 20px 102px;border-radius:28px}
-  body[data-view="feed"] .horizon-copy{max-width:100%;padding-right:0}
+  body[data-view="feed"] .horizon-copy{max-width:100%;padding-right:190px}
   body[data-view="feed"] .horizon-copy h1{font-size:40px;max-width:540px}
   body[data-view="feed"] .sylora-presence{top:22px;right:20px}
-  body[data-view="feed"] .horizon-flow{left:18px;right:18px;bottom:18px;grid-template-columns:repeat(7,minmax(76px,1fr));overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:1px}
+  body[data-view="feed"] .horizon-flow{left:18px;right:18px;bottom:18px;grid-template-columns:repeat(7,minmax(76px,1fr));overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scroll-padding-inline:8px;padding:1px 18px 2px 2px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
+  body[data-view="feed"] .horizon-flow::-webkit-scrollbar{display:none}
   body[data-view="feed"] .horizon-flow button{min-width:76px;height:68px;scroll-snap-align:start}
 }
 
 @media(max-width:620px){
   body[data-view="feed"] .living-horizon.home-compact{min-height:270px;padding:24px 16px 98px}
-  body[data-view="feed"] .horizon-copy{padding-top:54px}
+  body[data-view="feed"] .horizon-copy{padding-top:54px;padding-right:0}
   body[data-view="feed"] .horizon-copy h1{font-size:34px;margin-top:8px}
   body[data-view="feed"] .horizon-copy p{font-size:13px;line-height:1.55;max-width:92%}
   body[data-view="feed"] .sylora-presence{left:16px;right:auto;top:16px;height:44px;min-width:150px;padding-top:6px;padding-bottom:6px}
@@ -106,6 +111,7 @@ body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.
   body[data-view="feed"] .horizon-flow{left:12px;right:12px;bottom:12px;gap:7px}
   body[data-view="feed"] .horizon-flow button{min-width:72px;height:64px;border-radius:17px}
   body[data-view="feed"] .eco-strip{border-radius:20px;padding:14px}
+  body[data-view="feed"] .eco-empty-state{padding:21px 18px;border-radius:20px}
   body[data-view="feed"] .eco-carousel{grid-auto-columns:minmax(158px,82%);scroll-snap-type:x mandatory}
   body[data-view="feed"] #composer{grid-template-columns:1fr}
   body[data-view="feed"] #composer .primary{width:100%}

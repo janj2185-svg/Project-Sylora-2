@@ -95,7 +95,8 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
   z-index:3;
   right:18px;
-  bottom:18px;
+  top:auto!important;
+  bottom:18px!important;
   width:min(34%,210px);
   background:rgba(255,252,249,.78);
 }
@@ -136,7 +137,8 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
     right:20px;
-    bottom:118px;
+    top:auto!important;
+    bottom:118px!important;
     width:42%;
   }
   /* LIVE: full coherent portrait above a compact control strip — never cut through the torso. */

@@ -12,6 +12,7 @@ import {
 } from '../auth.mjs';
 
 const DUMMY_PASSWORD_HASH = hashPassword('sylora-dummy-password-2026');
+export const SUPPORTED_ACCOUNT_LOCALES = Object.freeze(['uk', 'en', 'pl', 'de', 'ru']);
 
 const ERROR_STATUS = Object.freeze({
   INVALID_EMAIL: 400,
@@ -168,7 +169,7 @@ export class AuthService {
       if (displayName) changes.displayName = displayName;
     }
     if (patch.bio != null) changes.bio = String(patch.bio).trim().slice(0, 500);
-    if (['uk', 'pl', 'en'].includes(patch.locale)) changes.locale = patch.locale;
+    if (SUPPORTED_ACCOUNT_LOCALES.includes(patch.locale)) changes.locale = patch.locale;
     if (patch.avatar != null) changes.avatar = String(patch.avatar).trim().slice(0, 2048);
     const updatedAt = this.now();
     let saved;

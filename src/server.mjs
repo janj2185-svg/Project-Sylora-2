@@ -691,7 +691,7 @@ function staticFile(req, res, url) {
     res.writeHead(404);
     return res.end('Not found');
   }
-  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml' };
+  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png' };
   res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream' }); fs.createReadStream(finalResolved).pipe(res);
 }
 

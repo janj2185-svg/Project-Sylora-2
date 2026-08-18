@@ -47,7 +47,7 @@ test('shell IA: Inbox+Profile dock, gifts off primary, create hub CSS linked', (
   assert.doesNotMatch(app, /AI provider ще не налаштований/);
   assert.match(app, /ecosystem-feed/);
   assert.match(app, /inbox-tabs/);
-  assert.match(app, /live-hub-tabs/);
+  assert.match(app, /class="live-tabs"/);
   assert.match(app, /orgWorkspacePanel/);
 });
 

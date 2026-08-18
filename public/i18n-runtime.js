@@ -1,4 +1,4 @@
-import {SUPPORTED_UI_LOCALES,getLocale,setLocale,localeLabel} from './i18n.js';
+import {SUPPORTED_UI_LOCALES,getLocale,setLocale,localeLabel,t} from './i18n.js?v=20260818-i18n3';
 
 const expected=SUPPORTED_UI_LOCALES.join(',');
 
@@ -16,7 +16,7 @@ function normalizeLocaleSelector(root=document){
     select.dataset.syloraLocales=expected;
   }
   select.value=current;
-  select.setAttribute('aria-label','Language');
+  select.setAttribute('aria-label',t('language'));
   return true;
 }
 

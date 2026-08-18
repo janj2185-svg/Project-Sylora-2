@@ -5,6 +5,9 @@ import { expectNoHorizontalOverflow, registerViaUi, uniqueAccount } from './help
 const qaDir='tmp/ui-qa';
 fs.mkdirSync(qaDir,{recursive:true});
 
+const canonicalLogo='/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+const canonicalLogoSha256='dc50f228968b2cebe46a2030cb5b22789482f680caca58171f06b0f25db40f08';
+
 const localeExpectations={
   uk:'Головна',
   en:'Home',
@@ -24,9 +27,10 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   await page.setViewportSize({width:1366,height:900});
   await waitBoot(page);
 
-  await expect(page.locator('.brand img')).toHaveAttribute('src','/assets/sylora-mark-v2.svg');
-  await expect(page.locator('.brand-copy small')).toHaveText('YOUR AI. YOUR WORLD. YOUR LEGACY.');
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href','/assets/sylora-app-icon.svg');
+  await expect(page.locator('.brand img')).toHaveAttribute('src',canonicalLogo);
+  await expect(page.locator('.brand img')).toHaveAttribute('data-brand-sha256',canonicalLogoSha256);
+  await expect(page.locator('.brand img')).toHaveAttribute('alt','SYLORA — YOUR AI. YOUR WORLD. YOUR LEGACY.');
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href',canonicalLogo);
 
   const values=await page.locator('#localeSwitch option').evaluateAll(options=>options.map(option=>option.value));
   const labels=await page.locator('#localeSwitch option').evaluateAll(options=>options.map(option=>option.textContent));
@@ -38,7 +42,7 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   const presenceBox=await presence.boundingBox();
   expect(presenceBox?.height).toBeLessThanOrEqual(58);
   const imageStyle=await page.locator('.sylora-presence-image').evaluate(el=>getComputedStyle(el).backgroundImage);
-  expect(imageStyle).toContain('sylora-mark-v2.svg');
+  expect(imageStyle).toContain(canonicalLogo);
 
   for(const [locale,home] of Object.entries(localeExpectations)){
     await page.locator('#localeSwitch').selectOption(locale);
@@ -57,6 +61,9 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
 });
 
 test('all required responsive widths have no accidental horizontal overflow',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await waitBoot(page);
+  await page.locator('#localeSwitch').selectOption('uk');
   for(const width of [320,390,430,768,1024,1366,1920]){
     await page.setViewportSize({width,height:Math.min(1080,Math.max(700,Math.round(width*.75)))});
     await waitBoot(page);
@@ -106,13 +113,18 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   await expectNoHorizontalOverflow(page);
   const tools=page.locator('.studio-mobile-tools button[data-studio-tool]');
   await expect(tools).toHaveCount(7);
-  await page.locator('.studio-mobile-tools button[data-studio-tool="sources"]').click();
+  const sourcesTool=page.locator('.studio-mobile-tools button[data-studio-tool="sources"]');
+  const sourcesBox=await sourcesTool.boundingBox();
+  expect(sourcesBox?.x).toBeGreaterThanOrEqual(0);
+  expect((sourcesBox?.x||0)+(sourcesBox?.width||0)).toBeLessThanOrEqual(390);
+  await sourcesTool.click();
   await expect(page.locator('.studio-controls>.card[data-studio-panel="sources"]')).toHaveAttribute('data-studio-open','true');
   await expect(page.locator('body')).toHaveClass(/sy-studio-sheet-open/);
   await page.screenshot({path:`${qaDir}/studio-390-sheet.png`,fullPage:true});
 });
 
 test('AI outage is contextual and LIVE state styling follows actual status text',async({page})=>{
+  test.setTimeout(120000);
   const account=uniqueAccount('presence');
   await page.setViewportSize({width:390,height:844});
   await registerViaUi(page,account);
@@ -122,10 +134,45 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await expect(page.locator('.sylora-ai-hero.ai-presence-container')).toBeVisible();
   const source=page.locator('#syloraDegraded');
   await expect(source).toBeHidden();
+  await expectNoHorizontalOverflow(page);
+  await page.screenshot({path:`${qaDir}/ai-390-presence.png`,fullPage:true});
 
   await page.locator('.mobile-dock button[data-view="live"]').click();
   await expect(page.locator('body')).toHaveAttribute('data-view','live');
+  await expect(page.locator('.live-tabs')).toBeVisible();
   await expect(page.locator('#syloraDegraded')).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({path:`${qaDir}/live-390-hub.png`,fullPage:true});
+
+  for(const [view,ready,name] of [
+    ['messages','.messages-hero','inbox'],
+    ['profile','.profile-hero','profile'],
+    ['more','.settings-scene','settings']
+  ]){
+    await page.goto(`/${view}`);
+    await expect(page.locator('body')).toHaveAttribute('data-view',view);
+    await expect(page.locator(ready)).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    if(view==='profile'){
+      const values=await page.locator('#profile select[name="locale"] option').evaluateAll(options=>options.map(option=>option.value));
+      expect(values).toEqual(['uk','en','pl','de','ru']);
+    }
+    await page.screenshot({path:`${qaDir}/${name}-390.png`,fullPage:true});
+  }
+
+  await page.setViewportSize({width:1366,height:900});
+  for(const [view,ready,name] of [
+    ['ai','.sylora-ai-hero.ai-presence-container','ai'],
+    ['live','.live-tabs','live'],
+    ['studio','.studio-stage','studio'],
+    ['messages','.messages-hero','inbox'],
+    ['profile','.profile-hero','profile'],
+    ['more','.settings-scene','settings']
+  ]){
+    await page.goto(`/${view}`);
+    await expect(page.locator('body')).toHaveAttribute('data-view',view);
+    await expect(page.locator(ready)).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.screenshot({path:`${qaDir}/${name}-1366.png`,fullPage:true});
+  }
 });

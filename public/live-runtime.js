@@ -1,4 +1,4 @@
-import {getLocale} from './i18n.js';
+import {getLocale} from './i18n.js?v=20260818-i18n3';
 
 function semanticState(text=''){
   const value=String(text).trim().toLowerCase();

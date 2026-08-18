@@ -12,14 +12,16 @@
 
 ## 0. Governance and non-negotiable rules
 
-This document is the single source of truth for the SYLORA redesign.
+This document remains the product-design roadmap. For brand identity, the
+owner-locked canonical asset contract in `docs/brand/CANONICAL_LOGO.md` has
+higher priority.
 
 The redesign is not a new decorative CSS layer and not a sequence of unrelated screen restyles. It is a product-wide design system with one visual, spatial, interaction and motion language across Social, AI, LIVE, Creation, Business and Learning.
 
 ### Locked rules
 
 1. The approved direction is **SYLORA Living Horizon**.
-2. The approved SYLORA mark and wordmark are retained. No replacement logo may be invented during implementation. The current repository mark is `public/assets/sylora-mark-v2.svg`.
+2. The approved SYLORA mark, wordmark, star detail and tagline are retained exactly. No replacement or redraw may be invented. The repository source of truth is `public/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png` with SHA-256 `dc50f228968b2cebe46a2030cb5b22789482f680caca58171f06b0f25db40f08`.
 3. Existing routes, APIs and working behavior are functional contracts, not visual references.
 4. Existing `design-*.css` files are not automatically an approved baseline. They must be audited for ownership, duplication and cascade conflicts.
 5. Do not add another global override stylesheet to hide structural design problems.

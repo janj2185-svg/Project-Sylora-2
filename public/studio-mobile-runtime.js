@@ -1,4 +1,4 @@
-import {getLocale} from './i18n.js';
+import {getLocale} from './i18n.js?v=20260818-i18n3';
 import {uiCopy} from './locales/ui-runtime.js';
 
 const TOOL_KEYS={
@@ -10,20 +10,14 @@ const TOOL_KEYS={
   browser:'browserSource',
   record:'record'
 };
+const PANEL_ORDER=['sources','audio','scenes','broadcast','obs','browser','record'];
+const STUDIO_PORTAL_SELECTOR='.studio-mobile-tools,.studio-sheet-backdrop';
+let mountedControls=null;
 
 function toolLabel(name){return uiCopy(getLocale(),TOOL_KEYS[name]||name)}
 
 function classify(card,index){
-  const label=String(card.querySelector('.eyebrow')?.textContent||'').trim().toLowerCase();
-  // Specific composite labels must be matched before generic "source" / "obs" labels.
-  if(label.includes('browser source'))return 'browser';
-  if(label.includes('source'))return 'sources';
-  if(label.includes('audio'))return 'audio';
-  if(label.includes('scene'))return 'scenes';
-  if(label.includes('broadcast'))return 'broadcast';
-  if(label.includes('obs'))return 'obs';
-  if(label.includes('record'))return 'record';
-  return `panel-${index}`;
+  return card.dataset.studioPanel||PANEL_ORDER[index]||`panel-${index}`;
 }
 
 function closeSheets(){
@@ -38,7 +32,9 @@ function openSheet(name){
   closeSheets();
   card.dataset.studioOpen='true';
   document.body.classList.add('sy-studio-sheet-open');
-  document.querySelector(`.studio-mobile-tools button[data-studio-tool="${CSS.escape(name)}"]`)?.classList.add('active');
+  const active=document.querySelector(`.studio-mobile-tools button[data-studio-tool="${CSS.escape(name)}"]`);
+  active?.classList.add('active');
+  active?.scrollIntoView({block:'nearest',inline:'center',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
 }
 
 function updateToolLabels(){
@@ -50,11 +46,31 @@ function updateToolLabels(){
   document.querySelector('.studio-mobile-tools')?.setAttribute('aria-label',uiCopy(getLocale(),'creatorStudio'));
 }
 
+function portalsAreCurrent(){
+  const tools=document.querySelectorAll('.studio-mobile-tools');
+  const backdrops=document.querySelectorAll('.studio-sheet-backdrop');
+  return tools.length===1&&backdrops.length===1&&tools[0].parentElement===document.body&&backdrops[0].parentElement===document.body;
+}
+
+function removePortalNodes(){
+  document.querySelectorAll(STUDIO_PORTAL_SELECTOR).forEach(node=>node.remove());
+  mountedControls=null;
+}
+
 function mount(){
-  if(document.body.dataset.view!=='studio')return;
+  if(document.body.dataset.view!=='studio')return false;
   const controls=document.querySelector('.studio-controls');
   const stage=document.querySelector('.studio-stage');
-  if(!controls||!stage||controls.dataset.mobileMounted==='1')return;
+  if(!controls||!stage){
+    closeSheets();
+    removePortalNodes();
+    return false;
+  }
+  if(mountedControls===controls&&controls.dataset.mobileMounted==='1'&&portalsAreCurrent())return true;
+
+  closeSheets();
+  removePortalNodes();
+  mountedControls=controls;
   controls.dataset.mobileMounted='1';
 
   const cards=[...controls.children].filter(node=>node.classList?.contains('card'));
@@ -75,9 +91,9 @@ function mount(){
 
   const tools=document.createElement('nav');
   tools.className='studio-mobile-tools';
+  tools.dataset.studioPortal='tools';
   tools.setAttribute('aria-label',uiCopy(getLocale(),'creatorStudio'));
-  const order=['sources','audio','scenes','broadcast','obs','browser','record'];
-  for(const name of order){
+  for(const name of PANEL_ORDER){
     if(!controls.querySelector(`.card[data-studio-panel="${name}"]`))continue;
     const button=document.createElement('button');
     button.type='button';
@@ -90,9 +106,11 @@ function mount(){
 
   const backdrop=document.createElement('div');
   backdrop.className='studio-sheet-backdrop';
+  backdrop.dataset.studioPortal='backdrop';
   backdrop.addEventListener('click',closeSheets);
   document.body.append(backdrop);
-  stage.after(tools);
+  document.body.append(tools);
+  return true;
 }
 
 function cleanupIfNeeded(){
@@ -102,8 +120,7 @@ function cleanupIfNeeded(){
     return;
   }
   closeSheets();
-  document.querySelector('.studio-mobile-tools')?.remove();
-  document.querySelector('.studio-sheet-backdrop')?.remove();
+  removePortalNodes();
   document.querySelectorAll('.studio-controls').forEach(node=>delete node.dataset.mobileMounted);
 }
 
