@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="SYLORA app icon">
+  <defs>
+    <linearGradient id="bg" x1="24" y1="10" x2="226" y2="242" gradientUnits="userSpaceOnUse"><stop stop-color="#232529"/><stop offset=".48" stop-color="#08090a"/><stop offset="1" stop-color="#1a1b1d"/></linearGradient>
+    <linearGradient id="metal" x1="55" y1="31" x2="198" y2="222" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".25" stop-color="#9da0a4"/><stop offset=".48" stop-color="#fff"/><stop offset=".72" stop-color="#55585c"/><stop offset="1" stop-color="#f5f5f3"/></linearGradient>
+    <radialGradient id="gold"><stop stop-color="#fff"/><stop offset=".18" stop-color="#fff2c2"/><stop offset=".48" stop-color="#e2a94b"/><stop offset=".8" stop-color="#7e4d12" stop-opacity=".82"/><stop offset="1" stop-color="#15100a" stop-opacity="0"/></radialGradient>
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".45"/></filter>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="54" fill="url(#bg)"/>
+  <g filter="url(#shadow)" fill="url(#metal)">
+    <path d="M128 38c6 32 1 53-17 75-9 11-19 16-30 14-13-2-22-9-34-19 24-24 46-32 62-50 9-11 15-20 19-20Z"/>
+    <path d="M138 55c-3 22 3 35 18 47 12 10 27 15 51 25-14 17-24 25-37 25-13 0-23-5-32-16-14-17-18-37-15-62 3-9 8-15 15-19Z"/>
+    <path d="M207 127c-24 10-39 16-51 26-15 12-21 26-18 48-7-4-12-10-15-19-3-25 1-45 15-62 9-11 19-16 32-16 13 0 23 7 37 23Z"/>
+    <path d="M128 218c-4 0-10-9-19-20-16-18-38-26-62-50 12-10 21-17 34-19 11-2 21 3 30 14 18 22 23 43 17 75Z"/>
+  </g>
+  <circle cx="128" cy="128" r="34" fill="url(#gold)" opacity=".72"/>
+  <path d="M128 96c7 16 16 25 32 32-16 7-25 16-32 32-7-16-16-25-32-32 16-7 25-16 32-32Z" fill="#fff7de"/>
+  <path d="M128 110c4 9 9 14 18 18-9 4-14 9-18 18-4-9-9-14-18-18 9-4 14-9 18-18Z" fill="#d9a348"/>
+  <circle cx="128" cy="128" r="3.2" fill="#fff"/>
+</svg>
