@@ -7,13 +7,19 @@ function sourceStatus(){
   return /voice/i.test(raw)&&!/text ai/i.test(raw)?{kind:'voice',text:t('voiceUnavailable')}:{kind:'ai',text:t('syloraUnavailable')};
 }
 
+function setTextIfChanged(node,value){
+  if(!node||node.textContent===value)return false;
+  node.textContent=value;
+  return true;
+}
+
 function sync(){
   const source=document.querySelector('#syloraDegraded');
-  if(source)source.classList.add('sy-ai-status-source');
+  if(source&&!source.classList.contains('sy-ai-status-source'))source.classList.add('sy-ai-status-source');
   const hero=document.querySelector('.sylora-ai-hero');
   document.querySelectorAll('.sy-ai-context-status').forEach(node=>{if(node.closest('.sylora-ai-hero')!==hero)node.remove()});
   if(document.body.dataset.view!=='ai'||!hero)return;
-  hero.classList.add('ai-presence-container');
+  if(!hero.classList.contains('ai-presence-container'))hero.classList.add('ai-presence-container');
   const status=sourceStatus();
   let node=hero.querySelector('.sy-ai-context-status');
   if(!status){node?.remove();delete hero.dataset.providerState;return}
@@ -25,15 +31,24 @@ function sync(){
     const eyebrow=hero.querySelector('.eyebrow');
     if(eyebrow)eyebrow.after(node);else hero.prepend(node);
   }
-  node.dataset.kind=status.kind;
-  node.textContent=status.text;
-  hero.dataset.providerState=status.kind==='ai'?'offline':'degraded';
+  if(node.dataset.kind!==status.kind)node.dataset.kind=status.kind;
+  setTextIfChanged(node,status.text);
+  const providerState=status.kind==='ai'?'offline':'degraded';
+  if(hero.dataset.providerState!==providerState)hero.dataset.providerState=providerState;
+}
+
+let scheduled=false;
+function scheduleSync(){
+  if(scheduled)return;
+  scheduled=true;
+  requestAnimationFrame(()=>{scheduled=false;sync()});
 }
 
 function boot(){
   sync();
-  const observer=new MutationObserver(()=>queueMicrotask(sync));
+  const observer=new MutationObserver(scheduleSync);
   observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['hidden','data-view']});
+  document.addEventListener('sylora:localechange',scheduleSync);
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
