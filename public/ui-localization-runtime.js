@@ -44,6 +44,12 @@ function updateTaggedCopy(root=document){
     const translated=uiCopy(getLocale(),key);
     if(!translated)continue;
     const textNode=directTextNode(element);
+    const current=String(textNode?.nodeValue??(!element.children.length?element.textContent:'')).trim();
+    const knownCopy=SUPPORTED_UI_LOCALES.some(locale=>uiCopy(locale,key)===current);
+    if(current&&!knownCopy){
+      delete element.dataset.syloraCopy;
+      continue;
+    }
     if(textNode){
       const raw=textNode.nodeValue||'';
       const trimmed=raw.trim();

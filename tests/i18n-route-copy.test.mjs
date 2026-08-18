@@ -26,6 +26,12 @@ test('localization bridge protects user-generated content from automatic UI tran
   }
 });
 
+test('localization bridge relinquishes stale tags when application state writes dynamic copy',()=>{
+  const source=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  assert.match(source,/SUPPORTED_UI_LOCALES\.some\(locale=>uiCopy\(locale,key\)===current\)/);
+  assert.match(source,/if\(current&&!knownCopy\)\{\s*delete element\.dataset\.syloraCopy;\s*continue;/);
+});
+
 test('critical Studio and LIVE labels are covered by centralized aliases',()=>{
   const source=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
   for(const literal of ['SOURCES','SCENES','AUDIO MIXER','BROADCAST','RECORD','WAITING FOR HOST','CONNECTION LOST']){
