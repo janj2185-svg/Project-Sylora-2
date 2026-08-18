@@ -128,6 +128,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   const account=uniqueAccount('presence');
   await page.setViewportSize({width:390,height:844});
   await registerViaUi(page,account);
+  expect(await page.locator('.horizon-copy h1').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
 
   await page.locator('.mobile-dock button[data-view="ai"]').click();
   await expect(page.locator('body')).toHaveAttribute('data-view','ai');
@@ -156,6 +157,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
     if(view==='profile'){
       const values=await page.locator('#profile select[name="locale"] option').evaluateAll(options=>options.map(option=>option.value));
       expect(values).toEqual(['uk','en','pl','de','ru']);
+      expect(await page.locator('.profile-hero h1').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
     }
     await page.screenshot({path:`${qaDir}/${name}-390.png`,fullPage:true});
   }

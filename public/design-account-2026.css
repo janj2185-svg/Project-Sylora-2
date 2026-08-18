@@ -31,6 +31,7 @@ body[data-view="profile"] .profile-hero h1{
   font-weight:640;
   letter-spacing:-.055em;
   line-height:1;
+  overflow-wrap:anywhere;
 }
 
 body[data-view="profile"] .profile-hero>p{
@@ -41,6 +42,7 @@ body[data-view="profile"] .profile-hero>p{
   color:var(--sy-muted);
   font-size:13px;
   line-height:1.6;
+  overflow-wrap:anywhere;
 }
 
 body[data-view="profile"] .profile-aura{

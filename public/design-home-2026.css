@@ -27,7 +27,7 @@ body[data-view="feed"] .living-horizon.home-compact:after{
 }
 body[data-view="feed"] .horizon-copy{position:relative;top:auto;left:auto;max-width:620px;z-index:3;padding-right:190px}
 body[data-view="feed"] .horizon-copy .eyebrow{font-size:10px;color:#76684f;letter-spacing:.18em}
-body[data-view="feed"] .horizon-copy h1{font-size:clamp(40px,4.5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;color:var(--sy-ink);font-weight:630}
+body[data-view="feed"] .horizon-copy h1{font-size:clamp(40px,4.5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;color:var(--sy-ink);font-weight:630;overflow-wrap:anywhere}
 body[data-view="feed"] .horizon-copy p{max-width:470px;font-size:14px;line-height:1.65;color:var(--sy-muted)}
 
 /* Contextual AI entry point: no portrait on Home. */
