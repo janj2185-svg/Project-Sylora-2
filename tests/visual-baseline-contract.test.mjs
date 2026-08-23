@@ -8,6 +8,11 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {deflateSync} from 'node:zlib';
 import {verifyPassword} from '../src/auth.mjs';
+import {
+  VISUAL_TOUCH_POINTS,
+  enforceVisualTouchEmulation,
+  verifyVisualTouchInput
+} from '../e2e/visual-helpers.mjs';
 import {FIXED_VISUAL_ACCOUNT,VISUAL_FIXTURE_ID,createVisualFixtureData} from '../scripts/visual-fixture.mjs';
 import {
   BASELINE_LOCALE,
@@ -147,12 +152,14 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
         devicePixelRatio:viewport.devicePixelRatio,
         locale:BASELINE_LOCALE,
         reducedMotion:true,
-        touchPoints:touch?1:0
+        touchPoints:touch?1:0,
+        primaryPointer:touch?'coarse':'fine',
+        primaryHover:touch?'none':'hover'
       }
     };
   });
   return {
-    schemaVersion:1,
+    schemaVersion:2,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -206,6 +213,63 @@ test('ordinary browser QA and deterministic visual QA have disjoint discovery',(
   assert.ok(visual.every(file=>file==='visual-baseline.spec.mjs'));
 });
 
+test('touch visual contexts retain explicit Chromium emulation and native input evidence',async()=>{
+  const page={id:'visual-page'};
+  const calls=[];
+  let detachCount=0;
+  const context={
+    async newCDPSession(observedPage){
+      assert.equal(observedPage,page);
+      return {
+        async send(method,params){calls.push({method,params});},
+        async detach(){detachCount+=1;}
+      };
+    }
+  };
+
+  const session=await enforceVisualTouchEmulation(context,page,{hasTouch:true});
+  assert.deepEqual(calls,[{
+    method:'Emulation.setTouchEmulationEnabled',
+    params:{enabled:true,maxTouchPoints:VISUAL_TOUCH_POINTS}
+  }]);
+  assert.equal(VISUAL_TOUCH_POINTS,1);
+  assert.equal(detachCount,0);
+  await session.detach();
+  assert.equal(detachCount,1);
+
+  const desktopSession=await enforceVisualTouchEmulation(context,page,{hasTouch:false});
+  assert.equal(desktopSession,null);
+  assert.equal(calls.length,1);
+  assert.equal(detachCount,1);
+
+  let failedDetachCount=0;
+  const failingContext={
+    async newCDPSession(){
+      return {
+        async send(){throw new Error('touch emulation failed');},
+        async detach(){failedDetachCount+=1;}
+      };
+    }
+  };
+  await assert.rejects(
+    enforceVisualTouchEmulation(failingContext,page,{hasTouch:true}),
+    /touch emulation failed/
+  );
+  assert.equal(failedDetachCount,1);
+
+  const evaluations=[];
+  const touchPage={
+    touchscreen:{async tap(x,y){assert.deepEqual([x,y],[12,12]);}},
+    async evaluate(){
+      evaluations.push(evaluations.length);
+      if(evaluations.length===2)return {pointerType:'touch',touchStart:true};
+    }
+  };
+  await verifyVisualTouchInput(touchPage,{hasTouch:true});
+  assert.equal(evaluations.length,3);
+  await verifyVisualTouchInput(null,{hasTouch:false});
+});
+
 test('visual fixture seed is deterministic and directly login-capable',()=>{
   const first=createVisualFixtureData();
   const second=createVisualFixtureData();
@@ -255,10 +319,27 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateCaptureMetadata(pendingMetadataFixture()),/sourceRun\.conclusion must be success/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:1}),/schemaVersion must be 2/);
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
   assert.throws(()=>validatePendingCaptureSource({...raw,browser:{...raw.browser,version:'different'}},pendingMetadataFixture()),/browser does not match/);
+  const pointerDrift={
+    ...raw,
+    files:raw.files.map((record,index)=>index===0?{
+      ...record,
+      runtime:{...record.runtime,primaryPointer:'fine'}
+    }:record)
+  };
+  assert.throws(()=>validateRawCaptureMetadata(pointerDrift),/pointer contract drifted/);
+  const hoverDrift={
+    ...raw,
+    files:raw.files.map((record,index)=>index===0?{
+      ...record,
+      runtime:{...record.runtime,primaryHover:'hover'}
+    }:record)
+  };
+  assert.throws(()=>validateRawCaptureMetadata(hoverDrift),/pointer contract drifted/);
 });
 
 test('pending runner provenance finalizes only from the exact successful terminal run',async()=>{

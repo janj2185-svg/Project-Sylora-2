@@ -14,8 +14,10 @@ import {
   VISUAL_VIEWPORTS,
   captureRuntimeDiagnostics,
   createVisualContext,
+  enforceVisualTouchEmulation,
   ensureFixedVisualAccount,
   gotoVisualSurface,
+  verifyVisualTouchInput,
   visualRuntimeMetadata
 } from './visual-helpers.mjs';
 
@@ -35,10 +37,13 @@ for (const viewport of VISUAL_VIEWPORTS) {
     const context = await createVisualContext(browser, viewport, baseURL);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage();
-    await page.clock.setFixedTime(new Date(FIXED_VISUAL_TIME));
     let traceStopped = false;
+    let touchEmulationSession = null;
 
     try {
+      touchEmulationSession = await enforceVisualTouchEmulation(context, page, viewport);
+      await verifyVisualTouchInput(page, viewport);
+      await page.clock.setFixedTime(new Date(FIXED_VISUAL_TIME));
       await ensureFixedVisualAccount(page);
       const diagnostics = captureRuntimeDiagnostics(page);
 
@@ -67,6 +72,11 @@ for (const viewport of VISUAL_VIEWPORTS) {
           }
           if (viewport.hasTouch ? runtime.touchPoints < 1 : runtime.touchPoints !== 0) {
             throw new Error(`Unexpected touch contract: ${runtime.touchPoints}`);
+          }
+          const expectedPointer = viewport.hasTouch ? 'coarse' : 'fine';
+          const expectedHover = viewport.hasTouch ? 'none' : 'hover';
+          if (runtime.primaryPointer !== expectedPointer || runtime.primaryHover !== expectedHover) {
+            throw new Error(`Unexpected pointer contract: ${runtime.primaryPointer}/${runtime.primaryHover}`);
           }
           diagnostics.assertClean(`${surface.id}:post-capture`);
 
@@ -100,7 +110,11 @@ for (const viewport of VISUAL_VIEWPORTS) {
       try {
         if (!traceStopped) await context.tracing.stop();
       } finally {
-        await context.close();
+        try {
+          await touchEmulationSession?.detach().catch(() => {});
+        } finally {
+          await context.close();
+        }
       }
     }
   });
@@ -116,7 +130,7 @@ test.afterAll(() => {
 
   const expectedFiles = VISUAL_SURFACES.length * VISUAL_VIEWPORTS.length;
   const metadata = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     status: 'CANDIDATE_RESTORED_BASELINE',
     complete: records.length === expectedFiles,
     expectedFiles,

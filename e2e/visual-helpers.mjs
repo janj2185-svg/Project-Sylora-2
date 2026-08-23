@@ -17,6 +17,8 @@ export const VISUAL_VIEWPORTS = Object.freeze([
   Object.freeze({ id: '1920x1080', width: 1920, height: 1080, isMobile: false, hasTouch: false })
 ]);
 
+export const VISUAL_TOUCH_POINTS = 1;
+
 export const VISUAL_SURFACES = Object.freeze([
   Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.living-horizon.home-compact' }),
   Object.freeze({ id: 'live', path: '/live', view: 'live', ready: '.live-tabs' }),
@@ -75,6 +77,78 @@ export async function createVisualContext(browser, viewport, baseURL) {
   }, { seed: VISUAL_RANDOM_SEED });
 
   return context;
+}
+
+export async function enforceVisualTouchEmulation(context, page, viewport) {
+  if (!viewport.hasTouch) return null;
+
+  // Playwright 1.62.1 enables Chromium touch emulation without sending the
+  // protocol's maxTouchPoints field. Chrome for Testing 151 nevertheless
+  // reported navigator.maxTouchPoints as 0 in CI. Keep Playwright's hasTouch
+  // context contract, and make the Chromium protocol value explicit so the
+  // captured page exposes the same touch capability that drives its input mode.
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send('Emulation.setTouchEmulationEnabled', {
+      enabled: true,
+      maxTouchPoints: VISUAL_TOUCH_POINTS
+    });
+    return session;
+  } catch (error) {
+    await session.detach().catch(() => {});
+    throw error;
+  }
+}
+
+export async function verifyVisualTouchInput(page, viewport) {
+  if (!viewport.hasTouch) return;
+
+  await page.evaluate(() => {
+    const probe = document.createElement('button');
+    probe.type = 'button';
+    probe.id = 'sylora-visual-touch-probe';
+    probe.setAttribute('aria-label', 'Visual touch probe');
+    Object.assign(probe.style, {
+      position: 'fixed',
+      inset: '0 auto auto 0',
+      width: '24px',
+      height: '24px',
+      zIndex: '2147483647',
+      opacity: '0.01',
+      touchAction: 'none'
+    });
+    globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = { pointerType: '', touchStart: false };
+    probe.addEventListener('pointerdown', event => {
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture: true });
+    probe.addEventListener('touchstart', event => {
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture: true, passive: false });
+    probe.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, { capture: true });
+    document.body.append(probe);
+  });
+
+  let result;
+  try {
+    await page.touchscreen.tap(12, 12);
+    result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
+  } finally {
+    await page.evaluate(() => {
+      document.querySelector('#sylora-visual-touch-probe')?.remove();
+      delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
+    }).catch(() => {});
+  }
+
+  if (!result?.touchStart || result.pointerType !== 'touch') {
+    throw new Error(`Native touch probe failed: ${JSON.stringify(result)}`);
+  }
 }
 
 async function browserAuthRequest(page, path, payload, token = '') {
@@ -340,6 +414,12 @@ export async function visualRuntimeMetadata(page) {
     devicePixelRatio,
     locale: document.documentElement.lang,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-    touchPoints: navigator.maxTouchPoints
+    touchPoints: navigator.maxTouchPoints,
+    primaryPointer: matchMedia('(pointer: coarse)').matches
+      ? 'coarse'
+      : matchMedia('(pointer: fine)').matches ? 'fine' : 'none',
+    primaryHover: matchMedia('(hover: hover)').matches
+      ? 'hover'
+      : matchMedia('(hover: none)').matches ? 'none' : 'unknown'
   }));
 }
