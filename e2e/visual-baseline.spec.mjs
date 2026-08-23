@@ -12,6 +12,7 @@ import {
   VISUAL_RANDOM_SEED,
   VISUAL_SURFACES,
   VISUAL_VIEWPORTS,
+  applyVisualTouchEmulation,
   captureRuntimeDiagnostics,
   createVisualContext,
   enforceVisualTouchEmulation,
@@ -41,15 +42,21 @@ for (const viewport of VISUAL_VIEWPORTS) {
     let touchEmulationSession = null;
 
     try {
-      touchEmulationSession = await enforceVisualTouchEmulation(context, page, viewport);
-      await verifyVisualTouchInput(page, viewport);
       await page.clock.setFixedTime(new Date(FIXED_VISUAL_TIME));
       await ensureFixedVisualAccount(page);
+      touchEmulationSession = await enforceVisualTouchEmulation(context, page, viewport);
+      await verifyVisualTouchInput(page, viewport);
       const diagnostics = captureRuntimeDiagnostics(page);
 
       for (const surface of VISUAL_SURFACES) {
         await test.step(surface.id, async () => {
-          await gotoVisualSurface(page, surface);
+          let nativeTouchInput = null;
+          await gotoVisualSurface(page, surface, {
+            afterNavigation: async () => {
+              await applyVisualTouchEmulation(touchEmulationSession, viewport);
+              nativeTouchInput = await verifyVisualTouchInput(page, viewport);
+            }
+          });
           diagnostics.assertClean(surface.id);
 
           const relativePath = path.join(surface.id, viewport.id, `${VISUAL_LOCALE}.png`);
@@ -62,7 +69,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
             caret: 'hide',
             scale: 'css'
           });
-          const runtime = await visualRuntimeMetadata(page);
+          const runtime = await visualRuntimeMetadata(page, nativeTouchInput);
           if (runtime.devicePixelRatio !== 1) throw new Error(`Unexpected DPR ${runtime.devicePixelRatio}`);
           if (runtime.fontStatus !== 'loaded') throw new Error(`Fonts are not loaded: ${runtime.fontStatus}`);
           if (runtime.locale !== VISUAL_LOCALE) throw new Error(`Unexpected locale ${runtime.locale}`);
@@ -130,7 +137,7 @@ test.afterAll(() => {
 
   const expectedFiles = VISUAL_SURFACES.length * VISUAL_VIEWPORTS.length;
   const metadata = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     status: 'CANDIDATE_RESTORED_BASELINE',
     complete: records.length === expectedFiles,
     expectedFiles,

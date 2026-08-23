@@ -10,7 +10,9 @@ import {deflateSync} from 'node:zlib';
 import {verifyPassword} from '../src/auth.mjs';
 import {
   VISUAL_TOUCH_POINTS,
+  applyVisualTouchEmulation,
   enforceVisualTouchEmulation,
+  gotoVisualSurface,
   verifyVisualTouchInput
 } from '../e2e/visual-helpers.mjs';
 import {FIXED_VISUAL_ACCOUNT,VISUAL_FIXTURE_ID,createVisualFixtureData} from '../scripts/visual-fixture.mjs';
@@ -43,6 +45,7 @@ import {
 const repositoryState=await inspectCandidateDirectory(DEFAULT_CANDIDATE_DIR);
 const defaultPlaywrightConfig=await readFile(new URL('../playwright.config.mjs',import.meta.url),'utf8');
 const visualPlaywrightConfig=await readFile(new URL('../playwright.visual.config.mjs',import.meta.url),'utf8');
+const visualBaselineSpec=await readFile(new URL('../e2e/visual-baseline.spec.mjs',import.meta.url),'utf8');
 const repositoryRoot=fileURLToPath(new URL('..',import.meta.url));
 const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
 
@@ -154,12 +157,13 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
         reducedMotion:true,
         touchPoints:touch?1:0,
         primaryPointer:touch?'coarse':'fine',
-        primaryHover:touch?'none':'hover'
+        primaryHover:touch?'none':'hover',
+        nativeTouchInput:touch?{touchStart:true,pointerType:'touch'}:null
       }
     };
   });
   return {
-    schemaVersion:2,
+    schemaVersion:3,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -213,7 +217,7 @@ test('ordinary browser QA and deterministic visual QA have disjoint discovery',(
   assert.ok(visual.every(file=>file==='visual-baseline.spec.mjs'));
 });
 
-test('touch visual contexts retain explicit Chromium emulation and native input evidence',async()=>{
+test('touch visual contexts reapply explicit Chromium emulation and retain post-navigation native input evidence',async()=>{
   const page={id:'visual-page'};
   const calls=[];
   let detachCount=0;
@@ -234,12 +238,19 @@ test('touch visual contexts retain explicit Chromium emulation and native input 
   }]);
   assert.equal(VISUAL_TOUCH_POINTS,1);
   assert.equal(detachCount,0);
+  await applyVisualTouchEmulation(session,{hasTouch:true});
+  assert.deepEqual(calls[1],{
+    method:'Emulation.setTouchEmulationEnabled',
+    params:{enabled:true,maxTouchPoints:VISUAL_TOUCH_POINTS}
+  });
+  await applyVisualTouchEmulation(null,{hasTouch:false});
+  await assert.rejects(applyVisualTouchEmulation(null,{hasTouch:true}),/active CDP session/);
   await session.detach();
   assert.equal(detachCount,1);
 
   const desktopSession=await enforceVisualTouchEmulation(context,page,{hasTouch:false});
   assert.equal(desktopSession,null);
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,2);
   assert.equal(detachCount,1);
 
   let failedDetachCount=0;
@@ -265,9 +276,22 @@ test('touch visual contexts retain explicit Chromium emulation and native input 
       if(evaluations.length===2)return {pointerType:'touch',touchStart:true};
     }
   };
-  await verifyVisualTouchInput(touchPage,{hasTouch:true});
+  const evidence=await verifyVisualTouchInput(touchPage,{hasTouch:true});
+  assert.deepEqual(evidence,{pointerType:'touch',touchStart:true});
   assert.equal(evaluations.length,3);
-  await verifyVisualTouchInput(null,{hasTouch:false});
+  assert.equal(await verifyVisualTouchInput(null,{hasTouch:false}),null);
+
+  const navigationSource=gotoVisualSurface.toString();
+  const gotoIndex=navigationSource.indexOf("await page.goto(surface.path, { waitUntil: 'load' })");
+  const reapplyIndex=navigationSource.indexOf('await afterNavigation()');
+  const readinessIndex=navigationSource.indexOf('await waitForCapabilitiesState');
+  assert.notEqual(gotoIndex,-1);
+  assert.notEqual(reapplyIndex,-1);
+  assert.notEqual(readinessIndex,-1);
+  assert.ok(gotoIndex<reapplyIndex);
+  assert.ok(reapplyIndex<readinessIndex);
+  assert.match(visualBaselineSpec,/await ensureFixedVisualAccount\(page\);\s+touchEmulationSession = await enforceVisualTouchEmulation/);
+  assert.match(visualBaselineSpec,/afterNavigation: async \(\) => \{\s+await applyVisualTouchEmulation\(touchEmulationSession, viewport\);\s+nativeTouchInput = await verifyVisualTouchInput/);
 });
 
 test('visual fixture seed is deterministic and directly login-capable',()=>{
@@ -319,7 +343,7 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateCaptureMetadata(pendingMetadataFixture()),/sourceRun\.conclusion must be success/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:1}),/schemaVersion must be 2/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:2}),/schemaVersion must be 3/);
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
@@ -340,6 +364,22 @@ test('file-set and runner-metadata contracts fail closed',()=>{
     }:record)
   };
   assert.throws(()=>validateRawCaptureMetadata(hoverDrift),/pointer contract drifted/);
+  const nativeTouchDrift={
+    ...raw,
+    files:raw.files.map((record,index)=>index===0?{
+      ...record,
+      runtime:{...record.runtime,nativeTouchInput:{touchStart:false,pointerType:'touch'}}
+    }:record)
+  };
+  assert.throws(()=>validateRawCaptureMetadata(nativeTouchDrift),/native touch evidence drifted/);
+  const desktopTouchClaim={
+    ...raw,
+    files:raw.files.map((record,index)=>index===2?{
+      ...record,
+      runtime:{...record.runtime,nativeTouchInput:{touchStart:true,pointerType:'touch'}}
+    }:record)
+  };
+  assert.throws(()=>validateRawCaptureMetadata(desktopTouchClaim),/desktop nativeTouchInput must be null/);
 });
 
 test('pending runner provenance finalizes only from the exact successful terminal run',async()=>{

@@ -252,7 +252,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==2)fail('capture report.schemaVersion must be 2');
+  if(report.schemaVersion!==3)fail('capture report.schemaVersion must be 3');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -315,7 +315,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
     requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
       'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','touchPoints',
-      'primaryPointer','primaryHover'
+      'primaryPointer','primaryHover','nativeTouchInput'
     ]);
     if(record.runtime.fontStatus!=='loaded')fail(`capture report ${record.file} fonts were not loaded`);
     requireString(record.runtime.bodyFontFamily,`capture report ${record.file} bodyFontFamily`);
@@ -326,6 +326,14 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     if(record.runtime.locale!==BASELINE_LOCALE)fail(`capture report ${record.file} runtime locale drifted`);
     if(record.runtime.reducedMotion!==true)fail(`capture report ${record.file} reduced motion is not active`);
     if(touch?record.runtime.touchPoints<1:record.runtime.touchPoints!==0)fail(`capture report ${record.file} touch contract drifted`);
+    if(touch){
+      requireExactObject(record.runtime.nativeTouchInput,`capture report ${record.file} runtime.nativeTouchInput`,['touchStart','pointerType']);
+      if(record.runtime.nativeTouchInput.touchStart!==true||record.runtime.nativeTouchInput.pointerType!=='touch'){
+        fail(`capture report ${record.file} native touch evidence drifted`);
+      }
+    }else if(record.runtime.nativeTouchInput!==null){
+      fail(`capture report ${record.file} desktop nativeTouchInput must be null`);
+    }
     const expectedPointer=touch?'coarse':'fine';
     const expectedHover=touch?'none':'hover';
     if(record.runtime.primaryPointer!==expectedPointer||record.runtime.primaryHover!==expectedHover){

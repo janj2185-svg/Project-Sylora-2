@@ -53,6 +53,7 @@ The pinned runner must:
 - freeze browser time and seeded randomness;
 - wait for the capability state, `document.fonts.ready`, DOM images and CSS background images;
 - record the exact rendered head commit, Playwright/Chromium versions, runner OS/image, font family, DPR and input mode;
+- reapply the explicit Chromium touch override after every navigation and record a native `touchstart` plus `PointerEvent.pointerType = touch` probe for every mobile screenshot;
 - produce exactly 44 unique canonical paths in each pass;
 - prove that all 44 PNG SHA-256 digests match between capture and repeat.
 

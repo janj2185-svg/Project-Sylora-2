@@ -79,20 +79,27 @@ export async function createVisualContext(browser, viewport, baseURL) {
   return context;
 }
 
+export async function applyVisualTouchEmulation(session, viewport) {
+  if (!viewport.hasTouch) return;
+  if (!session) throw new Error('Touch visual context requires an active CDP session');
+  await session.send('Emulation.setTouchEmulationEnabled', {
+    enabled: true,
+    maxTouchPoints: VISUAL_TOUCH_POINTS
+  });
+}
+
 export async function enforceVisualTouchEmulation(context, page, viewport) {
   if (!viewport.hasTouch) return null;
 
   // Playwright 1.62.1 enables Chromium touch emulation without sending the
   // protocol's maxTouchPoints field. Chrome for Testing 151 nevertheless
   // reported navigator.maxTouchPoints as 0 in CI. Keep Playwright's hasTouch
-  // context contract, and make the Chromium protocol value explicit so the
-  // captured page exposes the same touch capability that drives its input mode.
+  // context contract, and make the Chromium protocol value explicit. Chromium
+  // resets the renderer-owned override on navigation, so callers retain this
+  // session and reapply it on every newly loaded visual document.
   const session = await context.newCDPSession(page);
   try {
-    await session.send('Emulation.setTouchEmulationEnabled', {
-      enabled: true,
-      maxTouchPoints: VISUAL_TOUCH_POINTS
-    });
+    await applyVisualTouchEmulation(session, viewport);
     return session;
   } catch (error) {
     await session.detach().catch(() => {});
@@ -101,7 +108,7 @@ export async function enforceVisualTouchEmulation(context, page, viewport) {
 }
 
 export async function verifyVisualTouchInput(page, viewport) {
-  if (!viewport.hasTouch) return;
+  if (!viewport.hasTouch) return null;
 
   await page.evaluate(() => {
     const probe = document.createElement('button');
@@ -149,6 +156,7 @@ export async function verifyVisualTouchInput(page, viewport) {
   if (!result?.touchStart || result.pointerType !== 'touch') {
     throw new Error(`Native touch probe failed: ${JSON.stringify(result)}`);
   }
+  return { touchStart: true, pointerType: 'touch' };
 }
 
 async function browserAuthRequest(page, path, payload, token = '') {
@@ -281,10 +289,11 @@ export function captureRuntimeDiagnostics(page) {
   };
 }
 
-export async function gotoVisualSurface(page, surface) {
+export async function gotoVisualSurface(page, surface, { afterNavigation } = {}) {
   if (surface.id === 'sylora') await clearVisualAiState(page);
   const capabilitiesResponsePromise=nextCapabilitiesResponse(page);
   await page.goto(surface.path, { waitUntil: 'load' });
+  if (afterNavigation) await afterNavigation();
   await waitForCapabilitiesState(page,capabilitiesResponsePromise);
   await expect(page.locator('body')).toHaveAttribute('data-view', surface.view);
   await expect(page.locator('#localeSwitch')).toHaveValue(VISUAL_LOCALE);
@@ -405,7 +414,7 @@ export async function waitForStableVisualState(page, surface) {
   });
 }
 
-export async function visualRuntimeMetadata(page) {
+export async function visualRuntimeMetadata(page, nativeTouchInput = null) {
   return page.evaluate(() => ({
     fontStatus: document.fonts?.status || 'unsupported',
     bodyFontFamily: getComputedStyle(document.body).fontFamily,
@@ -421,5 +430,5 @@ export async function visualRuntimeMetadata(page) {
     primaryHover: matchMedia('(hover: hover)').matches
       ? 'hover'
       : matchMedia('(hover: none)').matches ? 'none' : 'unknown'
-  }));
+  })).then(runtime => ({ ...runtime, nativeTouchInput }));
 }
