@@ -34,9 +34,13 @@ const CANONICAL_IMAGE_MIN_CONTRAST = 0.02;
 const CANONICAL_BACKGROUND_MIN_CONTRAST = 0.003;
 const VISUAL_CAPTURE_STYLE_ID = 'sylora-visual-capture-style';
 const VISUAL_CAPTURE_STYLE_TEXT = 'input,textarea,[contenteditable]{caret-color:transparent!important}';
+const VISUAL_QUIESCENCE_TIMEOUT_MS = 15_000;
 const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
   type: 'png',
-  animations: 'disabled',
+  // Capture readiness proves that no Web Animation or transient press effect
+  // remains active. `allow` therefore preserves that settled state instead of
+  // making Playwright finish/cancel/restore animations around every frame.
+  animations: 'allow',
   // A persistent capture-only rule owns the caret state. `hide` would make
   // Playwright mutate and restore every editable element around every frame,
   // invalidating rounded controls and any backdrop that samples them.
@@ -392,6 +396,7 @@ export async function gotoVisualSurface(page, surface, { beforeNavigation, after
     await page.waitForFunction(() => globalThis.__syloraBooted === true);
     await expect(page.locator('.shell-wallet')).toHaveCount(1);
     await waitForStableVisualAssets(page);
+    await waitForVisualQuiescence(page);
     requireScreenshotBuffer(await page.screenshot(VISUAL_SCREENSHOT_OPTIONS), 'pre-open paint fence');
     await waitForCompositorFrames(page);
     await surface.open(page);
@@ -463,6 +468,36 @@ async function waitForStableVisualAssets(page) {
   });
 }
 
+export async function waitForVisualQuiescence(page) {
+  try {
+    await page.waitForFunction(() => {
+      const activeAnimations = document.getAnimations()
+        .filter(animation => animation.pending || animation.playState === 'running');
+      return !document.querySelector('.sylora-press-ripple') && activeAnimations.length === 0;
+    }, undefined, { timeout: VISUAL_QUIESCENCE_TIMEOUT_MS });
+  } catch (error) {
+    const evidence = await page.evaluate(() => ({
+      pressRippleCount: document.querySelectorAll('.sylora-press-ripple').length,
+      activeAnimationCount: document.getAnimations()
+        .filter(animation => animation.pending || animation.playState === 'running')
+        .length
+    })).catch(() => null);
+    throw new Error(
+      `Visual capture did not reach animation quiescence within ${VISUAL_QUIESCENCE_TIMEOUT_MS}ms: ${JSON.stringify(evidence)}`,
+      { cause: error }
+    );
+  }
+  const evidence = await page.evaluate(() => ({
+    pressRippleCount: document.querySelectorAll('.sylora-press-ripple').length,
+    activeAnimationCount: document.getAnimations()
+      .filter(animation => animation.pending || animation.playState === 'running')
+      .length
+  }));
+  if (evidence.pressRippleCount !== 0 || evidence.activeAnimationCount !== 0) {
+    throw new Error(`Visual capture did not reach animation quiescence: ${JSON.stringify(evidence)}`);
+  }
+}
+
 export async function waitForStableVisualState(page, surface) {
   await page.waitForFunction(() => globalThis.__syloraBooted === true);
   await page.waitForFunction(() => globalThis.__syloraGiftEngineState === 'ready');
@@ -523,6 +558,7 @@ export async function waitForStableVisualState(page, surface) {
   if (surface.id === 'video-create') await expect(page.locator('#videoUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
 
   await waitForStableVisualAssets(page);
+  await waitForVisualQuiescence(page);
 }
 
 async function assertPersistentVisualCaptureStyle(page) {
@@ -732,9 +768,12 @@ async function collectCanonicalPaintTargets(page) {
   return { targets, canonicalImagesChecked, canonicalBackgroundsChecked };
 }
 
-export async function captureStableVisualScreenshot(page, { assertClean } = {}) {
+export async function captureStableVisualScreenshot(page, { assertClean, recordMismatch } = {}) {
   if (typeof assertClean !== 'function') {
     throw new Error('Stable visual capture requires a diagnostics assertion callback');
+  }
+  if (typeof recordMismatch !== 'function') {
+    throw new Error('Stable visual capture requires a mismatch evidence callback');
   }
 
   await assertPersistentVisualCaptureStyle(page);
@@ -828,9 +867,7 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
     'full-page-stability-first',
     assertClean
   );
-  await assertCanonicalTargetsRestored(page, targets);
   await waitForCompositorFrames(page);
-  await assertVisualScrollOrigin(page);
   const finalSecond = await takeCheckedScreenshot(
     page,
     { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
@@ -838,8 +875,18 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
     assertClean
   );
   if (!finalFirst.equals(finalSecond)) {
+    const firstSha256 = screenshotDigest(finalFirst);
+    const secondSha256 = screenshotDigest(finalSecond);
+    let evidenceFailure = null;
+    try {
+      await recordMismatch({ first: finalFirst, second: finalSecond, firstSha256, secondSha256 });
+    } catch (error) {
+      evidenceFailure = error;
+    }
     throw new Error(
-      `Post-restore full-page paint is not byte-stable: first=${screenshotDigest(finalFirst)} second=${screenshotDigest(finalSecond)}`
+      `Post-restore full-page paint is not byte-stable: first=${firstSha256} second=${secondSha256}` +
+      (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
+      evidenceFailure ? { cause: evidenceFailure } : undefined
     );
   }
   const finalClips = await assertCanonicalTargetsRestored(page, targets);

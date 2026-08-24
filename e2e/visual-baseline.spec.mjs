@@ -40,6 +40,33 @@ let browserFingerprint = null;
 fs.mkdirSync(outputRoot, { recursive: true });
 fs.mkdirSync(resultsRoot, { recursive: true });
 
+function writeStabilityMismatchEvidence({ viewport, surface, first, second, firstSha256, secondSha256 }) {
+  const evidenceRoot = path.join(resultsRoot, 'stability-mismatch', viewport.id, surface.id);
+  const relativeEvidenceRoot = path.relative(resultsRoot, evidenceRoot);
+  if (!relativeEvidenceRoot || relativeEvidenceRoot.startsWith('..') || path.isAbsolute(relativeEvidenceRoot)) {
+    throw new Error(`Refusing to write visual mismatch evidence outside results root: ${evidenceRoot}`);
+  }
+  fs.mkdirSync(evidenceRoot, { recursive: true });
+  fs.writeFileSync(path.join(evidenceRoot, 'final-a.png'), first, { flag: 'wx' });
+  fs.writeFileSync(path.join(evidenceRoot, 'final-b.png'), second, { flag: 'wx' });
+  fs.writeFileSync(path.join(evidenceRoot, 'metadata.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    renderedFromCommit: process.env.SYLORA_VISUAL_GIT_SHA || 'unknown',
+    viewport: {
+      id: viewport.id,
+      width: viewport.width,
+      height: viewport.height,
+      isMobile: viewport.isMobile,
+      hasTouch: viewport.hasTouch
+    },
+    surface: surface.id,
+    frames: {
+      finalA: { file: 'final-a.png', sha256: firstSha256, bytes: first.length },
+      finalB: { file: 'final-b.png', sha256: secondSha256, bytes: second.length }
+    }
+  }, null, 2)}\n`, { flag: 'wx' });
+}
+
 for (const viewport of VISUAL_VIEWPORTS) {
   test(`candidate baseline ${viewport.id}`, async ({ browser, baseURL, connectOptions }, testInfo) => {
     assertVisualProjectConfiguration(testInfo.project.use);
@@ -102,7 +129,8 @@ for (const viewport of VISUAL_VIEWPORTS) {
           diagnostics.assertClean(`${surface.id}:pre-capture`);
 
           const { png, paintStability } = await captureStableVisualScreenshot(page, {
-            assertClean: label => diagnostics.assertClean(`${surface.id}:${label}`)
+            assertClean: label => diagnostics.assertClean(`${surface.id}:${label}`),
+            recordMismatch: evidence => writeStabilityMismatchEvidence({ ...evidence, viewport, surface })
           });
           diagnostics.assertClean(`${surface.id}:post-stability-capture`);
 
@@ -133,7 +161,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
     } catch (error) {
       const failureScreenshot = path.join(resultsRoot, `failure-${viewport.id}.png`);
       const evidenceFailures = [];
-      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'disabled', caret: 'initial' })
+      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'allow', caret: 'initial' })
         .catch(evidenceError => evidenceFailures.push(`screenshot: ${evidenceError.message}`));
       try {
         fs.writeFileSync(path.join(resultsRoot, `failure-runtime-${viewport.id}.json`), `${JSON.stringify({
