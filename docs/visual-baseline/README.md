@@ -51,14 +51,17 @@ The pinned runner must:
 
 - clear stale repeat artifacts before capture, then start both passes from independent copies of the same fixed fixture;
 - freeze browser time and seeded randomness;
-- wait for the capability state, `document.fonts.ready`, DOM images and CSS background images;
+- wait for the capability state, `document.fonts.ready`, DOM images and CSS background images; decode failures are fatal and every canonical brand raster must retain its locked 1100 × 650 intrinsic dimensions;
+- run a fixed pre-open asset/paint fence before capture-only overlays are opened, so a backdrop filter cannot sample an undecoded canonical CSS background;
 - launch headless with no browser channel or custom executable, then use browser-level CDP to prove the actual pinned `chromium-headless-shell` distribution, revision and executable before capturing;
 - record the exact rendered head commit, verified browser fingerprint, Playwright/Chromium versions, runner OS/image, font family, DPR and input mode without persisting the absolute executable path;
 - keep Playwright's primary session out of touch ownership (`hasTouch: false`), then use one retained CDP session to reset and apply Chromium's mobile touch profile immediately before every navigation;
 - after navigation, require the real document to report exactly `navigator.maxTouchPoints = 1`, primary coarse pointer and no primary hover for every mobile screenshot, without a `Navigator` or `matchMedia` JavaScript shim;
 - dispatch a direct CDP touch sequence and record trusted `touchstart` plus trusted `PointerEvent.pointerType = touch` evidence for every mobile screenshot; this proves the configured Chromium emulation and input path, not physical/native hardware;
 - produce exactly 44 unique canonical paths in each pass;
-- re-read every PNG from disk, verify its recorded SHA-256 and dimensions, then prove that all 44 digests match between capture and repeat.
+- take a fixed full-page frame A, require locked content contrast so an opaque-but-blank canonical raster cannot pass, prove that its raw crop matches each visible canonical image/background clip, prove each target changes pixels when hidden, require two identical hidden clips, restore the exact inline style and require the restored clip to match;
+- take one fixed full-page frame B with no retry or cherry-picking, require A and B to be byte-identical, and persist only B;
+- record the fail-closed compositor proof in raw capture schema 6, then re-read every PNG from disk, verify its recorded SHA-256 and dimensions, and prove that all 44 digests match between capture and repeat.
 
 A raw PNG is written only after its runtime profile, diagnostics and in-memory screenshot have passed. Failed runs that reach Playwright teardown retain only the successfully validated subset, mark `metadata.json` as `INCOMPLETE_VISUAL_CAPTURE`, and omit `capture-metadata.json`. An abrupt worker termination may leave `metadata.json` absent instead. Both states are non-promotable. Visual diagnostics retain a failure screenshot plus capability-only JSON; credential-bearing Playwright traces are not produced.
 

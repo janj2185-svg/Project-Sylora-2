@@ -287,7 +287,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==5)fail('capture report.schemaVersion must be 5');
+  if(report.schemaVersion!==6)fail('capture report.schemaVersion must be 6');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -341,7 +341,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
   for(let index=0;index<expectedPaths.length;index+=1){
     const record=report.files[index];
     requireExactObject(record,`capture report.files[${index}]`,[
-      'surface','viewport','width','height','locale','input','isMobile','hasTouch','file','sha256','bytes','runtime'
+      'surface','viewport','width','height','locale','input','isMobile','hasTouch','file','sha256','bytes','paintStability','runtime'
     ]);
     const expectedPath=expectedPaths[index];
     const [surface,viewportId]=expectedPath.split('/');
@@ -356,6 +356,27 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     if(record.input!==viewport.inputMode||record.isMobile!==touch||record.hasTouch!==touch)fail(`capture report record input does not match ${viewport.inputMode}`);
     if(typeof record.sha256!=='string'||!SHA256_PATTERN.test(record.sha256))fail(`capture report ${record.file} sha256 must be lowercase SHA-256`);
     requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
+    requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
+      'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
+      'hiddenScreenshotsCompared','fullPageScreenshotsCompared'
+    ]);
+    const expectedCanonicalImages=touch?1:2;
+    const expectedCanonicalBackgrounds=['home','create-hub-open'].includes(surface)?1:0;
+    if(record.paintStability.canonicalImagesChecked!==expectedCanonicalImages){
+      fail(`capture report ${record.file} canonical image paint evidence drifted`);
+    }
+    if(record.paintStability.canonicalBackgroundsChecked!==expectedCanonicalBackgrounds){
+      fail(`capture report ${record.file} canonical background paint evidence drifted`);
+    }
+    if(
+      record.paintStability.canonicalPixelContribution!==true||
+      record.paintStability.canonicalContentContrast!==true||
+      record.paintStability.canonicalRestoreMatch!==true||
+      record.paintStability.hiddenScreenshotsCompared!==2||
+      record.paintStability.fullPageScreenshotsCompared!==2
+    ){
+      fail(`capture report ${record.file} compositor paint stability evidence drifted`);
+    }
     requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
       'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','navigatorMaxTouchPoints',
       'primaryPointer','primaryHover','cdpTouchInput'

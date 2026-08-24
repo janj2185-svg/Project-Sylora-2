@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect } from '@playwright/test';
 import { expectNoHorizontalOverflow } from './helpers.mjs';
 import {
@@ -18,6 +19,25 @@ export const VISUAL_VIEWPORTS = Object.freeze([
 ]);
 
 export const VISUAL_TOUCH_POINTS = 1;
+
+const CANONICAL_BRAND_URL = '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+const CANONICAL_BRAND_IMAGE_SELECTOR = [
+  `.brand img[src="${CANONICAL_BRAND_URL}"]`,
+  `.shell-wallet img[src="${CANONICAL_BRAND_URL}"]`
+].join(', ');
+const CANONICAL_BRAND_BACKGROUND_SELECTOR = '.sylora-presence-image';
+// The foreground lockups retain strong glyph contrast even through the locked
+// modal backdrop. The CSS presence mark is sampled by that blur, so its lower
+// bound is intentionally smaller while still excluding the observed blank
+// raster state.
+const CANONICAL_IMAGE_MIN_CONTRAST = 0.02;
+const CANONICAL_BACKGROUND_MIN_CONTRAST = 0.003;
+const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
+  type: 'png',
+  animations: 'disabled',
+  caret: 'hide',
+  scale: 'css'
+});
 
 export const VISUAL_SURFACES = Object.freeze([
   Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.living-horizon.home-compact' }),
@@ -346,7 +366,14 @@ export async function gotoVisualSurface(page, surface, { beforeNavigation, after
   await expect(page.locator('#localeSwitch')).toHaveValue(VISUAL_LOCALE);
   await expect(page.locator('html')).toHaveAttribute('lang', VISUAL_LOCALE);
 
-  if (surface.open) await surface.open(page);
+  if (surface.open) {
+    await page.waitForFunction(() => globalThis.__syloraBooted === true);
+    await expect(page.locator('.shell-wallet')).toHaveCount(1);
+    await waitForStableVisualAssets(page);
+    requireScreenshotBuffer(await page.screenshot(VISUAL_SCREENSHOT_OPTIONS), 'pre-open paint fence');
+    await waitForCompositorFrames(page);
+    await surface.open(page);
+  }
   await expect(page.locator(surface.ready)).toBeVisible();
   await waitForStableVisualState(page, surface);
   await expectNoHorizontalOverflow(page);
@@ -363,6 +390,55 @@ async function clearVisualAiState(page) {
   if (statuses.some(status => status !== 200)) {
     throw new Error(`Unable to normalize visual AI state: ${statuses.join(', ')}`);
   }
+}
+
+async function waitForStableVisualAssets(page) {
+  await page.evaluate(async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+    const images = [...document.images].filter(image => image.currentSrc || image.src);
+    await Promise.all(images.map(async image => {
+      if (!image.complete) {
+        await new Promise((resolve, reject) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', reject, { once: true });
+        });
+      }
+      if (typeof image.decode === 'function') await image.decode();
+      if (!image.naturalWidth) throw new Error(`Image failed to decode: ${image.currentSrc || image.src}`);
+      if (
+        new URL(image.currentSrc || image.src, location.href).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
+        (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
+      ) throw new Error(`Canonical brand dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+    }));
+    const backgroundUrls = new Set();
+    const collect = style => {
+      for (const match of String(style?.backgroundImage || '').matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+        backgroundUrls.add(new URL(match[1], location.href).href);
+      }
+    };
+    for (const element of document.querySelectorAll('body, body *')) {
+      collect(getComputedStyle(element));
+      collect(getComputedStyle(element, '::before'));
+      collect(getComputedStyle(element, '::after'));
+    }
+    await Promise.all([...backgroundUrls].map(url => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = async () => {
+        try {
+          await image.decode?.();
+          if (
+            new URL(url).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
+            (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
+          ) throw new Error(`Canonical background dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+          resolve();
+        } catch (error) { reject(error); }
+      };
+      image.onerror = () => reject(new Error(`Background image failed to load: ${url}`));
+      image.src = url;
+    })));
+    scrollTo(0, 0);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
 }
 
 export async function waitForStableVisualState(page, surface) {
@@ -424,41 +500,276 @@ export async function waitForStableVisualState(page, surface) {
   if (surface.id === 'clips-create') await expect(page.locator('#clipUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
   if (surface.id === 'video-create') await expect(page.locator('#videoUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
 
-  await page.evaluate(async () => {
-    if (document.fonts?.ready) await document.fonts.ready;
-    const images = [...document.images].filter(image => image.currentSrc || image.src);
-    await Promise.all(images.map(async image => {
-      if (!image.complete) {
-        await new Promise((resolve, reject) => {
-          image.addEventListener('load', resolve, { once: true });
-          image.addEventListener('error', reject, { once: true });
-        });
-      }
-      if (typeof image.decode === 'function') await image.decode().catch(() => {});
-      if (!image.naturalWidth) throw new Error(`Image failed to decode: ${image.currentSrc || image.src}`);
-    }));
-    const backgroundUrls = new Set();
-    const collect = style => {
-      for (const match of String(style?.backgroundImage || '').matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
-        backgroundUrls.add(new URL(match[1], location.href).href);
-      }
-    };
-    for (const element of document.querySelectorAll('body, body *')) {
-      collect(getComputedStyle(element));
-      collect(getComputedStyle(element, '::before'));
-      collect(getComputedStyle(element, '::after'));
+  await waitForStableVisualAssets(page);
+}
+
+function screenshotDigest(png) {
+  return createHash('sha256').update(png).digest('hex');
+}
+
+function requireScreenshotBuffer(png, label) {
+  if (!Buffer.isBuffer(png) || png.length === 0) {
+    throw new Error(`${label} did not return a non-empty PNG buffer`);
+  }
+  return png;
+}
+
+async function waitForCompositorFrames(page) {
+  await page.evaluate(() => new Promise(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  }));
+}
+
+async function assertVisualScrollOrigin(page) {
+  const position = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+  if (position.x !== 0 || position.y !== 0) {
+    throw new Error(`Visual paint coordinates require scroll origin 0,0; observed ${position.x},${position.y}`);
+  }
+}
+
+async function takeCheckedScreenshot(page, options, label, assertClean) {
+  const png = requireScreenshotBuffer(await page.screenshot(options), label);
+  await assertClean(label);
+  return png;
+}
+
+async function canonicalElementClip(page, target) {
+  const box = await target.boundingBox();
+  const viewport = page.viewportSize();
+  if (!box || !viewport) return null;
+  const x = Math.max(0, Math.floor(box.x));
+  const y = Math.max(0, Math.floor(box.y));
+  const right = Math.min(viewport.width, Math.ceil(box.x + box.width));
+  const bottom = Math.min(viewport.height, Math.ceil(box.y + box.height));
+  if (right <= x || bottom <= y) return null;
+  return { x, y, width: right - x, height: bottom - y };
+}
+
+async function restoreInlineStyle(target, originalStyle) {
+  await target.evaluate((element, style) => {
+    if (style === null) element.removeAttribute('style');
+    else element.setAttribute('style', style);
+  }, originalStyle);
+  const restored = await target.getAttribute('style');
+  if (restored !== originalStyle) {
+    throw new Error('Canonical paint sentinel failed to restore the exact inline style');
+  }
+}
+
+async function rawScreenshotCropDigests(page, png, clips) {
+  const encoded = png.toString('base64');
+  return page.evaluate(async ({ encodedPng, cropList }) => {
+    const binary = atob(encodedPng);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+    try {
+      return await Promise.all(cropList.map(async clip => {
+        if (
+          !Number.isInteger(clip.x) || !Number.isInteger(clip.y) ||
+          !Number.isInteger(clip.width) || !Number.isInteger(clip.height) ||
+          clip.x < 0 || clip.y < 0 || clip.width <= 0 || clip.height <= 0 ||
+          clip.x + clip.width > bitmap.width || clip.y + clip.height > bitmap.height
+        ) throw new Error('Visual paint crop is outside the screenshot raster');
+        const canvas = document.createElement('canvas');
+        canvas.width = clip.width;
+        canvas.height = clip.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Visual paint crop could not create a 2D context');
+        context.drawImage(
+          bitmap,
+          clip.x, clip.y, clip.width, clip.height,
+          0, 0, clip.width, clip.height
+        );
+        const pixels = context.getImageData(0, 0, clip.width, clip.height).data;
+        let luminanceSum = 0;
+        let luminanceSquareSum = 0;
+        const pixelCount = pixels.length / 4;
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+          const luminance = (0.2126 * pixels[offset] + 0.7152 * pixels[offset + 1] + 0.0722 * pixels[offset + 2]) / 255;
+          luminanceSum += luminance;
+          luminanceSquareSum += luminance * luminance;
+        }
+        const mean = luminanceSum / pixelCount;
+        const contrast = Math.sqrt(Math.max(0, luminanceSquareSum / pixelCount - mean * mean));
+        const digest = await crypto.subtle.digest('SHA-256', pixels);
+        return {
+          sha256: [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join(''),
+          contrast
+        };
+      }));
+    } finally {
+      bitmap.close?.();
     }
-    await Promise.all([...backgroundUrls].map(url => new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = async () => {
-        try { await image.decode?.(); resolve(); } catch (error) { reject(error); }
-      };
-      image.onerror = () => reject(new Error(`Background image failed to load: ${url}`));
-      image.src = url;
-    })));
-    scrollTo(0, 0);
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
+  }, { encodedPng: encoded, cropList: clips });
+}
+
+async function rawClipScreenshotEvidence(page, png, clip) {
+  return (await rawScreenshotCropDigests(page, png, [{ x: 0, y: 0, width: clip.width, height: clip.height }]))[0];
+}
+
+async function collectCanonicalPaintTargets(page) {
+  const targets = [];
+  const images = page.locator(CANONICAL_BRAND_IMAGE_SELECTOR);
+  const imageCount = await images.count();
+  let canonicalImagesChecked = 0;
+  for (let index = 0; index < imageCount; index += 1) {
+    const target = images.nth(index);
+    if (!await target.isVisible()) continue;
+    const clip = await canonicalElementClip(page, target);
+    if (!clip) continue;
+    const role = await target.evaluate(element => element.closest('.brand') ? 'header' : 'wallet');
+    targets.push({ target, clip, role, hideProperty: 'visibility', minimumContrast: CANONICAL_IMAGE_MIN_CONTRAST });
+    canonicalImagesChecked += 1;
+  }
+  if (canonicalImagesChecked === 0) {
+    throw new Error('Canonical paint sentinel found no visible production brand image');
+  }
+
+  const backgrounds = page.locator(CANONICAL_BRAND_BACKGROUND_SELECTOR);
+  const backgroundCount = await backgrounds.count();
+  let canonicalBackgroundsChecked = 0;
+  for (let index = 0; index < backgroundCount; index += 1) {
+    const target = backgrounds.nth(index);
+    if (!await target.isVisible()) continue;
+    const usesCanonicalBrand = await target.evaluate((element, canonicalUrl) =>
+      getComputedStyle(element).backgroundImage.includes(canonicalUrl), CANONICAL_BRAND_URL
+    );
+    if (!usesCanonicalBrand) {
+      throw new Error('Canonical presence background selector no longer resolves to the locked brand asset');
+    }
+    const clip = await canonicalElementClip(page, target);
+    if (!clip) continue;
+    targets.push({
+      target,
+      clip,
+      role: 'presence-background',
+      hideProperty: 'background-image',
+      minimumContrast: CANONICAL_BACKGROUND_MIN_CONTRAST
+    });
+    canonicalBackgroundsChecked += 1;
+  }
+  return { targets, canonicalImagesChecked, canonicalBackgroundsChecked };
+}
+
+export async function captureStableVisualScreenshot(page, { assertClean } = {}) {
+  if (typeof assertClean !== 'function') {
+    throw new Error('Stable visual capture requires a diagnostics assertion callback');
+  }
+
+  const { targets, canonicalImagesChecked, canonicalBackgroundsChecked } = await collectCanonicalPaintTargets(page);
+  await assertVisualScrollOrigin(page);
+  await waitForCompositorFrames(page);
+  const first = await takeCheckedScreenshot(
+    page,
+    { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+    'full-page-stability-first',
+    assertClean
+  );
+  await assertVisualScrollOrigin(page);
+  const fullPageCropDigests = await rawScreenshotCropDigests(page, first, targets.map(({ clip }) => clip));
+  await assertClean('full-page-stability-first-raster');
+
+  for (let index = 0; index < targets.length; index += 1) {
+    await assertVisualScrollOrigin(page);
+    const { target, clip, role, hideProperty, minimumContrast } = targets[index];
+    const originalStyle = await target.getAttribute('style');
+    const fullPageCropEvidence = fullPageCropDigests[index];
+    if (!Number.isFinite(fullPageCropEvidence.contrast) || fullPageCropEvidence.contrast < minimumContrast) {
+      throw new Error(
+        `Canonical ${role} content contrast is below the locked paint threshold: observed=${fullPageCropEvidence.contrast} minimum=${minimumContrast}`
+      );
+    }
+    const visibleBefore = await takeCheckedScreenshot(
+      page,
+      { ...VISUAL_SCREENSHOT_OPTIONS, clip },
+      `canonical-${role}-visible-before`,
+      assertClean
+    );
+    const visibleBeforeEvidence = await rawClipScreenshotEvidence(page, visibleBefore, clip);
+    if (visibleBeforeEvidence.sha256 !== fullPageCropEvidence.sha256) {
+      throw new Error(
+        `Canonical ${role} full-page crop did not match its visible raster: full=${fullPageCropEvidence.sha256} clip=${visibleBeforeEvidence.sha256}`
+      );
+    }
+
+    let hiddenFirst;
+    let hiddenSecond;
+    try {
+      await target.evaluate((element, property) => {
+        element.style.setProperty(property, property === 'visibility' ? 'hidden' : 'none', 'important');
+      }, hideProperty);
+      await waitForCompositorFrames(page);
+      hiddenFirst = await takeCheckedScreenshot(
+        page,
+        { ...VISUAL_SCREENSHOT_OPTIONS, clip },
+        `canonical-${role}-hidden-first`,
+        assertClean
+      );
+      await waitForCompositorFrames(page);
+      hiddenSecond = await takeCheckedScreenshot(
+        page,
+        { ...VISUAL_SCREENSHOT_OPTIONS, clip },
+        `canonical-${role}-hidden-second`,
+        assertClean
+      );
+    } finally {
+      await restoreInlineStyle(target, originalStyle);
+      await waitForCompositorFrames(page);
+    }
+
+    const hiddenFirstEvidence = await rawClipScreenshotEvidence(page, hiddenFirst, clip);
+    const hiddenSecondEvidence = await rawClipScreenshotEvidence(page, hiddenSecond, clip);
+    const visibleAfter = await takeCheckedScreenshot(
+      page,
+      { ...VISUAL_SCREENSHOT_OPTIONS, clip },
+      `canonical-${role}-visible-after`,
+      assertClean
+    );
+    const visibleAfterEvidence = await rawClipScreenshotEvidence(page, visibleAfter, clip);
+    if (hiddenFirstEvidence.sha256 !== hiddenSecondEvidence.sha256) {
+      throw new Error(
+        `Canonical ${role} hidden raster is not deterministic: first=${hiddenFirstEvidence.sha256} second=${hiddenSecondEvidence.sha256}`
+      );
+    }
+    if (visibleBeforeEvidence.sha256 === hiddenSecondEvidence.sha256) {
+      throw new Error(
+        `Canonical ${role} paint sentinel saw no pixel contribution: sha256=${visibleBeforeEvidence.sha256}`
+      );
+    }
+    if (visibleBeforeEvidence.sha256 !== visibleAfterEvidence.sha256) {
+      throw new Error(
+        `Canonical ${role} paint did not restore deterministically: before=${visibleBeforeEvidence.sha256} after=${visibleAfterEvidence.sha256}`
+      );
+    }
+  }
+
+  await waitForCompositorFrames(page);
+  await assertVisualScrollOrigin(page);
+  const second = await takeCheckedScreenshot(
+    page,
+    { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+    'full-page-stability-second',
+    assertClean
+  );
+  if (!first.equals(second)) {
+    throw new Error(
+      `Full-page paint is not byte-stable: first=${screenshotDigest(first)} second=${screenshotDigest(second)}`
+    );
+  }
+
+  return {
+    png: second,
+    paintStability: {
+      canonicalImagesChecked,
+      canonicalBackgroundsChecked,
+      canonicalPixelContribution: true,
+      canonicalContentContrast: true,
+      canonicalRestoreMatch: true,
+      hiddenScreenshotsCompared: 2,
+      fullPageScreenshotsCompared: 2
+    }
+  };
 }
 
 export async function visualRuntimeMetadata(page, cdpTouchInput = null) {

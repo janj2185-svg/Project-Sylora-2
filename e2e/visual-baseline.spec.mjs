@@ -19,6 +19,7 @@ import {
   VISUAL_SURFACES,
   VISUAL_VIEWPORTS,
   applyVisualTouchEmulation,
+  captureStableVisualScreenshot,
   captureRuntimeDiagnostics,
   createVisualContext,
   enforceVisualTouchEmulation,
@@ -100,13 +101,10 @@ for (const viewport of VISUAL_VIEWPORTS) {
           }
           diagnostics.assertClean(`${surface.id}:pre-capture`);
 
-          const png = await page.screenshot({
-            fullPage: true,
-            animations: 'disabled',
-            caret: 'hide',
-            scale: 'css'
+          const { png, paintStability } = await captureStableVisualScreenshot(page, {
+            assertClean: label => diagnostics.assertClean(`${surface.id}:${label}`)
           });
-          diagnostics.assertClean(`${surface.id}:post-capture`);
+          diagnostics.assertClean(`${surface.id}:post-stability-capture`);
 
           // Candidate bytes become durable only after the runtime and screenshot
           // checks above have passed. Exclusive creation prevents a stale or
@@ -126,6 +124,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
             file: relativePath.split(path.sep).join('/'),
             sha256: createHash('sha256').update(png).digest('hex'),
             bytes: png.length,
+            paintStability,
             runtime
           });
           diagnostics.reset();
@@ -183,7 +182,7 @@ test.afterAll(() => {
   };
   const complete = records.length === expectedFiles;
   const metadata = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     status: complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
     complete,
     expectedFiles,

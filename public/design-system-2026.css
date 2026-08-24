@@ -85,7 +85,7 @@ body{
 
 /* Brand */
 .brand{width:120px!important;min-width:120px!important;flex:0 0 120px!important;color:var(--sy-ink)!important;text-decoration:none;overflow:visible}
-.brand-lockup{display:block;width:120px;height:auto;aspect-ratio:1100/650;object-fit:contain;object-position:center;filter:none!important;transform:translateZ(0);transition:transform var(--sy-motion-ui) var(--sy-ease),filter var(--sy-motion-ui) var(--sy-ease)}
+.brand-lockup{display:block;width:120px;height:auto;aspect-ratio:1100/650;object-fit:contain;object-position:center;filter:none!important;transition:transform var(--sy-motion-ui) var(--sy-ease),filter var(--sy-motion-ui) var(--sy-ease)}
 .brand:hover .brand-lockup{transform:translateY(-1px) scale(1.012);filter:none!important}
 .shell-wallet img{width:56px!important;height:auto!important;aspect-ratio:1100/650;object-fit:contain!important;filter:none!important}
 

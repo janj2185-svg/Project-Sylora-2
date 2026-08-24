@@ -33,13 +33,33 @@ test('web shell, favicon, and contextual presence use the canonical master direc
   const html=await readFile(path.join(PUBLIC_DIR,'index.html'),'utf8');
   const phoenixPreview=await readFile(path.join(PUBLIC_DIR,'phoenix-preview.html'),'utf8');
   const homeCss=await readFile(path.join(PUBLIC_DIR,'design-home-2026.css'),'utf8');
+  const systemCss=await readFile(path.join(PUBLIC_DIR,'design-system-2026.css'),'utf8');
+  const app=await readFile(path.join(PUBLIC_DIR,'app.js'),'utf8');
   const brandTag=html.match(/<a class="brand"[\s\S]*?<\/a>/)?.[0]||'';
 
+  assert.match(html,new RegExp(`<link rel="preload" as="image" href="${CANONICAL_URL.replaceAll('/','\\/')}" fetchpriority="high"`));
   assert.match(html,new RegExp(`<link rel="icon" type="image/png" href="${CANONICAL_URL.replaceAll('/','\\/')}"`));
   assert.ok(brandTag.includes(`src="${CANONICAL_URL}"`),'shell brand is not the canonical master');
   assert.ok(brandTag.includes(`data-brand-sha256="${EXPECTED_SHA256}"`),'shell brand checksum marker is missing');
+  assert.match(brandTag,/decoding="sync" loading="eager" fetchpriority="high"/);
   assert.doesNotMatch(brandTag,/<svg|\.svg\b/i,'shell brand must not use redrawn SVG geometry');
+  const walletImages=[...app.matchAll(/<img src="\$\{CANONICAL_BRAND_ASSET\}"[^>]*>/g)].map(match=>match[0]);
+  assert.equal(walletImages.length,2,'both authenticated and signed-out wallet states must use the canonical brand');
+  for(const image of walletImages){
+    assert.match(image,/width="1100" height="650"/);
+    assert.ok(image.includes(`data-brand-sha256="${EXPECTED_SHA256}"`));
+    assert.match(image,/decoding="sync" loading="eager"/);
+  }
+  assert.doesNotMatch(systemCss,/\.brand-lockup\{[^}]*transform:translateZ\(0\)/,'resting brand must not be forced into a transient compositor layer');
+  assert.match(systemCss,/\.brand:hover \.brand-lockup\{transform:translateY\(-1px\) scale\(1\.012\)/,'approved hover composition changed');
   assert.ok(homeCss.includes(`url('${CANONICAL_URL}')`),'Home presence is not the canonical master');
+  const canonicalCssReferences=[];
+  for(const file of await uiSourceFiles(PUBLIC_DIR)){
+    if(path.extname(file)!=='.css')continue;
+    if((await readFile(file,'utf8')).includes(CANONICAL_URL))canonicalCssReferences.push(path.relative(PUBLIC_DIR,file));
+  }
+  assert.deepEqual(canonicalCssReferences,['design-home-2026.css'],'visual paint sentinel coverage must expand with any new canonical CSS background');
+  assert.match(homeCss,/body\[data-view="feed"\] \.sylora-presence-image\{[^}]*background-image:url\('\/assets\/brand\/canonical\/SYLORA_CANONICAL_LOGO_MASTER\.png'\)/);
   assert.match(phoenixPreview,new RegExp(`<link rel="icon" type="image/png" href="${CANONICAL_URL.replaceAll('/','\\/')}"`));
   assert.match(phoenixPreview,new RegExp(`<img class="brand-mark" src="${CANONICAL_URL.replaceAll('/','\\/')}"`));
   assert.doesNotMatch(phoenixPreview,/class="brand-mark"[^>]*>\s*S\s*</,'standalone preview must not recreate the brand with text/CSS');

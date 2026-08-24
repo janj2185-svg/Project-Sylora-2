@@ -12,6 +12,7 @@ import visualPlaywrightConfigObject from '../playwright.visual.config.mjs';
 import {
   VISUAL_TOUCH_POINTS,
   applyVisualTouchEmulation,
+  captureStableVisualScreenshot,
   createVisualContext,
   enforceVisualTouchEmulation,
   ensureFixedVisualAccount,
@@ -170,6 +171,15 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
       file,
       sha256:createHash('sha256').update(png).digest('hex'),
       bytes:png.length,
+      paintStability:{
+        canonicalImagesChecked:touch?1:2,
+        canonicalBackgroundsChecked:['home','create-hub-open'].includes(surface)?1:0,
+        canonicalPixelContribution:true,
+        canonicalContentContrast:true,
+        canonicalRestoreMatch:true,
+        hiddenScreenshotsCompared:2,
+        fullPageScreenshotsCompared:2
+      },
       runtime:{
         fontStatus:'loaded',
         bodyFontFamily:'Inter, sans-serif',
@@ -191,7 +201,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
     };
   });
   return {
-    schemaVersion:5,
+    schemaVersion:6,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -537,6 +547,9 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const gotoIndex=navigationSource.indexOf("await page.goto(surface.path, { waitUntil: 'load' })");
   const verifyIndex=navigationSource.indexOf('await afterNavigation()');
   const readinessIndex=navigationSource.indexOf('await waitForCapabilitiesState');
+  const preOpenAssetsIndex=navigationSource.indexOf('await waitForStableVisualAssets(page)');
+  const preOpenPaintIndex=navigationSource.indexOf("requireScreenshotBuffer(await page.screenshot(VISUAL_SCREENSHOT_OPTIONS), 'pre-open paint fence')");
+  const surfaceOpenIndex=navigationSource.indexOf('await surface.open(page)');
   assert.notEqual(beforeIndex,-1);
   assert.notEqual(gotoIndex,-1);
   assert.notEqual(verifyIndex,-1);
@@ -544,6 +557,10 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.ok(beforeIndex<gotoIndex);
   assert.ok(gotoIndex<verifyIndex);
   assert.ok(verifyIndex<readinessIndex);
+  for(const index of [preOpenAssetsIndex,preOpenPaintIndex,surfaceOpenIndex])assert.notEqual(index,-1);
+  assert.ok(readinessIndex<preOpenAssetsIndex);
+  assert.ok(preOpenAssetsIndex<preOpenPaintIndex);
+  assert.ok(preOpenPaintIndex<surfaceOpenIndex);
 
   const accountSource=ensureFixedVisualAccount.toString();
   const accountBeforeFirst=accountSource.indexOf('await beforeNavigation()');
@@ -558,7 +575,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const enforceIndex=visualBaselineSpec.indexOf('touchEmulationSession = await enforceVisualTouchEmulation');
   const accountIndex=visualBaselineSpec.indexOf('await ensureFixedVisualAccount');
   const runtimeIndex=visualBaselineSpec.indexOf('const runtime = await visualRuntimeMetadata');
-  const screenshotIndex=visualBaselineSpec.indexOf('const png = await page.screenshot');
+  const screenshotIndex=visualBaselineSpec.indexOf('const { png, paintStability } = await captureStableVisualScreenshot');
   const durableWriteIndex=visualBaselineSpec.indexOf('fs.writeFileSync(absolutePath, png');
   const recordIndex=visualBaselineSpec.indexOf('records.push');
   const rawMetadataWriteIndex=visualBaselineSpec.indexOf("fs.writeFileSync(path.join(outputRoot, 'metadata.json')");
@@ -575,8 +592,150 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.ok(runtimeIndex<screenshotIndex&&screenshotIndex<durableWriteIndex&&durableWriteIndex<recordIndex);
   assert.ok(rawMetadataWriteIndex<incompleteGateIndex&&incompleteGateIndex<captureSidecarIndex);
   assert.match(visualBaselineSpec,/fs\.writeFileSync\(absolutePath, png, \{ flag: 'wx' \}\)/);
+  assert.match(visualBaselineSpec,/paintStability,\s+runtime/);
   assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
   assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
+  const stableCaptureSource=captureStableVisualScreenshot.toString();
+  const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
+  const cropProofIndex=stableCaptureSource.indexOf('rawScreenshotCropDigests');
+  const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-first");
+  const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-second");
+  const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
+  const byteGateIndex=stableCaptureSource.indexOf('if (!first.equals(second))');
+  for(const index of [fullFirstIndex,cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
+  assert.ok(fullFirstIndex<cropProofIndex&&cropProofIndex<hiddenFirstIndex&&hiddenFirstIndex<hiddenSecondIndex);
+  assert.ok(hiddenSecondIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
+  assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
+  assert.match(visualHelpersSource,/const binary = atob\(encodedPng\)/);
+  assert.doesNotMatch(visualHelpersSource,/fetch\(`data:image\/png/,'PNG evidence decoding must not violate the application connect-src CSP');
+});
+
+test('visual screenshots prove canonical pixel contribution, exact restoration and fixed full-page stability',async()=>{
+  function capturePage(frameNames,{rawDigests={},rawContrasts={},scrollPosition={x:0,y:0}}={}){
+    const frames=[...frameNames];
+    let inlineStyle=null;
+    let screenshotCalls=0;
+    const target={
+      async isVisible(){return true},
+      async boundingBox(){return {x:10,y:8,width:120,height:71}},
+      async getAttribute(name){return name==='style'?inlineStyle:null},
+      async evaluate(callback,arg){
+        const element={
+          closest(selector){return selector==='.brand'?{}:null},
+          style:{setProperty(property,value){inlineStyle=`${property}:${value}!important`}},
+          removeAttribute(name){if(name==='style')inlineStyle=null},
+          setAttribute(name,value){if(name==='style')inlineStyle=value}
+        };
+        return callback(element,arg);
+      }
+    };
+    const imageLocator={async count(){return 1},nth(){return target}};
+    const emptyLocator={async count(){return 0},nth(){throw new Error('empty locator')}};
+    const page={
+      locator(selector){return selector==='.sylora-presence-image'?emptyLocator:imageLocator},
+      viewportSize(){return {width:390,height:844}},
+      async screenshot(){
+        screenshotCalls+=1;
+        const next=frames.shift();
+        if(next instanceof Error)throw next;
+        return Buffer.from(next);
+      },
+      async evaluate(_callback,arg){
+        if(!arg?.encodedPng)return scrollPosition;
+        const name=Buffer.from(arg.encodedPng,'base64').toString();
+        const digest=rawDigests[name]||name;
+        const contrast=rawContrasts[name]??0.2;
+        return arg.cropList.map(()=>({sha256:digest,contrast}));
+      }
+    };
+    return {page,getStyle:()=>inlineStyle,getScreenshotCalls:()=>screenshotCalls};
+  }
+
+  const cleanLabels=[];
+  const stable=capturePage(
+    ['full','visible','hidden','hidden','visible','full'],
+    {rawDigests:{full:'visible'}}
+  );
+  const capture=await captureStableVisualScreenshot(stable.page,{
+    assertClean:label=>cleanLabels.push(label)
+  });
+  assert.equal(capture.png.toString(),'full');
+  assert.deepEqual(capture.paintStability,{
+    canonicalImagesChecked:1,
+    canonicalBackgroundsChecked:0,
+    canonicalPixelContribution:true,
+    canonicalContentContrast:true,
+    canonicalRestoreMatch:true,
+    hiddenScreenshotsCompared:2,
+    fullPageScreenshotsCompared:2
+  });
+  assert.equal(stable.getScreenshotCalls(),6);
+  assert.equal(cleanLabels.length,7);
+  assert.equal(stable.getStyle(),null);
+
+  const stableBlank=capturePage(
+    ['full','visible','hidden','hidden','visible','full'],
+    {rawDigests:{full:'same',visible:'same',hidden:'same'}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(stableBlank.page,{assertClean:()=>{}}),
+    /paint sentinel saw no pixel contribution/
+  );
+
+  const blankContent=capturePage(
+    ['full','visible'],
+    {rawDigests:{full:'visible'},rawContrasts:{full:0.001}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(blankContent.page,{assertClean:()=>{}}),
+    /content contrast is below the locked paint threshold/
+  );
+
+  const fullPageMismatch=capturePage(
+    ['full','visible'],
+    {rawDigests:{full:'blank-full-page',visible:'painted-clip'}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(fullPageMismatch.page,{assertClean:()=>{}}),
+    /full-page crop did not match its visible raster/
+  );
+
+  const unstableHidden=capturePage(
+    ['full','visible','hidden-a','hidden-b','visible','full'],
+    {rawDigests:{full:'visible'}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(unstableHidden.page,{assertClean:()=>{}}),
+    /hidden raster is not deterministic/
+  );
+
+  const unstableFullPage=capturePage(
+    ['full-a','visible','hidden','hidden','visible','full-b'],
+    {rawDigests:{'full-a':'visible','full-b':'visible'}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(unstableFullPage.page,{assertClean:()=>{}}),
+    /Full-page paint is not byte-stable/
+  );
+
+  const restorationFailure=capturePage(
+    ['full','visible',new Error('hidden screenshot failed')],
+    {rawDigests:{full:'visible'}}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(restorationFailure.page,{assertClean:()=>{}}),
+    /hidden screenshot failed/
+  );
+  assert.equal(restorationFailure.getStyle(),null,'inline style must be restored even when the hidden capture throws');
+
+  const scrolled=capturePage(['full'],{scrollPosition:{x:0,y:4}});
+  await assert.rejects(
+    captureStableVisualScreenshot(scrolled.page,{assertClean:()=>{}}),
+    /require scroll origin 0,0/
+  );
+  assert.equal(scrolled.getScreenshotCalls(),0);
+
+  await assert.rejects(captureStableVisualScreenshot(stable.page),/requires a diagnostics assertion callback/);
 });
 
 test('visual fixture seed is deterministic and directly login-capable',()=>{
@@ -660,7 +819,23 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:4}),/schemaVersion must be 5/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:5}),/schemaVersion must be 6/);
+  for(const [field,value,message] of [
+    ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
+    ['canonicalBackgroundsChecked',0,/canonical background paint evidence drifted/],
+    ['canonicalPixelContribution',false,/compositor paint stability evidence drifted/],
+    ['canonicalContentContrast',false,/compositor paint stability evidence drifted/],
+    ['canonicalRestoreMatch',false,/compositor paint stability evidence drifted/],
+    ['hiddenScreenshotsCompared',1,/compositor paint stability evidence drifted/],
+    ['fullPageScreenshotsCompared',3,/compositor paint stability evidence drifted/]
+  ]){
+    assert.throws(()=>validateRawCaptureMetadata({
+      ...raw,
+      files:raw.files.map((record,index)=>index===0?{
+        ...record,paintStability:{...record.paintStability,[field]:value}
+      }:record)
+    }),message);
+  }
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
