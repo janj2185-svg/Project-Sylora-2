@@ -59,12 +59,11 @@ The pinned runner must:
 - after navigation, require the real document to report exactly `navigator.maxTouchPoints = 1`, primary coarse pointer and no primary hover for every mobile screenshot, without a `Navigator` or `matchMedia` JavaScript shim;
 - dispatch a direct CDP touch sequence and record trusted `touchstart` plus trusted `PointerEvent.pointerType = touch` evidence for every mobile screenshot; this proves the configured Chromium emulation and input path, not physical/native hardware;
 - produce exactly 44 unique canonical paths in each pass;
-- take a fixed full-page frame A and require locked content contrast so an opaque-but-blank canonical raster cannot pass;
 - require the visible canonical target rectangles to be non-overlapping, preserve every exact inline style, hide all targets without changing layout, and take two hidden full-page frames whose canonical target crops are byte-identical;
-- derive every target crop from both hidden frames, require the paired crops to match and require each to differ from frame A, then restore every exact inline style;
+- derive every target crop from both hidden frames, require the paired crops to match, then restore every exact inline style and require the original canonical geometry, visibility and asset predicates to match;
 - never use a tight-clip screenshot as the exact oracle for a full-page crop: the locked shell uses `backdrop-filter`, and Chromium legitimately samples a different compositor boundary for tight clips;
-- take one fixed full-page frame B with no retry or cherry-picking, require A and B to be byte-identical, and persist only B;
-- record the fail-closed compositor proof in raw capture schema 6, then re-read every PNG from disk, verify its recorded SHA-256 and dimensions, and prove that all 44 digests match between capture and repeat.
+- after exact style restoration, discard one fixed full-page paint-fence frame, then take consecutive final full-page frames A and B with no retry or cherry-picking, require A and B to be byte-identical, require locked canonical contrast and require every visible canonical crop to differ from its stable hidden crop, then persist only B;
+- record the fail-closed compositor proof in raw capture schema 6, then re-read every PNG from disk, verify its recorded SHA-256 and dimensions, and prove that all 44 persisted digests match between independent capture and repeat passes.
 
 A raw PNG is written only after its runtime profile, diagnostics and in-memory screenshot have passed. Failed runs that reach Playwright teardown retain only the successfully validated subset, mark `metadata.json` as `INCOMPLETE_VISUAL_CAPTURE`, and omit `capture-metadata.json`. An abrupt worker termination may leave `metadata.json` absent instead. Both states are non-promotable. Visual diagnostics retain a failure screenshot plus capability-only JSON; credential-bearing Playwright traces are not produced.
 

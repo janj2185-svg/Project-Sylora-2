@@ -596,15 +596,16 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
   assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
   const stableCaptureSource=captureStableVisualScreenshot.toString();
-  const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const cropProofIndex=stableCaptureSource.indexOf('rawScreenshotCropDigests');
   const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-full-page-first");
   const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-full-page-second");
+  const warmupIndex=stableCaptureSource.indexOf("'full-page-post-restore-warmup'");
+  const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
-  const byteGateIndex=stableCaptureSource.indexOf('if (!first.equals(second))');
-  for(const index of [fullFirstIndex,cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
-  assert.ok(fullFirstIndex<cropProofIndex&&cropProofIndex<hiddenFirstIndex&&hiddenFirstIndex<hiddenSecondIndex);
-  assert.ok(hiddenSecondIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
+  const byteGateIndex=stableCaptureSource.indexOf('if (!finalFirst.equals(finalSecond))');
+  for(const index of [cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
+  assert.ok(hiddenFirstIndex<hiddenSecondIndex&&hiddenSecondIndex<cropProofIndex&&cropProofIndex<warmupIndex);
+  assert.ok(warmupIndex<fullFirstIndex&&fullFirstIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
   assert.doesNotMatch(stableCaptureSource,/VISUAL_SCREENSHOT_OPTIONS,\s*clip/,'tight clips are not exact compositor oracles for full-page evidence');
   assert.doesNotMatch(stableCaptureSource,/hiddenFirst\.equals\(hiddenSecond\)/,'unrelated full-page pixels must not invalidate canonical crop evidence');
@@ -617,21 +618,37 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
 
 test('visual screenshots prove canonical pixel contribution, exact restoration and fixed full-page stability',async()=>{
   function capturePage(frameNames,{
-    rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],restoreFailureIndexes=[]
+    rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],
+    restoredTargetBoxes=[],restoreFailureIndexes=[],restoredInvisibleIndexes=[],restoredSourceDriftIndexes=[],
+    restoredBackgroundDriftIndexes=[]
   }={}){
     const frames=[...frameNames];
     const inlineStyles=targetRoles.map((_,index)=>initialStyles[index]??null);
+    const restoredFlags=targetRoles.map(()=>false);
     let screenshotCalls=0;
     const screenshotOptions=[];
     const screenshotStyleSnapshots=[];
     const cropLists=[];
+    const boxCalls=targetRoles.map(()=>0);
     const targets=targetRoles.map((role,index)=>({
-      async isVisible(){return true},
+      async isVisible(){return !(restoredFlags[index]&&restoredInvisibleIndexes.includes(index))},
       async boundingBox(){
-        return targetBoxes[index]??{x:10.4+index*150,y:8.2+index*90,width:119.2,height:70.1};
+        const fallback=targetBoxes[index]??{x:10.4+index*150,y:8.2+index*90,width:119.2,height:70.1};
+        const box=boxCalls[index]===0?fallback:(restoredTargetBoxes[index]??fallback);
+        boxCalls[index]+=1;
+        return box;
       },
-      async getAttribute(name){return name==='style'?inlineStyles[index]:null},
+      async getAttribute(name){
+        if(name==='style')return inlineStyles[index];
+        if(name==='src')return restoredFlags[index]&&restoredSourceDriftIndexes.includes(index)
+          ?'/assets/brand/other.png'
+          :'/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+        return null;
+      },
       async evaluate(callback,arg){
+        if(String(callback).includes('getComputedStyle')){
+          return !(restoredFlags[index]&&restoredBackgroundDriftIndexes.includes(index));
+        }
         const element={
           closest(selector){return selector==='.brand'&&role==='header'?{}:null},
           style:{setProperty(property,value){inlineStyles[index]=`${property}:${value}!important`}},
@@ -639,20 +656,23 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
             if(name!=='style')return;
             if(restoreFailureIndexes.includes(index))throw new Error(`restore target ${index} failed`);
             inlineStyles[index]=null;
+            restoredFlags[index]=true;
           },
           setAttribute(name,value){
             if(name!=='style')return;
             if(restoreFailureIndexes.includes(index))throw new Error(`restore target ${index} failed`);
             inlineStyles[index]=value;
+            restoredFlags[index]=true;
           }
         };
         return callback(element,arg);
       }
     }));
-    const imageLocator={async count(){return targets.length},nth(index){return targets[index]}};
-    const emptyLocator={async count(){return 0},nth(){throw new Error('empty locator')}};
+    const locatorFor=items=>({async count(){return items.length},nth(index){return items[index]}});
+    const imageLocator=locatorFor(targets.filter((_target,index)=>targetRoles[index]!=='presence-background'));
+    const backgroundLocator=locatorFor(targets.filter((_target,index)=>targetRoles[index]==='presence-background'));
     const page={
-      locator(selector){return selector==='.sylora-presence-image'?emptyLocator:imageLocator},
+      locator(selector){return selector==='.sylora-presence-image'?backgroundLocator:imageLocator},
       viewportSize(){return {width:390,height:844}},
       async screenshot(options){
         screenshotCalls+=1;
@@ -685,13 +705,13 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
 
   const cleanLabels=[];
   const stable=capturePage(
-    ['full','hidden','hidden','full'],
-    {rawDigests:{full:'visible'}}
+    ['hidden','hidden','warmup','final','final'],
+    {rawDigests:{final:'visible'}}
   );
   const capture=await captureStableVisualScreenshot(stable.page,{
     assertClean:label=>cleanLabels.push(label)
   });
-  assert.equal(capture.png.toString(),'full');
+  assert.equal(capture.png.toString(),'final');
   assert.deepEqual(capture.paintStability,{
     canonicalImagesChecked:1,
     canonicalBackgroundsChecked:0,
@@ -701,23 +721,26 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     hiddenScreenshotsCompared:2,
     fullPageScreenshotsCompared:2
   });
-  assert.equal(stable.getScreenshotCalls(),4);
-  assert.equal(cleanLabels.length,5);
+  assert.equal(stable.getScreenshotCalls(),5);
+  assert.equal(cleanLabels.length,7);
+  assert.ok(cleanLabels.includes('canonical-hidden-full-page-raster'));
+  assert.ok(cleanLabels.includes('full-page-stability-second-raster'));
   assert.ok(stable.getScreenshotOptions().every(options=>options.fullPage===true));
   assert.deepEqual(stable.getCropLists()[0],[{x:10,y:8,width:120,height:71}]);
   assert.equal(stable.getStyle(),null);
 
   const batched=capturePage(
-    ['full','hidden','hidden','full'],
-    {rawDigests:{full:'visible'},targetRoles:['header','wallet']}
+    ['hidden','hidden','warmup','final','final'],
+    {rawDigests:{final:'visible'},targetRoles:['header','wallet']}
   );
   const batchedCapture=await captureStableVisualScreenshot(batched.page,{assertClean:()=>{}});
   assert.equal(batchedCapture.paintStability.canonicalImagesChecked,2);
-  assert.equal(batched.getScreenshotCalls(),4,'multi-target proof must batch both hidden frames');
+  assert.equal(batched.getScreenshotCalls(),5,'multi-target proof must use a fixed five-frame sequence');
   assert.deepEqual(batched.getScreenshotStyleSnapshots(),[
+    ['visibility:hidden!important','visibility:hidden!important'],
+    ['visibility:hidden!important','visibility:hidden!important'],
     [null,null],
-    ['visibility:hidden!important','visibility:hidden!important'],
-    ['visibility:hidden!important','visibility:hidden!important'],
+    [null,null],
     [null,null]
   ]);
   assert.deepEqual(batched.getStyles(),[null,null]);
@@ -737,8 +760,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(overlapping.getScreenshotCalls(),0);
 
   const stableBlank=capturePage(
-    ['full','hidden','hidden'],
-    {rawDigests:{full:'same',hidden:'same'}}
+    ['hidden','hidden','warmup','final','final'],
+    {rawDigests:{hidden:'same',final:'same'}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(stableBlank.page,{assertClean:()=>{}}),
@@ -746,8 +769,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 
   const blankContent=capturePage(
-    ['full'],
-    {rawContrasts:{full:0.001}}
+    ['hidden','hidden','warmup','final','final'],
+    {rawDigests:{hidden:'hidden',final:'visible'},rawContrasts:{final:0.001}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(blankContent.page,{assertClean:()=>{}}),
@@ -755,16 +778,15 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 
   const unrelatedHiddenDifference=capturePage(
-    ['full','hidden-frame-a','hidden-frame-b','full'],
-    {rawDigests:{full:'visible','hidden-frame-a':'hidden','hidden-frame-b':'hidden'}}
+    ['hidden-frame-a','hidden-frame-b','warmup','final','final'],
+    {rawDigests:{final:'visible','hidden-frame-a':'hidden','hidden-frame-b':'hidden'}}
   );
   const unrelatedHiddenCapture=await captureStableVisualScreenshot(unrelatedHiddenDifference.page,{assertClean:()=>{}});
-  assert.equal(unrelatedHiddenCapture.png.toString(),'full');
-  assert.equal(unrelatedHiddenDifference.getScreenshotCalls(),4);
+  assert.equal(unrelatedHiddenCapture.png.toString(),'final');
+  assert.equal(unrelatedHiddenDifference.getScreenshotCalls(),5);
 
   const unstableHiddenCrop=capturePage(
-    ['full','hidden-a','hidden-b'],
-    {rawDigests:{full:'visible'}}
+    ['hidden-a','hidden-b']
   );
   await assert.rejects(
     captureStableVisualScreenshot(unstableHiddenCrop.page,{assertClean:()=>{}}),
@@ -772,11 +794,10 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 
   const unstableSecondHiddenCrop=capturePage(
-    ['full','hidden-a','hidden-b'],
+    ['hidden-a','hidden-b'],
     {
       targetRoles:['header','wallet'],
       rawDigests:{
-        'full:0':'visible-header','full:1':'visible-wallet',
         'hidden-a:0':'hidden-header','hidden-b:0':'hidden-header',
         'hidden-a:1':'hidden-wallet-a','hidden-b:1':'hidden-wallet-b'
       }
@@ -788,17 +809,54 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 
   const unstableFullPage=capturePage(
-    ['full-a','hidden','hidden','full-b'],
-    {rawDigests:{'full-a':'visible','full-b':'visible'}}
+    ['hidden','hidden','warmup','final-a','final-b'],
+    {rawDigests:{'final-a':'visible','final-b':'visible'}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(unstableFullPage.page,{assertClean:()=>{}}),
-    /Full-page paint is not byte-stable/
+    /Post-restore full-page paint is not byte-stable/
+  );
+  assert.equal(unstableFullPage.getScreenshotCalls(),5,'a final mismatch must fail without an extra capture or retry');
+
+  const unstableRestoredGeometry=capturePage(
+    ['hidden','hidden','warmup'],
+    {restoredTargetBoxes:[{x:11.4,y:8.2,width:119.2,height:70.1}]}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(unstableRestoredGeometry.page,{assertClean:()=>{}}),
+    /Canonical header geometry drifted across paint restoration/
+  );
+
+  const invisibleAfterRestore=capturePage(
+    ['hidden','hidden','warmup'],
+    {restoredInvisibleIndexes:[0]}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(invisibleAfterRestore.page,{assertClean:()=>{}}),
+    /Canonical header is not visible after paint restoration/
+  );
+
+  const sourceDriftAfterRestore=capturePage(
+    ['hidden','hidden','warmup'],
+    {restoredSourceDriftIndexes:[0]}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(sourceDriftAfterRestore.page,{assertClean:()=>{}}),
+    /Canonical header image source drifted across paint restoration/
+  );
+
+  const backgroundDriftAfterRestore=capturePage(
+    ['hidden','hidden','warmup'],
+    {targetRoles:['header','presence-background'],restoredBackgroundDriftIndexes:[1]}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(backgroundDriftAfterRestore.page,{assertClean:()=>{}}),
+    /Canonical presence background was not restored/
   );
 
   const restorationFailure=capturePage(
-    ['full',new Error('hidden full-page screenshot failed')],
-    {rawDigests:{full:'visible'},initialStyles:['opacity:.9']}
+    [new Error('hidden full-page screenshot failed')],
+    {initialStyles:['opacity:.9']}
   );
   await assert.rejects(
     captureStableVisualScreenshot(restorationFailure.page,{assertClean:()=>{}}),
@@ -807,8 +865,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(restorationFailure.getStyle(),'opacity:.9','inline style must be restored even when the hidden capture throws');
 
   const secondHiddenFailure=capturePage(
-    ['full','hidden',new Error('second hidden full-page screenshot failed')],
-    {rawDigests:{full:'visible'},initialStyles:['opacity:.8']}
+    ['hidden',new Error('second hidden full-page screenshot failed')],
+    {initialStyles:['opacity:.8']}
   );
   await assert.rejects(
     captureStableVisualScreenshot(secondHiddenFailure.page,{assertClean:()=>{}}),
@@ -817,8 +875,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(secondHiddenFailure.getStyle(),'opacity:.8');
 
   const hiddenDiagnosticsFailure=capturePage(
-    ['full','hidden','hidden'],
-    {rawDigests:{full:'visible'},initialStyles:['opacity:.7']}
+    ['hidden','hidden'],
+    {initialStyles:['opacity:.7']}
   );
   await assert.rejects(
     captureStableVisualScreenshot(hiddenDiagnosticsFailure.page,{
@@ -831,9 +889,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(hiddenDiagnosticsFailure.getStyle(),'opacity:.7');
 
   const restoreAllTargets=capturePage(
-    ['full','hidden','hidden'],
+    ['hidden','hidden'],
     {
-      rawDigests:{full:'visible'},
       targetRoles:['header','wallet'],
       restoreFailureIndexes:[0]
     }
@@ -848,7 +905,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     'a failed first restoration must not prevent later targets from restoring'
   );
 
-  const scrolled=capturePage(['full'],{scrollPosition:{x:0,y:4}});
+  const scrolled=capturePage([],{scrollPosition:{x:0,y:4}});
   await assert.rejects(
     captureStableVisualScreenshot(scrolled.page,{assertClean:()=>{}}),
     /require scroll origin 0,0/

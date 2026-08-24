@@ -573,6 +573,34 @@ function assertNonOverlappingCanonicalTargets(targets) {
   }
 }
 
+async function assertCanonicalTargetsRestored(page, targets) {
+  await assertVisualScrollOrigin(page);
+  const restoredClips = [];
+  for (const { target, clip, role } of targets) {
+    const restoredClip = await canonicalElementClip(page, target);
+    if (
+      !restoredClip ||
+      restoredClip.x !== clip.x || restoredClip.y !== clip.y ||
+      restoredClip.width !== clip.width || restoredClip.height !== clip.height
+    ) {
+      throw new Error(`Canonical ${role} geometry drifted across paint restoration`);
+    }
+    if (!await target.isVisible()) {
+      throw new Error(`Canonical ${role} is not visible after paint restoration`);
+    }
+    if (role === 'presence-background') {
+      const restoredBackground = await target.evaluate((element, canonicalUrl) =>
+        getComputedStyle(element).backgroundImage.includes(canonicalUrl), CANONICAL_BRAND_URL
+      );
+      if (!restoredBackground) throw new Error('Canonical presence background was not restored');
+    } else if (await target.getAttribute('src') !== CANONICAL_BRAND_URL) {
+      throw new Error(`Canonical ${role} image source drifted across paint restoration`);
+    }
+    restoredClips.push(restoredClip);
+  }
+  return restoredClips;
+}
+
 async function rawScreenshotCropDigests(page, png, clips) {
   const encoded = png.toString('base64');
   return page.evaluate(async ({ encodedPng, cropList }) => {
@@ -673,32 +701,12 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
   const { targets, canonicalImagesChecked, canonicalBackgroundsChecked } = await collectCanonicalPaintTargets(page);
   assertNonOverlappingCanonicalTargets(targets);
   await assertVisualScrollOrigin(page);
-  await waitForCompositorFrames(page);
-  const first = await takeCheckedScreenshot(
-    page,
-    { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
-    'full-page-stability-first',
-    assertClean
-  );
-  await assertVisualScrollOrigin(page);
-  const fullPageCropDigests = await rawScreenshotCropDigests(page, first, targets.map(({ clip }) => clip));
-  await assertClean('full-page-stability-first-raster');
-
-  for (let index = 0; index < targets.length; index += 1) {
-    const { role, minimumContrast } = targets[index];
-    const visibleEvidence = fullPageCropDigests[index];
-    if (!Number.isFinite(visibleEvidence.contrast) || visibleEvidence.contrast < minimumContrast) {
-      throw new Error(
-        `Canonical ${role} content contrast is below the locked paint threshold: observed=${visibleEvidence.contrast} minimum=${minimumContrast}`
-      );
-    }
-  }
 
   // Keep every exact pixel comparison in the same full-page capture mode. A
   // tight CDP clip changes the sampling boundary for the shell's
   // backdrop-filter layers and is therefore not a valid byte oracle for a crop
   // taken from the persisted full-page frame. Hiding every non-overlapping
-  // target together also keeps the proof to exactly four full-page captures.
+  // target together keeps the hidden proof in one compositor path.
   const originalStyles = [];
   for (const { target } of targets) {
     originalStyles.push(await target.getAttribute('style'));
@@ -744,9 +752,9 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
   // compositor LSB even when every canonical target is byte-stable.
   const hiddenFirstCropDigests = await rawScreenshotCropDigests(page, hiddenFirst, targets.map(({ clip }) => clip));
   const hiddenSecondCropDigests = await rawScreenshotCropDigests(page, hiddenSecond, targets.map(({ clip }) => clip));
+  await assertClean('canonical-hidden-full-page-raster');
   for (let index = 0; index < targets.length; index += 1) {
     const { role } = targets[index];
-    const visibleEvidence = fullPageCropDigests[index];
     const hiddenFirstEvidence = hiddenFirstCropDigests[index];
     const hiddenSecondEvidence = hiddenSecondCropDigests[index];
     if (hiddenFirstEvidence.sha256 !== hiddenSecondEvidence.sha256) {
@@ -754,29 +762,64 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
         `Canonical ${role} hidden crop is not deterministic: first=${hiddenFirstEvidence.sha256} second=${hiddenSecondEvidence.sha256}`
       );
     }
-    if (visibleEvidence.sha256 === hiddenSecondEvidence.sha256) {
-      throw new Error(
-        `Canonical ${role} paint sentinel saw no full-page pixel contribution: sha256=${visibleEvidence.sha256}`
-      );
-    }
   }
 
+  // The first post-restore full-page capture is a fixed paint fence. Chromium
+  // can materialize offscreen tiles while producing it, so it is deliberately
+  // discarded. The following two captures are consecutive evidence frames in
+  // the same restored compositor state; no retry or preferred-frame selection
+  // is permitted.
   await waitForCompositorFrames(page);
   await assertVisualScrollOrigin(page);
-  const second = await takeCheckedScreenshot(
+  await takeCheckedScreenshot(
+    page,
+    { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+    'full-page-post-restore-warmup',
+    assertClean
+  );
+  await assertCanonicalTargetsRestored(page, targets);
+  await waitForCompositorFrames(page);
+  await assertVisualScrollOrigin(page);
+  const finalFirst = await takeCheckedScreenshot(
+    page,
+    { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+    'full-page-stability-first',
+    assertClean
+  );
+  await waitForCompositorFrames(page);
+  await assertVisualScrollOrigin(page);
+  const finalSecond = await takeCheckedScreenshot(
     page,
     { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
     'full-page-stability-second',
     assertClean
   );
-  if (!first.equals(second)) {
+  if (!finalFirst.equals(finalSecond)) {
     throw new Error(
-      `Full-page paint is not byte-stable: first=${screenshotDigest(first)} second=${screenshotDigest(second)}`
+      `Post-restore full-page paint is not byte-stable: first=${screenshotDigest(finalFirst)} second=${screenshotDigest(finalSecond)}`
     );
+  }
+  const finalClips = await assertCanonicalTargetsRestored(page, targets);
+  const finalCropDigests = await rawScreenshotCropDigests(page, finalSecond, finalClips);
+  await assertClean('full-page-stability-second-raster');
+  for (let index = 0; index < targets.length; index += 1) {
+    const { role, minimumContrast } = targets[index];
+    const hiddenEvidence = hiddenSecondCropDigests[index];
+    const finalEvidence = finalCropDigests[index];
+    if (!Number.isFinite(finalEvidence.contrast) || finalEvidence.contrast < minimumContrast) {
+      throw new Error(
+        `Canonical ${role} content contrast is below the locked paint threshold: observed=${finalEvidence.contrast} minimum=${minimumContrast}`
+      );
+    }
+    if (finalEvidence.sha256 === hiddenEvidence.sha256) {
+      throw new Error(
+        `Canonical ${role} paint sentinel saw no full-page pixel contribution: sha256=${finalEvidence.sha256}`
+      );
+    }
   }
 
   return {
-    png: second,
+    png: finalSecond,
     paintStability: {
       canonicalImagesChecked,
       canonicalBackgroundsChecked,
