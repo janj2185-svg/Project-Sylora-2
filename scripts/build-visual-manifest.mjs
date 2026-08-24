@@ -285,6 +285,84 @@ export function validateCaptureMetadata(metadata,{expectedCommit}={}){
   return structuredClone(metadata);
 }
 
+export function validateRawCaptureRecord(record,{expectedPath,label='capture record'}={}){
+  requireExactObject(record,label,[
+    'surface','viewport','width','height','locale','input','isMobile','hasTouch','file','sha256','bytes','paintStability','runtime'
+  ]);
+  const canonicalPaths=expectedRelativePngPaths();
+  const recordPath=expectedPath||record.file;
+  if(!canonicalPaths.includes(recordPath))fail(`${label} path is not canonical: ${recordPath}`);
+  const [surface,viewportId]=recordPath.split('/');
+  const viewport=VIEWPORTS.find(item=>item.id===viewportId);
+  if(record.file!==recordPath)fail(`${label}.file must be ${recordPath}`);
+  if(record.surface!==surface||record.viewport!==viewportId)fail(`capture report record identity does not match ${recordPath}`);
+  if(record.width!==viewport.width||record.height!==viewport.height)fail(`capture report record geometry does not match ${viewportId}`);
+  if(record.locale!==BASELINE_LOCALE)fail(`capture report record locale must be ${BASELINE_LOCALE}`);
+  const touch=viewport.inputMode==='touch';
+  if(record.input!==viewport.inputMode||record.isMobile!==touch||record.hasTouch!==touch)fail(`capture report record input does not match ${viewport.inputMode}`);
+  if(typeof record.sha256!=='string'||!SHA256_PATTERN.test(record.sha256))fail(`capture report ${record.file} sha256 must be lowercase SHA-256`);
+  requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
+  requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
+    'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
+    'hiddenScreenshotsCompared','fullPageScreenshotsCompared'
+  ]);
+  const expectedCanonicalImages=touch?1:2;
+  const expectedCanonicalBackgrounds=['home','create-hub-open'].includes(surface)?1:0;
+  if(record.paintStability.canonicalImagesChecked!==expectedCanonicalImages){
+    fail(`capture report ${record.file} canonical image paint evidence drifted`);
+  }
+  if(record.paintStability.canonicalBackgroundsChecked!==expectedCanonicalBackgrounds){
+    fail(`capture report ${record.file} canonical background paint evidence drifted`);
+  }
+  if(
+    record.paintStability.canonicalPixelContribution!==true||
+    record.paintStability.canonicalContentContrast!==true||
+    record.paintStability.canonicalRestoreMatch!==true||
+    record.paintStability.hiddenScreenshotsCompared!==2||
+    record.paintStability.fullPageScreenshotsCompared!==2
+  ){
+    fail(`capture report ${record.file} compositor paint stability evidence drifted`);
+  }
+  requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
+    'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','navigatorMaxTouchPoints',
+    'primaryPointer','primaryHover','cdpTouchInput'
+  ]);
+  if(record.runtime.fontStatus!=='loaded')fail(`capture report ${record.file} fonts were not loaded`);
+  requireString(record.runtime.bodyFontFamily,`capture report ${record.file} bodyFontFamily`);
+  if(!Number.isSafeInteger(record.runtime.imageCount)||record.runtime.imageCount<0)fail(`capture report ${record.file} imageCount must be a non-negative integer`);
+  requireExactObject(record.runtime.viewport,`capture report ${record.file} runtime.viewport`,['width','height']);
+  if(record.runtime.viewport.width!==viewport.width||record.runtime.viewport.height!==viewport.height)fail(`capture report ${record.file} runtime viewport drifted`);
+  if(record.runtime.devicePixelRatio!==viewport.devicePixelRatio)fail(`capture report ${record.file} DPR drifted`);
+  if(record.runtime.locale!==BASELINE_LOCALE)fail(`capture report ${record.file} runtime locale drifted`);
+  if(record.runtime.reducedMotion!==true)fail(`capture report ${record.file} reduced motion is not active`);
+  if(
+    !Number.isSafeInteger(record.runtime.navigatorMaxTouchPoints)||
+    record.runtime.navigatorMaxTouchPoints<0||
+    record.runtime.navigatorMaxTouchPoints!==(touch?1:0)
+  )fail(`capture report ${record.file} touch contract drifted`);
+  if(touch){
+    requireExactObject(record.runtime.cdpTouchInput,`capture report ${record.file} runtime.cdpTouchInput`,[
+      'touchStart','touchTrusted','pointerType','pointerTrusted'
+    ]);
+    if(
+      record.runtime.cdpTouchInput.touchStart!==true||
+      record.runtime.cdpTouchInput.touchTrusted!==true||
+      record.runtime.cdpTouchInput.pointerType!=='touch'||
+      record.runtime.cdpTouchInput.pointerTrusted!==true
+    ){
+      fail(`capture report ${record.file} Chromium CDP touch evidence drifted`);
+    }
+  }else if(record.runtime.cdpTouchInput!==null){
+    fail(`capture report ${record.file} desktop cdpTouchInput must be null`);
+  }
+  const expectedPointer=touch?'coarse':'fine';
+  const expectedHover=touch?'none':'hover';
+  if(record.runtime.primaryPointer!==expectedPointer||record.runtime.primaryHover!==expectedHover){
+    fail(`capture report ${record.file} pointer contract drifted`);
+  }
+  return structuredClone(record);
+}
+
 export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMode}={}){
   requireExactObject(report,'capture report',[
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
@@ -344,80 +422,10 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
   const seen=new Set();
   for(let index=0;index<expectedPaths.length;index+=1){
     const record=report.files[index];
-    requireExactObject(record,`capture report.files[${index}]`,[
-      'surface','viewport','width','height','locale','input','isMobile','hasTouch','file','sha256','bytes','paintStability','runtime'
-    ]);
     const expectedPath=expectedPaths[index];
-    const [surface,viewportId]=expectedPath.split('/');
-    const viewport=VIEWPORTS.find(item=>item.id===viewportId);
-    if(record.file!==expectedPath)fail(`capture report.files[${index}].file must be ${expectedPath}`);
-    if(seen.has(record.file))fail(`capture report contains duplicate path ${record.file}`);
-    seen.add(record.file);
-    if(record.surface!==surface||record.viewport!==viewportId)fail(`capture report record identity does not match ${expectedPath}`);
-    if(record.width!==viewport.width||record.height!==viewport.height)fail(`capture report record geometry does not match ${viewportId}`);
-    if(record.locale!==BASELINE_LOCALE)fail(`capture report record locale must be ${BASELINE_LOCALE}`);
-    const touch=viewport.inputMode==='touch';
-    if(record.input!==viewport.inputMode||record.isMobile!==touch||record.hasTouch!==touch)fail(`capture report record input does not match ${viewport.inputMode}`);
-    if(typeof record.sha256!=='string'||!SHA256_PATTERN.test(record.sha256))fail(`capture report ${record.file} sha256 must be lowercase SHA-256`);
-    requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
-    requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
-      'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
-      'hiddenScreenshotsCompared','fullPageScreenshotsCompared'
-    ]);
-    const expectedCanonicalImages=touch?1:2;
-    const expectedCanonicalBackgrounds=['home','create-hub-open'].includes(surface)?1:0;
-    if(record.paintStability.canonicalImagesChecked!==expectedCanonicalImages){
-      fail(`capture report ${record.file} canonical image paint evidence drifted`);
-    }
-    if(record.paintStability.canonicalBackgroundsChecked!==expectedCanonicalBackgrounds){
-      fail(`capture report ${record.file} canonical background paint evidence drifted`);
-    }
-    if(
-      record.paintStability.canonicalPixelContribution!==true||
-      record.paintStability.canonicalContentContrast!==true||
-      record.paintStability.canonicalRestoreMatch!==true||
-      record.paintStability.hiddenScreenshotsCompared!==2||
-      record.paintStability.fullPageScreenshotsCompared!==2
-    ){
-      fail(`capture report ${record.file} compositor paint stability evidence drifted`);
-    }
-    requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
-      'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','navigatorMaxTouchPoints',
-      'primaryPointer','primaryHover','cdpTouchInput'
-    ]);
-    if(record.runtime.fontStatus!=='loaded')fail(`capture report ${record.file} fonts were not loaded`);
-    requireString(record.runtime.bodyFontFamily,`capture report ${record.file} bodyFontFamily`);
-    if(!Number.isSafeInteger(record.runtime.imageCount)||record.runtime.imageCount<0)fail(`capture report ${record.file} imageCount must be a non-negative integer`);
-    requireExactObject(record.runtime.viewport,`capture report ${record.file} runtime.viewport`,['width','height']);
-    if(record.runtime.viewport.width!==viewport.width||record.runtime.viewport.height!==viewport.height)fail(`capture report ${record.file} runtime viewport drifted`);
-    if(record.runtime.devicePixelRatio!==viewport.devicePixelRatio)fail(`capture report ${record.file} DPR drifted`);
-    if(record.runtime.locale!==BASELINE_LOCALE)fail(`capture report ${record.file} runtime locale drifted`);
-    if(record.runtime.reducedMotion!==true)fail(`capture report ${record.file} reduced motion is not active`);
-    if(
-      !Number.isSafeInteger(record.runtime.navigatorMaxTouchPoints)||
-      record.runtime.navigatorMaxTouchPoints<0||
-      record.runtime.navigatorMaxTouchPoints!==(touch?1:0)
-    )fail(`capture report ${record.file} touch contract drifted`);
-    if(touch){
-      requireExactObject(record.runtime.cdpTouchInput,`capture report ${record.file} runtime.cdpTouchInput`,[
-        'touchStart','touchTrusted','pointerType','pointerTrusted'
-      ]);
-      if(
-        record.runtime.cdpTouchInput.touchStart!==true||
-        record.runtime.cdpTouchInput.touchTrusted!==true||
-        record.runtime.cdpTouchInput.pointerType!=='touch'||
-        record.runtime.cdpTouchInput.pointerTrusted!==true
-      ){
-        fail(`capture report ${record.file} Chromium CDP touch evidence drifted`);
-      }
-    }else if(record.runtime.cdpTouchInput!==null){
-      fail(`capture report ${record.file} desktop cdpTouchInput must be null`);
-    }
-    const expectedPointer=touch?'coarse':'fine';
-    const expectedHover=touch?'none':'hover';
-    if(record.runtime.primaryPointer!==expectedPointer||record.runtime.primaryHover!==expectedHover){
-      fail(`capture report ${record.file} pointer contract drifted`);
-    }
+    const normalizedRecord=validateRawCaptureRecord(record,{expectedPath,label:`capture report.files[${index}]`});
+    if(seen.has(normalizedRecord.file))fail(`capture report contains duplicate path ${normalizedRecord.file}`);
+    seen.add(normalizedRecord.file);
   }
   return structuredClone(report);
 }

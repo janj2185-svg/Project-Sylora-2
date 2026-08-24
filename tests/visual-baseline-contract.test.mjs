@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
-import {mkdir,mkdtemp,readFile,rm,unlink,writeFile} from 'node:fs/promises';
+import {mkdir,mkdtemp,readFile,rename,rm,unlink,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -35,6 +35,13 @@ import {
   inspectVisualBrowserRuntime,
   normalizeVisualBrowserCommandLine
 } from '../scripts/visual-browser-contract.mjs';
+import {
+  VISUAL_CAPTURE_LEDGER_DIRECTORY,
+  VISUAL_CAPTURE_LEDGER_SCHEMA_VERSION,
+  aggregateVisualCaptureLedger,
+  persistVisualCaptureLedgerEntry,
+  writeJsonAtomicReplace
+} from '../scripts/visual-capture-ledger.mjs';
 import {FIXED_VISUAL_ACCOUNT,VISUAL_FIXTURE_ID,createVisualFixtureData} from '../scripts/visual-fixture.mjs';
 import {
   BASELINE_LOCALE,
@@ -58,6 +65,7 @@ import {
   validateCaptureMetadata,
   validatePendingCaptureMetadata,
   validatePendingCaptureSource,
+  validateRawCaptureRecord,
   validateRawCaptureMetadata,
   verifyRawCaptureBytes,
   writeJsonAtomicExclusive
@@ -68,9 +76,58 @@ const defaultPlaywrightConfig=await readFile(new URL('../playwright.config.mjs',
 const visualPlaywrightConfig=await readFile(new URL('../playwright.visual.config.mjs',import.meta.url),'utf8');
 const visualBaselineSpec=await readFile(new URL('../e2e/visual-baseline.spec.mjs',import.meta.url),'utf8');
 const visualHelpersSource=await readFile(new URL('../e2e/visual-helpers.mjs',import.meta.url),'utf8');
+const visualCaptureLedgerSource=await readFile(new URL('../scripts/visual-capture-ledger.mjs',import.meta.url),'utf8');
 const runVisualQaScript=await readFile(new URL('../scripts/run-visual-qa.mjs',import.meta.url),'utf8');
+const ciWorkflow=await readFile(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
+const packageManifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
 const repositoryRoot=fileURLToPath(new URL('..',import.meta.url));
 const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
+const visualCaptureLedgerModuleUrl=new URL('../scripts/visual-capture-ledger.mjs',import.meta.url).href;
+
+const ledgerWorkerSource=`
+import {mkdirSync,writeFileSync} from 'node:fs';
+import path from 'node:path';
+const {aggregateVisualCaptureLedger,persistVisualCaptureLedgerEntry}=await import(process.env.SYLORA_LEDGER_MODULE_URL);
+const action=process.env.SYLORA_LEDGER_ACTION;
+const payload=JSON.parse(Buffer.from(process.env.SYLORA_LEDGER_PAYLOAD,'base64').toString('utf8'));
+if(action==='persist'){
+  for(const record of payload.records){
+    const absolute=path.join(payload.outputRoot,...record.file.split('/'));
+    mkdirSync(path.dirname(absolute),{recursive:true});
+    writeFileSync(absolute,Buffer.from(payload.pngByViewport[record.viewport],'base64'),{flag:'wx'});
+    persistVisualCaptureLedgerEntry({
+      resultsRoot:payload.resultsRoot,
+      outputRoot:payload.outputRoot,
+      record,
+      browser:payload.report.browser,
+      runner:payload.report.runner,
+      renderedFromCommit:payload.report.renderedFromCommit,
+      runMode:payload.report.runMode
+    });
+  }
+  process.stdout.write(JSON.stringify({persisted:payload.records.length}));
+}else if(action==='aggregate'){
+  process.stdout.write(JSON.stringify(aggregateVisualCaptureLedger(payload)));
+}else{
+  throw new Error('Unknown ledger worker action');
+}
+`;
+
+function runLedgerWorker(action,payload){
+  const result=spawnSync(process.execPath,['--input-type=module','--eval',ledgerWorkerSource],{
+    cwd:repositoryRoot,
+    encoding:'utf8',
+    maxBuffer:10*1024*1024,
+    env:{
+      ...process.env,
+      SYLORA_LEDGER_MODULE_URL:visualCaptureLedgerModuleUrl,
+      SYLORA_LEDGER_ACTION:action,
+      SYLORA_LEDGER_PAYLOAD:Buffer.from(JSON.stringify(payload)).toString('base64')
+    }
+  });
+  assert.equal(result.status,0,result.stderr||result.stdout||`ledger worker exited ${result.status}`);
+  return JSON.parse(result.stdout);
+}
 
 function discoverPlaywright(configFile){
   const result=spawnSync(process.execPath,[playwrightCli,'test',`--config=${configFile}`,'--list','--reporter=json'],{
@@ -246,6 +303,31 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
   };
 }
 
+function ledgerCaptureFixture(commit='a'.repeat(40)){
+  const pngByViewport=new Map(VIEWPORTS.map(viewport=>[
+    viewport.id,
+    validPng(viewport.width,viewport.height)
+  ]));
+  return {report:rawCaptureFixture(commit,pngByViewport),pngByViewport};
+}
+
+async function persistLedgerRecords({resultsRoot,outputRoot,report,pngByViewport,records}){
+  for(const record of records){
+    const absolute=path.join(outputRoot,...record.file.split('/'));
+    await mkdir(path.dirname(absolute),{recursive:true});
+    await writeFile(absolute,pngByViewport.get(record.viewport));
+    persistVisualCaptureLedgerEntry({
+      resultsRoot,
+      outputRoot,
+      record,
+      browser:report.browser,
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    });
+  }
+}
+
 test('visual baseline matrix is exactly eleven surfaces by four fixed viewports',()=>{
   const paths=expectedRelativePngPaths();
   assert.equal(SURFACES.length,11);
@@ -256,6 +338,246 @@ test('visual baseline matrix is exactly eleven surfaces by four fixed viewports'
   for(const file of paths)assert.match(file,/^[a-z0-9-]+\/(?:390x844|768x1024|1366x900|1920x1080)\/uk\.png$/);
 });
 
+test('durable visual ledger aggregates 2 + 2 + 22 records across worker restarts',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'sylora-visual-ledger-partitions-'));
+  const resultsRoot=path.join(root,'results');
+  const outputRoot=path.join(root,'candidate');
+  try{
+    const {report,pngByViewport}=ledgerCaptureFixture();
+    const byPath=new Map(report.files.map(record=>[record.file,record]));
+    const partitions=[
+      ['home/390x844/uk.png','live/390x844/uk.png'].map(file=>byPath.get(file)),
+      ['home/768x1024/uk.png','live/768x1024/uk.png'].map(file=>byPath.get(file)),
+      report.files.filter(record=>['1366x900','1920x1080'].includes(record.viewport))
+    ];
+    const encodedPngByViewport=Object.fromEntries(
+      [...pngByViewport].map(([viewport,png])=>[viewport,png.toString('base64')])
+    );
+    const expectedCounts=[2,4,26];
+    let aggregate=null;
+    for(let index=0;index<partitions.length;index+=1){
+      const persisted=runLedgerWorker('persist',{
+        resultsRoot,
+        outputRoot,
+        report,
+        records:partitions[index],
+        pngByViewport:encodedPngByViewport
+      });
+      assert.equal(persisted.persisted,partitions[index].length);
+      aggregate=runLedgerWorker('aggregate',{
+        resultsRoot,
+        outputRoot,
+        expectedCommit:report.renderedFromCommit,
+        expectedRunMode:report.runMode,
+        observedBrowser:report.browser,
+        observedRunner:report.runner
+      });
+      assert.equal(aggregate.actualFiles,expectedCounts[index]);
+      assert.equal(aggregate.complete,false);
+      writeJsonAtomicReplace(path.join(outputRoot,'metadata.json'),{actualFiles:aggregate.actualFiles});
+      assert.deepEqual(JSON.parse(await readFile(path.join(outputRoot,'metadata.json'),'utf8')),{actualFiles:expectedCounts[index]});
+    }
+    assert.equal(aggregate.records.length,26);
+    for(const file of [
+      'home/390x844/uk.png','live/390x844/uk.png',
+      'home/768x1024/uk.png','live/768x1024/uk.png'
+    ])assert.ok(aggregate.records.some(record=>record.file===file),`${file} must survive worker restart aggregation`);
+    const firstSidecar=JSON.parse(await readFile(path.join(
+      resultsRoot,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`
+    ),'utf8'));
+    assert.equal(firstSidecar.schemaVersion,VISUAL_CAPTURE_LEDGER_SCHEMA_VERSION);
+    await assert.rejects(readFile(path.join(
+      outputRoot,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`
+    )),error=>error?.code==='ENOENT');
+    await assert.rejects(readFile(path.join(outputRoot,'capture-metadata.json')),error=>error?.code==='ENOENT');
+  }finally{
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('durable visual ledger completes exactly 44 validated records and prevents duplicate sidecars',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'sylora-visual-ledger-complete-'));
+  const resultsRoot=path.join(root,'results');
+  const outputRoot=path.join(root,'candidate');
+  try{
+    const {report,pngByViewport}=ledgerCaptureFixture();
+    await persistLedgerRecords({resultsRoot,outputRoot,report,pngByViewport,records:report.files});
+    const aggregate=aggregateVisualCaptureLedger({
+      resultsRoot,
+      outputRoot,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    });
+    assert.equal(aggregate.actualFiles,EXPECTED_PNG_COUNT);
+    assert.equal(aggregate.complete,true);
+    assert.deepEqual(aggregate.records,report.files);
+    assert.doesNotThrow(()=>validateRawCaptureMetadata({...report,files:aggregate.records}));
+    assert.throws(()=>persistVisualCaptureLedgerEntry({
+      resultsRoot,
+      outputRoot,
+      record:report.files[0],
+      browser:report.browser,
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    }),/refusing to overwrite ledger sidecar/);
+  }finally{
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test('visual ledger rejects provenance drift, byte drift, missing records and missing PNGs',async()=>{
+  const root=await mkdtemp(path.join(os.tmpdir(),'sylora-visual-ledger-reject-'));
+  try{
+    const {report,pngByViewport}=ledgerCaptureFixture();
+    const first=report.files[0];
+
+    assert.throws(()=>persistVisualCaptureLedgerEntry({
+      resultsRoot:root,
+      outputRoot:root,
+      record:first,
+      browser:report.browser,
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    }),/resultsRoot and outputRoot must be disjoint/);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:path.join(root,'nested'),
+      outputRoot:root,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/resultsRoot and outputRoot must be disjoint/);
+
+    const provenanceResults=path.join(root,'provenance-results');
+    const provenanceOutput=path.join(root,'provenance-output');
+    await persistLedgerRecords({resultsRoot:provenanceResults,outputRoot:provenanceOutput,report,pngByViewport,records:[first]});
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:provenanceResults,
+      outputRoot:provenanceOutput,
+      expectedCommit:'b'.repeat(40),
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/entry commit .* does not match/);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:provenanceResults,
+      outputRoot:provenanceOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:'repeat',
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/entry runMode .* does not match/);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:provenanceResults,
+      outputRoot:provenanceOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:{...report.runner,release:'different'}
+    }),/runner fingerprint drifted/);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:provenanceResults,
+      outputRoot:provenanceOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:{...report.browser,version:'different'},
+      observedRunner:report.runner
+    }),/observedBrowser\.version must be/);
+
+    const consensusResults=path.join(root,'consensus-results');
+    const consensusOutput=path.join(root,'consensus-output');
+    const second=report.files[1];
+    await persistLedgerRecords({resultsRoot:consensusResults,outputRoot:consensusOutput,report,pngByViewport,records:[first]});
+    const secondAbsolute=path.join(consensusOutput,...second.file.split('/'));
+    await mkdir(path.dirname(secondAbsolute),{recursive:true});
+    await writeFile(secondAbsolute,pngByViewport.get(second.viewport));
+    persistVisualCaptureLedgerEntry({
+      resultsRoot:consensusResults,
+      outputRoot:consensusOutput,
+      record:second,
+      browser:report.browser,
+      runner:{...report.runner,release:'different'},
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    });
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:consensusResults,
+      outputRoot:consensusOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/runner fingerprint drifted at/);
+
+    const misplacedResults=path.join(root,'misplaced-results');
+    const misplacedOutput=path.join(root,'misplaced-output');
+    await persistLedgerRecords({resultsRoot:misplacedResults,outputRoot:misplacedOutput,report,pngByViewport,records:[first]});
+    const canonicalSidecar=path.join(misplacedResults,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`);
+    const misplacedSidecar=path.join(misplacedResults,VISUAL_CAPTURE_LEDGER_DIRECTORY,'live','390x844',`${BASELINE_LOCALE}.json`);
+    await mkdir(path.dirname(misplacedSidecar),{recursive:true});
+    await rename(canonicalSidecar,misplacedSidecar);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:misplacedResults,
+      outputRoot:misplacedOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/does not match sidecar/);
+
+    const driftResults=path.join(root,'drift-results');
+    const driftOutput=path.join(root,'drift-output');
+    await persistLedgerRecords({resultsRoot:driftResults,outputRoot:driftOutput,report,pngByViewport,records:[first]});
+    const drifted=Buffer.from(pngByViewport.get(first.viewport));
+    // Alter the IDAT CRC without changing the PNG chunk boundaries. The
+    // ledger must still reject the byte digest even when structural parsing
+    // can read the complete image stream.
+    drifted[drifted.length-13]^=1;
+    await writeFile(path.join(driftOutput,...first.file.split('/')),drifted);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:driftResults,
+      outputRoot:driftOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/PNG digest\/size\/dimensions do not match/);
+
+    const orphanResults=path.join(root,'orphan-results');
+    const orphanOutput=path.join(root,'orphan-output');
+    const orphanPath=path.join(orphanOutput,...first.file.split('/'));
+    await mkdir(path.dirname(orphanPath),{recursive:true});
+    await writeFile(orphanPath,pngByViewport.get(first.viewport));
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:orphanResults,
+      outputRoot:orphanOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/pngWithoutRecord/);
+
+    const missingResults=path.join(root,'missing-results');
+    const missingOutput=path.join(root,'missing-output');
+    await persistLedgerRecords({resultsRoot:missingResults,outputRoot:missingOutput,report,pngByViewport,records:[first]});
+    await unlink(path.join(missingOutput,...first.file.split('/')));
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:missingResults,
+      outputRoot:missingOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/PNG for .* cannot be read/);
+  }finally{
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
 test('ordinary browser QA and deterministic visual QA have disjoint discovery',()=>{
   assert.match(defaultPlaywrightConfig,/testIgnore:\s*['"]visual-baseline\.spec\.mjs['"]/);
   assert.match(visualPlaywrightConfig,/testMatch:\s*['"]visual-baseline\.spec\.mjs['"]/);
@@ -264,6 +586,9 @@ test('ordinary browser QA and deterministic visual QA have disjoint discovery',(
   assert.doesNotMatch(visualPlaywrightConfig,/\bchannel\s*:/);
   assert.equal(visualPlaywrightConfigObject.use.browserName,'chromium');
   assert.equal(visualPlaywrightConfigObject.use.headless,true);
+  assert.equal(visualPlaywrightConfigObject.workers,1);
+  assert.equal(visualPlaywrightConfigObject.retries,0);
+  assert.equal(visualPlaywrightConfigObject.fullyParallel,false);
   assert.equal(Object.hasOwn(visualPlaywrightConfigObject.use,'channel'),false);
   assert.deepEqual(visualPlaywrightConfigObject.use.launchOptions,{args:['--enable-automation']});
   assert.equal(visualPlaywrightConfigObject.projects.length,1);
@@ -304,6 +629,8 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   for(const index of [visualEnvironmentIndex,ambientEnvironmentIndex,legacyScreenshotIndex,visualSpawnIndex])assert.notEqual(index,-1);
   assert.ok(visualEnvironmentIndex<ambientEnvironmentIndex&&ambientEnvironmentIndex<legacyScreenshotIndex&&legacyScreenshotIndex<visualSpawnIndex);
   assert.match(runVisualQaScript,/if \(mode === 'capture'\) \{[\s\S]*clean\(repeatDir\);/);
+  assert.match(runVisualQaScript,/clean\(path\.join\(tmpRoot, 'playwright-visual-results-repeat'\)\)/);
+  assert.match(runVisualQaScript,/clean\(outputDir\);\s*clean\(resultsDir\);\s*clean\(dataFile\);/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(outputDir, outputReport\)/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(candidateDir, candidate\)/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
@@ -656,21 +983,46 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const runtimeIndex=visualBaselineSpec.indexOf('const runtime = await visualRuntimeMetadata');
   const screenshotIndex=visualBaselineSpec.indexOf('const { png, paintStability } = await captureStableVisualScreenshot');
   const durableWriteIndex=visualBaselineSpec.indexOf('fs.writeFileSync(absolutePath, png');
-  const recordIndex=visualBaselineSpec.indexOf('records.push');
-  const rawMetadataWriteIndex=visualBaselineSpec.indexOf("fs.writeFileSync(path.join(outputRoot, 'metadata.json')");
+  const recordBuildIndex=visualBaselineSpec.indexOf('const record = {');
+  const ledgerPersistIndex=visualBaselineSpec.indexOf('persistVisualCaptureLedgerEntry({');
+  const aggregateWriteIndex=visualBaselineSpec.indexOf('writeAggregatedRawMetadata();');
+  const rawMetadataWriteIndex=visualBaselineSpec.indexOf("writeJsonAtomicReplace(path.join(outputRoot, 'metadata.json'), metadata)");
+  const afterAllAggregateIndex=visualBaselineSpec.indexOf('const metadata = writeAggregatedRawMetadata();');
   const incompleteGateIndex=visualBaselineSpec.indexOf('if (!metadata.complete)');
   const captureSidecarIndex=visualBaselineSpec.indexOf("fs.writeFileSync(path.join(outputRoot, 'capture-metadata.json')");
   for(const index of [
-    enforceIndex,accountIndex,runtimeIndex,screenshotIndex,durableWriteIndex,recordIndex,
-    rawMetadataWriteIndex,incompleteGateIndex,captureSidecarIndex
+    enforceIndex,accountIndex,runtimeIndex,screenshotIndex,durableWriteIndex,recordBuildIndex,
+    ledgerPersistIndex,aggregateWriteIndex,
+    rawMetadataWriteIndex,afterAllAggregateIndex,incompleteGateIndex,captureSidecarIndex
   ])assert.notEqual(index,-1);
   assert.ok(enforceIndex<accountIndex);
   assert.match(visualBaselineSpec,/lastSurface = surface\.id;\s+lastSafeRuntime = null;/);
   assert.match(visualBaselineSpec,/ensureFixedVisualAccount\(page, \{\s+beforeNavigation: \(\) => applyVisualTouchEmulation/);
   assert.match(visualBaselineSpec,/beforeNavigation: \(\) => applyVisualTouchEmulation\(touchEmulationSession, viewport\),\s+afterNavigation: async \(\) => \{\s+cdpTouchInput = await verifyVisualTouchInput/);
-  assert.ok(runtimeIndex<screenshotIndex&&screenshotIndex<durableWriteIndex&&durableWriteIndex<recordIndex);
-  assert.ok(rawMetadataWriteIndex<incompleteGateIndex&&incompleteGateIndex<captureSidecarIndex);
+  assert.ok(
+    runtimeIndex<screenshotIndex&&screenshotIndex<durableWriteIndex&&
+    durableWriteIndex<recordBuildIndex&&recordBuildIndex<ledgerPersistIndex&&
+    ledgerPersistIndex<aggregateWriteIndex
+  );
+  assert.ok(rawMetadataWriteIndex<afterAllAggregateIndex&&afterAllAggregateIndex<incompleteGateIndex&&incompleteGateIndex<captureSidecarIndex);
+  assert.doesNotMatch(visualBaselineSpec,/const records = \[\]/,'capture records must survive Playwright worker restarts');
   assert.match(visualBaselineSpec,/fs\.writeFileSync\(absolutePath, png, \{ flag: 'wx' \}\)/);
+  assert.match(visualCaptureLedgerSource,/resolveDisjointRoots\(resultsRoot,outputRoot\)/);
+  assert.match(visualCaptureLedgerSource,/const ledgerRoot=path\.join\(resultsDirectory,VISUAL_CAPTURE_LEDGER_DIRECTORY\)/);
+  assert.match(visualCaptureLedgerSource,/writeFileSync\(temporary,`\$\{JSON\.stringify\(entry,null,2\)\}\\n`,\{flag:'wx'\}\)/);
+  assert.match(visualCaptureLedgerSource,/linkSync\(temporary,target\)/,'ledger sidecar publication must be atomic and exclusive');
+  assert.match(visualCaptureLedgerSource,/verifyRecordPng\(outputDirectory,entry\.record\)/);
+  assert.match(visualCaptureLedgerSource,/ledger\/output mismatch/);
+  assert.match(visualCaptureLedgerSource,/renameSync\(temporary,target\)/,'metadata replacement must be atomic');
+  assert.match(packageManifest.scripts.lint,/node --check scripts\/visual-capture-ledger\.mjs/);
+  const candidateUploadIndex=ciWorkflow.indexOf('- name: Upload deterministic visual candidate');
+  const diagnosticsUploadIndex=ciWorkflow.indexOf('- name: Upload Playwright diagnostics');
+  assert.ok(candidateUploadIndex!==-1&&candidateUploadIndex<diagnosticsUploadIndex);
+  const candidateUploadBlock=ciWorkflow.slice(candidateUploadIndex,diagnosticsUploadIndex);
+  const diagnosticsUploadBlock=ciWorkflow.slice(diagnosticsUploadIndex);
+  assert.doesNotMatch(candidateUploadBlock,/playwright-visual-results|capture-ledger/);
+  assert.match(diagnosticsUploadBlock,/tmp\/playwright-visual-results-capture/);
+  assert.match(diagnosticsUploadBlock,/tmp\/playwright-visual-results-repeat/);
   assert.match(visualBaselineSpec,/paintStability,\s+runtime/);
   assert.match(
     visualBaselineSpec,
@@ -678,7 +1030,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   );
   assert.match(visualBaselineSpec,/stability-mismatch[\s\S]*final-a\.png[\s\S]*final-b\.png[\s\S]*metadata\.json/);
   assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
-  assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
+  assert.match(visualBaselineSpec,/status: aggregate\.complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
   const stableCaptureSource=captureStableVisualScreenshot.toString();
   const stableStyleIndexes=[...stableCaptureSource.matchAll(/await assertPersistentVisualCaptureStyle\(page\)/g)]
     .map(match=>match.index);

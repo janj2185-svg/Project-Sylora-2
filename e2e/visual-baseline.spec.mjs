@@ -12,6 +12,11 @@ import {
   inspectVisualBrowserRuntime
 } from '../scripts/visual-browser-contract.mjs';
 import {
+  aggregateVisualCaptureLedger,
+  persistVisualCaptureLedgerEntry,
+  writeJsonAtomicReplace
+} from '../scripts/visual-capture-ledger.mjs';
+import {
   FIXED_VISUAL_ACCOUNT,
   FIXED_VISUAL_TIME,
   VISUAL_FIXTURE_ID,
@@ -36,7 +41,9 @@ assertVisualScreenshotEnvironment(process.env);
 const playwrightVersion = VISUAL_PLAYWRIGHT_VERSION;
 const outputRoot = path.resolve(process.env.SYLORA_VISUAL_OUTPUT_DIR || 'tmp/visual-candidate');
 const resultsRoot = path.resolve(process.env.SYLORA_VISUAL_RESULTS_DIR || 'tmp/playwright-visual-results');
-const records = [];
+const renderedFromCommit = process.env.SYLORA_VISUAL_GIT_SHA || 'unknown';
+const runMode = process.env.SYLORA_VISUAL_RUN_MODE || 'capture';
+const runnerFingerprint = { platform: process.platform, arch: process.arch, release: os.release() };
 let browserFingerprint = null;
 
 fs.mkdirSync(outputRoot, { recursive: true });
@@ -53,7 +60,7 @@ function writeStabilityMismatchEvidence({ viewport, surface, first, second, firs
   fs.writeFileSync(path.join(evidenceRoot, 'final-b.png'), second, { flag: 'wx' });
   fs.writeFileSync(path.join(evidenceRoot, 'metadata.json'), `${JSON.stringify({
     schemaVersion: 1,
-    renderedFromCommit: process.env.SYLORA_VISUAL_GIT_SHA || 'unknown',
+    renderedFromCommit,
     viewport: {
       id: viewport.id,
       width: viewport.width,
@@ -67,6 +74,52 @@ function writeStabilityMismatchEvidence({ viewport, surface, first, second, firs
       finalB: { file: 'final-b.png', sha256: secondSha256, bytes: second.length }
     }
   }, null, 2)}\n`, { flag: 'wx' });
+}
+
+function writeAggregatedRawMetadata() {
+  const aggregate = aggregateVisualCaptureLedger({
+    resultsRoot,
+    outputRoot,
+    expectedCommit: renderedFromCommit,
+    expectedRunMode: runMode,
+    observedBrowser: browserFingerprint ? { ...browserFingerprint, playwrightVersion } : null,
+    observedRunner: runnerFingerprint
+  });
+  const browserMetadata = aggregate.browser || {
+    name: 'chromium',
+    distribution: 'unverified',
+    revision: 'unverified',
+    executable: 'unverified',
+    screenshotBackend: 'unverified',
+    version: 'unverified',
+    playwrightVersion
+  };
+  const metadata = {
+    schemaVersion: 7,
+    status: aggregate.complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
+    complete: aggregate.complete,
+    expectedFiles: aggregate.expectedFiles,
+    actualFiles: aggregate.actualFiles,
+    generatedAt: new Date().toISOString(),
+    renderedFromCommit,
+    runMode,
+    fixture: {
+      id: VISUAL_FIXTURE_ID,
+      username: FIXED_VISUAL_ACCOUNT.username,
+      displayName: FIXED_VISUAL_ACCOUNT.displayName,
+      fixedTime: FIXED_VISUAL_TIME,
+      randomSeed: VISUAL_RANDOM_SEED,
+      locale: VISUAL_LOCALE,
+      dailyBrief: false
+    },
+    browser: browserMetadata,
+    runner: aggregate.runner,
+    surfaces: VISUAL_SURFACES.map(surface => surface.id),
+    viewports: VISUAL_VIEWPORTS,
+    files: aggregate.records
+  };
+  writeJsonAtomicReplace(path.join(outputRoot, 'metadata.json'), metadata);
+  return metadata;
 }
 
 for (const viewport of VISUAL_VIEWPORTS) {
@@ -142,7 +195,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
           fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
           fs.writeFileSync(absolutePath, png, { flag: 'wx' });
 
-          records.push({
+          const record = {
             surface: surface.id,
             viewport: viewport.id,
             width: viewport.width,
@@ -156,7 +209,17 @@ for (const viewport of VISUAL_VIEWPORTS) {
             bytes: png.length,
             paintStability,
             runtime
+          };
+          persistVisualCaptureLedgerEntry({
+            resultsRoot,
+            outputRoot,
+            record,
+            browser: { ...browserFingerprint, playwrightVersion },
+            runner: runnerFingerprint,
+            renderedFromCommit,
+            runMode
           });
+          writeAggregatedRawMetadata();
           diagnostics.reset();
         });
       }
@@ -195,63 +258,21 @@ for (const viewport of VISUAL_VIEWPORTS) {
 }
 
 test.afterAll(() => {
-  records.sort((left, right) =>
-    VISUAL_SURFACES.findIndex(surface => surface.id === left.surface) -
-      VISUAL_SURFACES.findIndex(surface => surface.id === right.surface) ||
-    VISUAL_VIEWPORTS.findIndex(viewport => viewport.id === left.viewport) -
-      VISUAL_VIEWPORTS.findIndex(viewport => viewport.id === right.viewport)
-  );
-
-  const expectedFiles = VISUAL_SURFACES.length * VISUAL_VIEWPORTS.length;
-  const browserMetadata = browserFingerprint || {
-    name: 'chromium',
-    distribution: 'unverified',
-    revision: 'unverified',
-    executable: 'unverified',
-    screenshotBackend: 'unverified',
-    version: 'unverified'
-  };
-  const complete = records.length === expectedFiles;
-  const metadata = {
-    schemaVersion: 7,
-    status: complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
-    complete,
-    expectedFiles,
-    actualFiles: records.length,
-    generatedAt: new Date().toISOString(),
-    renderedFromCommit: process.env.SYLORA_VISUAL_GIT_SHA || 'unknown',
-    runMode: process.env.SYLORA_VISUAL_RUN_MODE || 'capture',
-    fixture: {
-      id: VISUAL_FIXTURE_ID,
-      username: FIXED_VISUAL_ACCOUNT.username,
-      displayName: FIXED_VISUAL_ACCOUNT.displayName,
-      fixedTime: FIXED_VISUAL_TIME,
-      randomSeed: VISUAL_RANDOM_SEED,
-      locale: VISUAL_LOCALE,
-      dailyBrief: false
-    },
-    browser: { ...browserMetadata, playwrightVersion },
-    runner: { platform: process.platform, arch: process.arch, release: os.release() },
-    surfaces: VISUAL_SURFACES.map(surface => surface.id),
-    viewports: VISUAL_VIEWPORTS,
-    files: records
-  };
-  fs.writeFileSync(path.join(outputRoot, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
+  const metadata = writeAggregatedRawMetadata();
 
   if (!metadata.complete) {
-    throw new Error(`Incomplete visual candidate: expected ${expectedFiles}, captured ${records.length}`);
+    throw new Error(`Incomplete visual candidate: expected ${metadata.expectedFiles}, captured ${metadata.actualFiles}`);
   }
 
   if (process.env.GITHUB_ACTIONS === 'true') {
     const sourceRunId = Number(process.env.GITHUB_RUN_ID || 0);
     const sourceRunAttempt = Number(process.env.GITHUB_RUN_ATTEMPT || 0);
     const repository = String(process.env.GITHUB_REPOSITORY || '').trim();
-    const renderedFromCommit = metadata.renderedFromCommit;
-    const fontFamilies = [...new Set(records.map(record => record.runtime.bodyFontFamily))];
+    const fontFamilies = [...new Set(metadata.files.map(record => record.runtime.bodyFontFamily))];
     const runnerImage = String(process.env.ImageOS || process.env.RUNNER_OS || '').trim();
     if (!/^[a-f0-9]{40}$/.test(renderedFromCommit)) throw new Error(`Invalid rendered commit metadata: ${renderedFromCommit}`);
     if (!sourceRunId || !sourceRunAttempt || !repository || !runnerImage) throw new Error('GitHub runner provenance is required for promotable visual evidence');
-    if (fontFamilies.length !== 1 || records.some(record => record.runtime.fontStatus !== 'loaded')) {
+    if (fontFamilies.length !== 1 || metadata.files.some(record => record.runtime.fontStatus !== 'loaded')) {
       throw new Error(`Inconsistent font evidence: ${JSON.stringify(fontFamilies)}`);
     }
 
@@ -268,7 +289,14 @@ test.afterAll(() => {
         headSha: renderedFromCommit
       },
       playwright: { version: playwrightVersion },
-      browser: browserMetadata,
+      browser: {
+        name: metadata.browser.name,
+        distribution: metadata.browser.distribution,
+        revision: metadata.browser.revision,
+        executable: metadata.browser.executable,
+        screenshotBackend: metadata.browser.screenshotBackend,
+        version: metadata.browser.version
+      },
       os: {
         name: String(process.env.RUNNER_OS || process.platform),
         version: String(process.env.ImageVersion || os.release()),
