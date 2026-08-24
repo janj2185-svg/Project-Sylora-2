@@ -8,7 +8,8 @@ import {
   EXPECTED_PNG_COUNT,
   expectedRelativePngPaths,
   validatePendingCaptureSource,
-  validateRawCaptureMetadata
+  validateRawCaptureMetadata,
+  verifyRawCaptureBytes
 } from './build-visual-manifest.mjs';
 import {assertNoVisualBrowserConnectionEnvironment} from './visual-browser-contract.mjs';
 import {createVisualFixtureData} from './visual-fixture.mjs';
@@ -25,7 +26,8 @@ if (!['capture', 'repeat'].includes(mode)) {
 assertNoVisualBrowserConnectionEnvironment(process.env);
 
 const candidateDir = path.join(tmpRoot, 'visual-candidate');
-const outputDir = mode === 'capture' ? candidateDir : path.join(tmpRoot, 'visual-repeat');
+const repeatDir = path.join(tmpRoot, 'visual-repeat');
+const outputDir = mode === 'capture' ? candidateDir : repeatDir;
 const dataFile = path.join(tmpRoot, `visual-fixture-${mode}.json`);
 const resultsDir = path.join(tmpRoot, `playwright-visual-results-${mode}`);
 const candidateMetadata = path.join(candidateDir, 'metadata.json');
@@ -64,6 +66,14 @@ if (fs.existsSync(path.join(repoRoot, '.env.local'))) {
 const gitSha = actualGitSha;
 
 fs.mkdirSync(tmpRoot, { recursive: true });
+if (mode === 'capture') {
+  // A new capture invalidates every repeat artifact from an earlier attempt.
+  // Clear them before rendering so an aborted capture cannot upload stale
+  // determinism evidence from another commit or run.
+  clean(repeatDir);
+  clean(path.join(tmpRoot, 'playwright-visual-results-repeat'));
+  clean(path.join(tmpRoot, 'visual-fixture-repeat.json'));
+}
 clean(outputDir);
 clean(resultsDir);
 clean(dataFile);
@@ -103,6 +113,7 @@ const outputReport = validateRawCaptureMetadata(JSON.parse(fs.readFileSync(outpu
   expectedCommit: gitSha,
   expectedRunMode: mode
 });
+await verifyRawCaptureBytes(outputDir, outputReport);
 if (process.env.GITHUB_ACTIONS === 'true') {
   const captureMetadata = path.join(outputDir, 'capture-metadata.json');
   if (!fs.existsSync(captureMetadata)) throw new Error(`Missing GitHub capture provenance: ${captureMetadata}`);
@@ -118,6 +129,7 @@ if (mode === 'repeat') {
     expectedCommit: gitSha,
     expectedRunMode: 'capture'
   });
+  await verifyRawCaptureBytes(candidateDir, candidate);
   const repeat = outputReport;
   const canonicalPaths = expectedRelativePngPaths();
   const digestMap = report => new Map(report.files.map(file => [file.file, file.sha256]));

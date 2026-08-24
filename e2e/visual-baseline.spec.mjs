@@ -51,40 +51,37 @@ for (const viewport of VISUAL_VIEWPORTS) {
     }
     browserFingerprint ||= observedBrowser;
     const context = await createVisualContext(browser, viewport, baseURL);
-    await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage();
-    let traceStopped = false;
     let touchEmulationSession = null;
+    let lastSurface = null;
+    let lastSafeRuntime = null;
 
     try {
-      await page.clock.setFixedTime(new Date(FIXED_VISUAL_TIME));
-      await ensureFixedVisualAccount(page);
       touchEmulationSession = await enforceVisualTouchEmulation(context, page, viewport);
-      await verifyVisualTouchInput(page, viewport);
+      await page.clock.setFixedTime(new Date(FIXED_VISUAL_TIME));
+      await ensureFixedVisualAccount(page, {
+        beforeNavigation: () => applyVisualTouchEmulation(touchEmulationSession, viewport)
+      });
+      await verifyVisualTouchInput(page, viewport, touchEmulationSession);
       const diagnostics = captureRuntimeDiagnostics(page);
 
       for (const surface of VISUAL_SURFACES) {
         await test.step(surface.id, async () => {
-          let playwrightTouchInput = null;
+          lastSurface = surface.id;
+          lastSafeRuntime = null;
+          let cdpTouchInput = null;
           await gotoVisualSurface(page, surface, {
+            beforeNavigation: () => applyVisualTouchEmulation(touchEmulationSession, viewport),
             afterNavigation: async () => {
-              await applyVisualTouchEmulation(touchEmulationSession, viewport);
-              playwrightTouchInput = await verifyVisualTouchInput(page, viewport);
+              cdpTouchInput = await verifyVisualTouchInput(page, viewport, touchEmulationSession);
             }
           });
           diagnostics.assertClean(surface.id);
 
           const relativePath = path.join(surface.id, viewport.id, `${VISUAL_LOCALE}.png`);
           const absolutePath = path.join(outputRoot, relativePath);
-          fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-          const png = await page.screenshot({
-            path: absolutePath,
-            fullPage: true,
-            animations: 'disabled',
-            caret: 'hide',
-            scale: 'css'
-          });
-          const runtime = await visualRuntimeMetadata(page, playwrightTouchInput);
+          const runtime = await visualRuntimeMetadata(page, cdpTouchInput);
+          lastSafeRuntime = runtime;
           if (runtime.devicePixelRatio !== 1) throw new Error(`Unexpected DPR ${runtime.devicePixelRatio}`);
           if (runtime.fontStatus !== 'loaded') throw new Error(`Fonts are not loaded: ${runtime.fontStatus}`);
           if (runtime.locale !== VISUAL_LOCALE) throw new Error(`Unexpected locale ${runtime.locale}`);
@@ -92,15 +89,30 @@ for (const viewport of VISUAL_VIEWPORTS) {
           if (runtime.viewport.width !== viewport.width || runtime.viewport.height !== viewport.height) {
             throw new Error(`Unexpected viewport ${runtime.viewport.width}x${runtime.viewport.height}`);
           }
-          if (viewport.hasTouch ? runtime.touchPoints < 1 : runtime.touchPoints !== 0) {
-            throw new Error(`Unexpected touch contract: ${runtime.touchPoints}`);
+          const expectedTouchPoints = viewport.hasTouch ? 1 : 0;
+          if (runtime.navigatorMaxTouchPoints !== expectedTouchPoints) {
+            throw new Error(`Unexpected touch contract: ${runtime.navigatorMaxTouchPoints}`);
           }
           const expectedPointer = viewport.hasTouch ? 'coarse' : 'fine';
           const expectedHover = viewport.hasTouch ? 'none' : 'hover';
           if (runtime.primaryPointer !== expectedPointer || runtime.primaryHover !== expectedHover) {
             throw new Error(`Unexpected pointer contract: ${runtime.primaryPointer}/${runtime.primaryHover}`);
           }
+          diagnostics.assertClean(`${surface.id}:pre-capture`);
+
+          const png = await page.screenshot({
+            fullPage: true,
+            animations: 'disabled',
+            caret: 'hide',
+            scale: 'css'
+          });
           diagnostics.assertClean(`${surface.id}:post-capture`);
+
+          // Candidate bytes become durable only after the runtime and screenshot
+          // checks above have passed. Exclusive creation prevents a stale or
+          // repeated run from silently overwriting evidence.
+          fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+          fs.writeFileSync(absolutePath, png, { flag: 'wx' });
 
           records.push({
             surface: surface.id,
@@ -121,22 +133,33 @@ for (const viewport of VISUAL_VIEWPORTS) {
       }
     } catch (error) {
       const failureScreenshot = path.join(resultsRoot, `failure-${viewport.id}.png`);
-      const failureTrace = path.join(resultsRoot, `trace-${viewport.id}.zip`);
-      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'disabled', caret: 'hide' }).catch(() => {});
-      await context.tracing.stop({ path: failureTrace }).catch(traceError => {
-        error.message += `\nTrace retention also failed: ${traceError.message}`;
-      });
-      traceStopped = true;
+      const evidenceFailures = [];
+      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'disabled', caret: 'hide' })
+        .catch(evidenceError => evidenceFailures.push(`screenshot: ${evidenceError.message}`));
+      try {
+        fs.writeFileSync(path.join(resultsRoot, `failure-runtime-${viewport.id}.json`), `${JSON.stringify({
+          viewport: {
+            id: viewport.id,
+            width: viewport.width,
+            height: viewport.height,
+            isMobile: viewport.isMobile,
+            hasTouch: viewport.hasTouch
+          },
+          surface: lastSurface,
+          runtime: lastSafeRuntime
+        }, null, 2)}\n`, { flag: 'wx' });
+      } catch (evidenceError) {
+        evidenceFailures.push(`runtime JSON: ${evidenceError.message}`);
+      }
+      if (evidenceFailures.length && error instanceof Error) {
+        error.message += `\nFailure evidence issues: ${evidenceFailures.join('; ')}`;
+      }
       throw error;
     } finally {
       try {
-        if (!traceStopped) await context.tracing.stop();
+        await touchEmulationSession?.detach().catch(() => {});
       } finally {
-        try {
-          await touchEmulationSession?.detach().catch(() => {});
-        } finally {
-          await context.close();
-        }
+        await context.close();
       }
     }
   });
@@ -158,10 +181,11 @@ test.afterAll(() => {
     executable: 'unverified',
     version: 'unverified'
   };
+  const complete = records.length === expectedFiles;
   const metadata = {
-    schemaVersion: 4,
-    status: 'CANDIDATE_RESTORED_BASELINE',
-    complete: records.length === expectedFiles,
+    schemaVersion: 5,
+    status: complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
+    complete,
     expectedFiles,
     actualFiles: records.length,
     generatedAt: new Date().toISOString(),

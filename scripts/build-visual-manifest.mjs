@@ -287,7 +287,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==4)fail('capture report.schemaVersion must be 4');
+  if(report.schemaVersion!==5)fail('capture report.schemaVersion must be 5');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -357,8 +357,8 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     if(typeof record.sha256!=='string'||!SHA256_PATTERN.test(record.sha256))fail(`capture report ${record.file} sha256 must be lowercase SHA-256`);
     requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
     requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
-      'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','touchPoints',
-      'primaryPointer','primaryHover','playwrightTouchInput'
+      'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','navigatorMaxTouchPoints',
+      'primaryPointer','primaryHover','cdpTouchInput'
     ]);
     if(record.runtime.fontStatus!=='loaded')fail(`capture report ${record.file} fonts were not loaded`);
     requireString(record.runtime.bodyFontFamily,`capture report ${record.file} bodyFontFamily`);
@@ -369,17 +369,24 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     if(record.runtime.locale!==BASELINE_LOCALE)fail(`capture report ${record.file} runtime locale drifted`);
     if(record.runtime.reducedMotion!==true)fail(`capture report ${record.file} reduced motion is not active`);
     if(
-      !Number.isSafeInteger(record.runtime.touchPoints)||
-      record.runtime.touchPoints<0||
-      (touch?record.runtime.touchPoints<1:record.runtime.touchPoints!==0)
+      !Number.isSafeInteger(record.runtime.navigatorMaxTouchPoints)||
+      record.runtime.navigatorMaxTouchPoints<0||
+      record.runtime.navigatorMaxTouchPoints!==(touch?1:0)
     )fail(`capture report ${record.file} touch contract drifted`);
     if(touch){
-      requireExactObject(record.runtime.playwrightTouchInput,`capture report ${record.file} runtime.playwrightTouchInput`,['touchStart','pointerType']);
-      if(record.runtime.playwrightTouchInput.touchStart!==true||record.runtime.playwrightTouchInput.pointerType!=='touch'){
-        fail(`capture report ${record.file} Playwright touch evidence drifted`);
+      requireExactObject(record.runtime.cdpTouchInput,`capture report ${record.file} runtime.cdpTouchInput`,[
+        'touchStart','touchTrusted','pointerType','pointerTrusted'
+      ]);
+      if(
+        record.runtime.cdpTouchInput.touchStart!==true||
+        record.runtime.cdpTouchInput.touchTrusted!==true||
+        record.runtime.cdpTouchInput.pointerType!=='touch'||
+        record.runtime.cdpTouchInput.pointerTrusted!==true
+      ){
+        fail(`capture report ${record.file} Chromium CDP touch evidence drifted`);
       }
-    }else if(record.runtime.playwrightTouchInput!==null){
-      fail(`capture report ${record.file} desktop playwrightTouchInput must be null`);
+    }else if(record.runtime.cdpTouchInput!==null){
+      fail(`capture report ${record.file} desktop cdpTouchInput must be null`);
     }
     const expectedPointer=touch?'coarse':'fine';
     const expectedHover=touch?'none':'hover';
@@ -577,7 +584,7 @@ export function validatePendingCaptureSource(report,metadata,{expectedCommit,exp
   return {report:normalizedReport,metadata:normalizedMetadata};
 }
 
-async function verifyRawCaptureBytes(source,report){
+export async function verifyRawCaptureBytes(source,report){
   for(const record of report.files){
     const bytes=await readFile(path.join(source,...record.file.split('/')));
     const inspected=inspectPngBuffer(bytes,record.file);

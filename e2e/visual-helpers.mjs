@@ -53,7 +53,10 @@ export async function createVisualContext(browser, viewport, baseURL) {
     screen: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: 1,
     isMobile: viewport.isMobile,
-    hasTouch: viewport.hasTouch,
+    // Keep Playwright's primary Chromium session out of the touch-emulation
+    // contract. A single explicit CDP session owns touch below, including the
+    // maxTouchPoints value and the trusted input probe.
+    hasTouch: false,
     locale: 'uk-UA',
     timezoneId: 'UTC',
     colorScheme: 'light',
@@ -82,21 +85,31 @@ export async function createVisualContext(browser, viewport, baseURL) {
 export async function applyVisualTouchEmulation(session, viewport) {
   if (!viewport.hasTouch) return;
   if (!session) throw new Error('Touch visual context requires an active CDP session');
+  // Chromium applies emulation per DevTools session. Reset both touch paths so
+  // this secondary session is the sole, explicit owner even if a prior
+  // document retained stale state. The mobile configuration is Chromium's
+  // protocol-level pointer/hover profile; no Navigator or matchMedia shim is
+  // installed in page JavaScript.
+  await session.send('Emulation.setEmitTouchEventsForMouse', { enabled: false });
+  await session.send('Emulation.setTouchEmulationEnabled', { enabled: false });
   await session.send('Emulation.setTouchEmulationEnabled', {
     enabled: true,
     maxTouchPoints: VISUAL_TOUCH_POINTS
+  });
+  await session.send('Emulation.setEmitTouchEventsForMouse', {
+    enabled: true,
+    configuration: 'mobile'
   });
 }
 
 export async function enforceVisualTouchEmulation(context, page, viewport) {
   if (!viewport.hasTouch) return null;
 
-  // Playwright 1.62.1 enables Chromium touch emulation without sending the
-  // protocol's maxTouchPoints field. Chrome for Testing 151 nevertheless
-  // reported navigator.maxTouchPoints as 0 in CI. Keep Playwright's hasTouch
-  // context contract, and make the Chromium protocol value explicit. Chromium
-  // resets the renderer-owned override on navigation, so callers retain this
-  // session and reapply it on every newly loaded visual document.
+  // Playwright 1.62.1's primary Chromium session omits maxTouchPoints and
+  // Chrome for Testing 151 reported a desktop capability profile in CI. The
+  // context deliberately disables Playwright-owned touch, so this retained
+  // session is the single touch-emulation owner. Callers reapply it immediately
+  // before every production navigation.
   const session = await context.newCDPSession(page);
   try {
     await applyVisualTouchEmulation(session, viewport);
@@ -107,8 +120,9 @@ export async function enforceVisualTouchEmulation(context, page, viewport) {
   }
 }
 
-export async function verifyVisualTouchInput(page, viewport) {
+export async function verifyVisualTouchInput(page, viewport, session) {
   if (!viewport.hasTouch) return null;
+  if (!session) throw new Error('Touch visual probe requires an active CDP session');
 
   await page.evaluate(() => {
     const probe = document.createElement('button');
@@ -124,14 +138,21 @@ export async function verifyVisualTouchInput(page, viewport) {
       opacity: '0.01',
       touchAction: 'none'
     });
-    globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = { pointerType: '', touchStart: false };
+    globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = {
+      pointerType: '',
+      pointerTrusted: false,
+      touchStart: false,
+      touchTrusted: false
+    };
     probe.addEventListener('pointerdown', event => {
       globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerTrusted = event.isTrusted;
       event.preventDefault();
       event.stopImmediatePropagation();
     }, { capture: true });
     probe.addEventListener('touchstart', event => {
       globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchTrusted = event.isTrusted;
       event.preventDefault();
       event.stopImmediatePropagation();
     }, { capture: true, passive: false });
@@ -143,20 +164,43 @@ export async function verifyVisualTouchInput(page, viewport) {
   });
 
   let result;
+  let touchActive = false;
   try {
-    await page.touchscreen.tap(12, 12);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ id: 1, x: 12, y: 12, radiusX: 1, radiusY: 1, force: 1 }]
+    });
+    touchActive = true;
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    touchActive = false;
     result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
   } finally {
+    if (touchActive) {
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }).catch(() => {});
+    }
     await page.evaluate(() => {
       document.querySelector('#sylora-visual-touch-probe')?.remove();
       delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
-    }).catch(() => {});
+      if (document.querySelector('#sylora-visual-touch-probe')) {
+        throw new Error('Visual touch probe cleanup failed');
+      }
+    });
   }
 
-  if (!result?.touchStart || result.pointerType !== 'touch') {
-    throw new Error(`Playwright touch probe failed: ${JSON.stringify(result)}`);
+  if (
+    !result?.touchStart ||
+    !result.touchTrusted ||
+    result.pointerType !== 'touch' ||
+    !result.pointerTrusted
+  ) {
+    throw new Error(`Chromium CDP touch probe failed: ${JSON.stringify(result)}`);
   }
-  return { touchStart: true, pointerType: 'touch' };
+  return {
+    touchStart: true,
+    touchTrusted: true,
+    pointerType: 'touch',
+    pointerTrusted: true
+  };
 }
 
 async function browserAuthRequest(page, path, payload, token = '') {
@@ -197,7 +241,8 @@ async function waitForCapabilitiesState(page,responsePromise) {
   },degraded);
 }
 
-export async function ensureFixedVisualAccount(page) {
+export async function ensureFixedVisualAccount(page, { beforeNavigation } = {}) {
+  if (beforeNavigation) await beforeNavigation();
   await page.goto('/', { waitUntil: 'load' });
   await expect(page.locator('body')).toHaveAttribute('data-view', 'feed');
 
@@ -207,7 +252,7 @@ export async function ensureFixedVisualAccount(page) {
   });
 
   if (auth.status !== 200 || !auth.body?.token) {
-    throw new Error(`Deterministic visual fixture login failed: ${auth.status} ${JSON.stringify(auth.body)}`);
+    throw new Error(`Deterministic visual fixture login failed: status=${auth.status} tokenPresent=${Boolean(auth.body?.token)}`);
   }
 
   const token = auth.body.token;
@@ -247,6 +292,7 @@ export async function ensureFixedVisualAccount(page) {
   }
 
   const capabilitiesResponse=nextCapabilitiesResponse(page);
+  if (beforeNavigation) await beforeNavigation();
   await page.reload({ waitUntil: 'load' });
   await waitForCapabilitiesState(page,capabilitiesResponse);
   await expect(page.locator('body')).toHaveAttribute('data-view', 'feed');
@@ -289,9 +335,10 @@ export function captureRuntimeDiagnostics(page) {
   };
 }
 
-export async function gotoVisualSurface(page, surface, { afterNavigation } = {}) {
+export async function gotoVisualSurface(page, surface, { beforeNavigation, afterNavigation } = {}) {
   if (surface.id === 'sylora') await clearVisualAiState(page);
   const capabilitiesResponsePromise=nextCapabilitiesResponse(page);
+  if (beforeNavigation) await beforeNavigation();
   await page.goto(surface.path, { waitUntil: 'load' });
   if (afterNavigation) await afterNavigation();
   await waitForCapabilitiesState(page,capabilitiesResponsePromise);
@@ -414,7 +461,7 @@ export async function waitForStableVisualState(page, surface) {
   });
 }
 
-export async function visualRuntimeMetadata(page, playwrightTouchInput = null) {
+export async function visualRuntimeMetadata(page, cdpTouchInput = null) {
   return page.evaluate(() => ({
     fontStatus: document.fonts?.status || 'unsupported',
     bodyFontFamily: getComputedStyle(document.body).fontFamily,
@@ -423,12 +470,12 @@ export async function visualRuntimeMetadata(page, playwrightTouchInput = null) {
     devicePixelRatio,
     locale: document.documentElement.lang,
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-    touchPoints: navigator.maxTouchPoints,
+    navigatorMaxTouchPoints: navigator.maxTouchPoints,
     primaryPointer: matchMedia('(pointer: coarse)').matches
       ? 'coarse'
       : matchMedia('(pointer: fine)').matches ? 'fine' : 'none',
     primaryHover: matchMedia('(hover: hover)').matches
       ? 'hover'
       : matchMedia('(hover: none)').matches ? 'none' : 'unknown'
-  })).then(runtime => ({ ...runtime, playwrightTouchInput }));
+  })).then(runtime => ({ ...runtime, cdpTouchInput }));
 }

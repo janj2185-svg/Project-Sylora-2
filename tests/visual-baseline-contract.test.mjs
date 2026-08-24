@@ -12,7 +12,9 @@ import visualPlaywrightConfigObject from '../playwright.visual.config.mjs';
 import {
   VISUAL_TOUCH_POINTS,
   applyVisualTouchEmulation,
+  createVisualContext,
   enforceVisualTouchEmulation,
+  ensureFixedVisualAccount,
   gotoVisualSurface,
   verifyVisualTouchInput
 } from '../e2e/visual-helpers.mjs';
@@ -51,6 +53,7 @@ import {
   validatePendingCaptureMetadata,
   validatePendingCaptureSource,
   validateRawCaptureMetadata,
+  verifyRawCaptureBytes,
   writeJsonAtomicExclusive
 } from '../scripts/build-visual-manifest.mjs';
 
@@ -58,6 +61,7 @@ const repositoryState=await inspectCandidateDirectory(DEFAULT_CANDIDATE_DIR);
 const defaultPlaywrightConfig=await readFile(new URL('../playwright.config.mjs',import.meta.url),'utf8');
 const visualPlaywrightConfig=await readFile(new URL('../playwright.visual.config.mjs',import.meta.url),'utf8');
 const visualBaselineSpec=await readFile(new URL('../e2e/visual-baseline.spec.mjs',import.meta.url),'utf8');
+const visualHelpersSource=await readFile(new URL('../e2e/visual-helpers.mjs',import.meta.url),'utf8');
 const runVisualQaScript=await readFile(new URL('../scripts/run-visual-qa.mjs',import.meta.url),'utf8');
 const repositoryRoot=fileURLToPath(new URL('..',import.meta.url));
 const playwrightCli=fileURLToPath(new URL('../node_modules/@playwright/test/cli.js',import.meta.url));
@@ -174,15 +178,20 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
         devicePixelRatio:viewport.devicePixelRatio,
         locale:BASELINE_LOCALE,
         reducedMotion:true,
-        touchPoints:touch?1:0,
+        navigatorMaxTouchPoints:touch?1:0,
         primaryPointer:touch?'coarse':'fine',
         primaryHover:touch?'none':'hover',
-        playwrightTouchInput:touch?{touchStart:true,pointerType:'touch'}:null
+        cdpTouchInput:touch?{
+          touchStart:true,
+          touchTrusted:true,
+          pointerType:'touch',
+          pointerTrusted:true
+        }:null
       }
     };
   });
   return {
-    schemaVersion:4,
+    schemaVersion:5,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -267,6 +276,9 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.equal(VISUAL_BROWSER_VERSION,'151.0.7922.34');
   assert.equal(VISUAL_PLAYWRIGHT_VERSION,'1.62.1');
   assert.match(runVisualQaScript,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
+  assert.match(runVisualQaScript,/if \(mode === 'capture'\) \{[\s\S]*clean\(repeatDir\);/);
+  assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(outputDir, outputReport\)/);
+  assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(candidateDir, candidate\)/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(visualBaselineSpec,/connectOptions !== undefined && connectOptions !== null/);
 
@@ -361,7 +373,22 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args:['--enable-automation','--headless=new']}}),/must be exactly/);
 });
 
-test('touch visual contexts reapply explicit Chromium emulation and retain post-navigation Playwright input evidence',async()=>{
+test('touch visual contexts use one pre-navigation CDP owner and trusted post-navigation input evidence',async()=>{
+  const contextOptions=[];
+  const createdContext={async addInitScript(){}};
+  const contextBrowser={
+    async newContext(options){contextOptions.push(options);return createdContext;}
+  };
+  const mobileViewport={id:'390x844',width:390,height:844,isMobile:true,hasTouch:true};
+  assert.equal(await createVisualContext(contextBrowser,mobileViewport,'http://127.0.0.1:4173'),createdContext);
+  assert.equal(contextOptions.length,1);
+  assert.equal(contextOptions[0].isMobile,true);
+  assert.equal(contextOptions[0].hasTouch,false);
+  assert.doesNotMatch(visualHelpersSource,/Object\.defineProperty\s*\(\s*(?:Navigator|navigator)/);
+  assert.doesNotMatch(visualHelpersSource,/navigator\.maxTouchPoints\s*=/);
+  assert.doesNotMatch(visualHelpersSource,/\bmatchMedia\s*=/);
+  assert.doesNotMatch(visualHelpersSource,/page\.touchscreen|touchscreen\.tap/);
+
   const page={id:'visual-page'};
   const calls=[];
   let detachCount=0;
@@ -376,17 +403,17 @@ test('touch visual contexts reapply explicit Chromium emulation and retain post-
   };
 
   const session=await enforceVisualTouchEmulation(context,page,{hasTouch:true});
-  assert.deepEqual(calls,[{
-    method:'Emulation.setTouchEmulationEnabled',
-    params:{enabled:true,maxTouchPoints:VISUAL_TOUCH_POINTS}
-  }]);
+  const expectedReset=[
+    {method:'Emulation.setEmitTouchEventsForMouse',params:{enabled:false}},
+    {method:'Emulation.setTouchEmulationEnabled',params:{enabled:false}},
+    {method:'Emulation.setTouchEmulationEnabled',params:{enabled:true,maxTouchPoints:VISUAL_TOUCH_POINTS}},
+    {method:'Emulation.setEmitTouchEventsForMouse',params:{enabled:true,configuration:'mobile'}}
+  ];
+  assert.deepEqual(calls,expectedReset);
   assert.equal(VISUAL_TOUCH_POINTS,1);
   assert.equal(detachCount,0);
   await applyVisualTouchEmulation(session,{hasTouch:true});
-  assert.deepEqual(calls[1],{
-    method:'Emulation.setTouchEmulationEnabled',
-    params:{enabled:true,maxTouchPoints:VISUAL_TOUCH_POINTS}
-  });
+  assert.deepEqual(calls,[...expectedReset,...expectedReset]);
   await applyVisualTouchEmulation(null,{hasTouch:false});
   await assert.rejects(applyVisualTouchEmulation(null,{hasTouch:true}),/active CDP session/);
   await session.detach();
@@ -394,58 +421,162 @@ test('touch visual contexts reapply explicit Chromium emulation and retain post-
 
   const desktopSession=await enforceVisualTouchEmulation(context,page,{hasTouch:false});
   assert.equal(desktopSession,null);
-  assert.equal(calls.length,2);
+  assert.equal(calls.length,8);
   assert.equal(detachCount,1);
 
-  let failedDetachCount=0;
-  const failingContext={
-    async newCDPSession(){
-      return {
-        async send(){throw new Error('touch emulation failed');},
-        async detach(){failedDetachCount+=1;}
+  for(let failureAt=1;failureAt<=expectedReset.length;failureAt+=1){
+    const failedCalls=[];
+    let failedDetachCount=0;
+    const failingContext={
+      async newCDPSession(){
+        return {
+          async send(method,params){
+            failedCalls.push({method,params});
+            if(failedCalls.length===failureAt)throw new Error(`touch emulation failed at ${failureAt}`);
+          },
+          async detach(){failedDetachCount+=1;}
+        };
+      }
+    };
+    await assert.rejects(
+      enforceVisualTouchEmulation(failingContext,page,{hasTouch:true}),
+      new RegExp(`touch emulation failed at ${failureAt}`)
+    );
+    assert.deepEqual(failedCalls,expectedReset.slice(0,failureAt));
+    assert.equal(failedDetachCount,1);
+  }
+
+  const evaluations=[];
+  const inputCalls=[];
+  const touchPage={
+    async evaluate(){
+      evaluations.push(evaluations.length);
+      if(evaluations.length===2)return {
+        pointerType:'touch',
+        pointerTrusted:true,
+        touchStart:true,
+        touchTrusted:true
+      };
+    }
+  };
+  const inputSession={async send(method,params){inputCalls.push({method,params});}};
+  const evidence=await verifyVisualTouchInput(touchPage,{hasTouch:true},inputSession);
+  assert.deepEqual(evidence,{
+    touchStart:true,
+    touchTrusted:true,
+    pointerType:'touch',
+    pointerTrusted:true
+  });
+  assert.deepEqual(inputCalls,[
+    {
+      method:'Input.dispatchTouchEvent',
+      params:{type:'touchStart',touchPoints:[{id:1,x:12,y:12,radiusX:1,radiusY:1,force:1}]}
+    },
+    {method:'Input.dispatchTouchEvent',params:{type:'touchEnd',touchPoints:[]}}
+  ]);
+  assert.equal(evaluations.length,3);
+  assert.equal(await verifyVisualTouchInput(null,{hasTouch:false},null),null);
+  await assert.rejects(verifyVisualTouchInput(touchPage,{hasTouch:true},null),/active CDP session/);
+
+  let endFailureEvaluations=0;
+  const endFailureCalls=[];
+  const endFailurePage={async evaluate(){endFailureEvaluations+=1;}};
+  const endFailureSession={
+    async send(method,params){
+      endFailureCalls.push({method,params});
+      if(params.type==='touchEnd')throw new Error('touch end failed');
+    }
+  };
+  await assert.rejects(
+    verifyVisualTouchInput(endFailurePage,{hasTouch:true},endFailureSession),
+    /touch end failed/
+  );
+  assert.deepEqual(endFailureCalls.map(call=>call.params.type),['touchStart','touchEnd','touchCancel']);
+  assert.deepEqual(endFailureCalls.at(-1),{
+    method:'Input.dispatchTouchEvent',
+    params:{type:'touchCancel',touchPoints:[]}
+  });
+  assert.equal(endFailureEvaluations,2);
+
+  let cleanupFailureEvaluations=0;
+  const cleanupFailurePage={
+    async evaluate(){
+      cleanupFailureEvaluations+=1;
+      if(cleanupFailureEvaluations===2)return {
+        pointerType:'touch',pointerTrusted:true,touchStart:true,touchTrusted:true
+      };
+      if(cleanupFailureEvaluations===3)throw new Error('probe cleanup failed');
+    }
+  };
+  await assert.rejects(
+    verifyVisualTouchInput(cleanupFailurePage,{hasTouch:true},inputSession),
+    /probe cleanup failed/
+  );
+  assert.equal(cleanupFailureEvaluations,3);
+
+  let failingEvaluations=0;
+  const failingTouchPage={
+    async evaluate(){
+      failingEvaluations+=1;
+      if(failingEvaluations===2)return {
+        pointerType:'mouse',
+        pointerTrusted:false,
+        touchStart:false,
+        touchTrusted:false
       };
     }
   };
   await assert.rejects(
-    enforceVisualTouchEmulation(failingContext,page,{hasTouch:true}),
-    /touch emulation failed/
+    verifyVisualTouchInput(failingTouchPage,{hasTouch:true},inputSession),
+    /Chromium CDP touch probe failed/
   );
-  assert.equal(failedDetachCount,1);
-
-  const evaluations=[];
-  const touchPage={
-    touchscreen:{async tap(x,y){assert.deepEqual([x,y],[12,12]);}},
-    async evaluate(){
-      evaluations.push(evaluations.length);
-      if(evaluations.length===2)return {pointerType:'touch',touchStart:true};
-    }
-  };
-  const evidence=await verifyVisualTouchInput(touchPage,{hasTouch:true});
-  assert.deepEqual(evidence,{pointerType:'touch',touchStart:true});
-  assert.equal(evaluations.length,3);
-  assert.equal(await verifyVisualTouchInput(null,{hasTouch:false}),null);
-  let failingEvaluations=0;
-  const failingTouchPage={
-    touchscreen:{async tap(){}},
-    async evaluate(){
-      failingEvaluations+=1;
-      if(failingEvaluations===2)return {pointerType:'mouse',touchStart:false};
-    }
-  };
-  await assert.rejects(verifyVisualTouchInput(failingTouchPage,{hasTouch:true}),/Playwright touch probe failed/);
   assert.equal(failingEvaluations,3);
 
   const navigationSource=gotoVisualSurface.toString();
+  const beforeIndex=navigationSource.indexOf('await beforeNavigation()');
   const gotoIndex=navigationSource.indexOf("await page.goto(surface.path, { waitUntil: 'load' })");
-  const reapplyIndex=navigationSource.indexOf('await afterNavigation()');
+  const verifyIndex=navigationSource.indexOf('await afterNavigation()');
   const readinessIndex=navigationSource.indexOf('await waitForCapabilitiesState');
+  assert.notEqual(beforeIndex,-1);
   assert.notEqual(gotoIndex,-1);
-  assert.notEqual(reapplyIndex,-1);
+  assert.notEqual(verifyIndex,-1);
   assert.notEqual(readinessIndex,-1);
-  assert.ok(gotoIndex<reapplyIndex);
-  assert.ok(reapplyIndex<readinessIndex);
-  assert.match(visualBaselineSpec,/await ensureFixedVisualAccount\(page\);\s+touchEmulationSession = await enforceVisualTouchEmulation/);
-  assert.match(visualBaselineSpec,/afterNavigation: async \(\) => \{\s+await applyVisualTouchEmulation\(touchEmulationSession, viewport\);\s+playwrightTouchInput = await verifyVisualTouchInput/);
+  assert.ok(beforeIndex<gotoIndex);
+  assert.ok(gotoIndex<verifyIndex);
+  assert.ok(verifyIndex<readinessIndex);
+
+  const accountSource=ensureFixedVisualAccount.toString();
+  const accountBeforeFirst=accountSource.indexOf('await beforeNavigation()');
+  const accountGoto=accountSource.indexOf("await page.goto('/', { waitUntil: 'load' })");
+  const accountBeforeReload=accountSource.indexOf('await beforeNavigation()',accountBeforeFirst+1);
+  const accountReload=accountSource.indexOf("await page.reload({ waitUntil: 'load' })");
+  for(const index of [accountBeforeFirst,accountGoto,accountBeforeReload,accountReload])assert.notEqual(index,-1);
+  assert.ok(accountBeforeFirst<accountGoto);
+  assert.ok(accountGoto<accountBeforeReload);
+  assert.ok(accountBeforeReload<accountReload);
+
+  const enforceIndex=visualBaselineSpec.indexOf('touchEmulationSession = await enforceVisualTouchEmulation');
+  const accountIndex=visualBaselineSpec.indexOf('await ensureFixedVisualAccount');
+  const runtimeIndex=visualBaselineSpec.indexOf('const runtime = await visualRuntimeMetadata');
+  const screenshotIndex=visualBaselineSpec.indexOf('const png = await page.screenshot');
+  const durableWriteIndex=visualBaselineSpec.indexOf('fs.writeFileSync(absolutePath, png');
+  const recordIndex=visualBaselineSpec.indexOf('records.push');
+  const rawMetadataWriteIndex=visualBaselineSpec.indexOf("fs.writeFileSync(path.join(outputRoot, 'metadata.json')");
+  const incompleteGateIndex=visualBaselineSpec.indexOf('if (!metadata.complete)');
+  const captureSidecarIndex=visualBaselineSpec.indexOf("fs.writeFileSync(path.join(outputRoot, 'capture-metadata.json')");
+  for(const index of [
+    enforceIndex,accountIndex,runtimeIndex,screenshotIndex,durableWriteIndex,recordIndex,
+    rawMetadataWriteIndex,incompleteGateIndex,captureSidecarIndex
+  ])assert.notEqual(index,-1);
+  assert.ok(enforceIndex<accountIndex);
+  assert.match(visualBaselineSpec,/lastSurface = surface\.id;\s+lastSafeRuntime = null;/);
+  assert.match(visualBaselineSpec,/ensureFixedVisualAccount\(page, \{\s+beforeNavigation: \(\) => applyVisualTouchEmulation/);
+  assert.match(visualBaselineSpec,/beforeNavigation: \(\) => applyVisualTouchEmulation\(touchEmulationSession, viewport\),\s+afterNavigation: async \(\) => \{\s+cdpTouchInput = await verifyVisualTouchInput/);
+  assert.ok(runtimeIndex<screenshotIndex&&screenshotIndex<durableWriteIndex&&durableWriteIndex<recordIndex);
+  assert.ok(rawMetadataWriteIndex<incompleteGateIndex&&incompleteGateIndex<captureSidecarIndex);
+  assert.match(visualBaselineSpec,/fs\.writeFileSync\(absolutePath, png, \{ flag: 'wx' \}\)/);
+  assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
+  assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
 });
 
 test('visual fixture seed is deterministic and directly login-capable',()=>{
@@ -529,7 +660,7 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:3}),/schemaVersion must be 4/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:4}),/schemaVersion must be 5/);
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
@@ -561,11 +692,11 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   },{
     ...pendingMetadataFixture(),playwright:{version:'999.0.0'}
   }),/playwrightVersion must be/);
-  for(const touchPoints of ['1',{},1.5]){
+  for(const navigatorMaxTouchPoints of ['1',{},1.5,-1,2]){
     assert.throws(()=>validateRawCaptureMetadata({
       ...raw,
       files:raw.files.map((record,index)=>index===0?{
-        ...record,runtime:{...record.runtime,touchPoints}
+        ...record,runtime:{...record.runtime,navigatorMaxTouchPoints}
       }:record)
     }),/touch contract drifted/);
   }
@@ -585,28 +716,59 @@ test('file-set and runner-metadata contracts fail closed',()=>{
     }:record)
   };
   assert.throws(()=>validateRawCaptureMetadata(hoverDrift),/pointer contract drifted/);
-  const playwrightTouchDrift={
-    ...raw,
-    files:raw.files.map((record,index)=>index===0?{
-      ...record,
-      runtime:{...record.runtime,playwrightTouchInput:{touchStart:false,pointerType:'touch'}}
-    }:record)
-  };
-  assert.throws(()=>validateRawCaptureMetadata(playwrightTouchDrift),/Playwright touch evidence drifted/);
+  for(const cdpTouchInput of [
+    {touchStart:false,touchTrusted:true,pointerType:'touch',pointerTrusted:true},
+    {touchStart:true,touchTrusted:false,pointerType:'touch',pointerTrusted:true},
+    {touchStart:true,touchTrusted:true,pointerType:'mouse',pointerTrusted:true},
+    {touchStart:true,touchTrusted:true,pointerType:'touch',pointerTrusted:false}
+  ]){
+    const cdpTouchDrift={
+      ...raw,
+      files:raw.files.map((record,index)=>index===0?{
+        ...record,
+        runtime:{...record.runtime,cdpTouchInput}
+      }:record)
+    };
+    assert.throws(()=>validateRawCaptureMetadata(cdpTouchDrift),/Chromium CDP touch evidence drifted/);
+  }
+  for(const cdpTouchInput of [
+    {touchStart:true,touchTrusted:true,pointerType:'touch'},
+    {touchStart:true,touchTrusted:true,pointerType:'touch',pointerTrusted:true,synthetic:false}
+  ]){
+    const malformedCdpEvidence={
+      ...raw,
+      files:raw.files.map((record,index)=>index===0?{
+        ...record,
+        runtime:{...record.runtime,cdpTouchInput}
+      }:record)
+    };
+    assert.throws(()=>validateRawCaptureMetadata(malformedCdpEvidence),/cdpTouchInput fields mismatch/);
+  }
   const desktopTouchClaim={
     ...raw,
     files:raw.files.map((record,index)=>index===2?{
       ...record,
-      runtime:{...record.runtime,playwrightTouchInput:{touchStart:true,pointerType:'touch'}}
+      runtime:{...record.runtime,cdpTouchInput:{
+        touchStart:true,touchTrusted:true,pointerType:'touch',pointerTrusted:true
+      }}
     }:record)
   };
-  assert.throws(()=>validateRawCaptureMetadata(desktopTouchClaim),/desktop playwrightTouchInput must be null/);
+  assert.throws(()=>validateRawCaptureMetadata(desktopTouchClaim),/desktop cdpTouchInput must be null/);
+  const legacyPlaywrightClaim={
+    ...raw,
+    files:raw.files.map((record,index)=>{
+      if(index!==0)return record;
+      const {navigatorMaxTouchPoints,cdpTouchInput,...runtime}=record.runtime;
+      return {...record,runtime:{...runtime,touchPoints:navigatorMaxTouchPoints,playwrightTouchInput:cdpTouchInput}};
+    })
+  };
+  assert.throws(()=>validateRawCaptureMetadata(legacyPlaywrightClaim),/runtime fields mismatch/);
   const legacyNativeClaim={
     ...raw,
     files:raw.files.map((record,index)=>{
       if(index!==0)return record;
-      const {playwrightTouchInput,...runtime}=record.runtime;
-      return {...record,runtime:{...runtime,nativeTouchInput:playwrightTouchInput}};
+      const {cdpTouchInput,...runtime}=record.runtime;
+      return {...record,runtime:{...runtime,nativeTouchInput:cdpTouchInput}};
     })
   };
   assert.throws(()=>validateRawCaptureMetadata(legacyNativeClaim),/runtime fields mismatch/);
@@ -689,6 +851,12 @@ test('verified raw capture promotes only the canonical 44 PNGs and refuses overw
     }
     await writeFile(path.join(source,'metadata.json'),`${JSON.stringify(raw,null,2)}\n`);
     await writeFile(path.join(source,'capture-metadata.json'),`${JSON.stringify(pending,null,2)}\n`);
+    await assert.doesNotReject(verifyRawCaptureBytes(source,raw));
+    const tamperPath=path.join(source,SURFACES[0],VIEWPORTS[0].id,`${BASELINE_LOCALE}.png`);
+    const originalBytes=pngByViewport.get(VIEWPORTS[0].id);
+    await writeFile(tamperPath,Buffer.from('tampered'));
+    await assert.rejects(verifyRawCaptureBytes(source,raw),/invalid PNG signature/);
+    await writeFile(tamperPath,originalBytes);
 
     await assert.rejects(promoteCandidateFromCapture({
       sourceDir:source,
