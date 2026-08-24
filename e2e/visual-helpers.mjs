@@ -154,7 +154,7 @@ export async function verifyVisualTouchInput(page, viewport) {
   }
 
   if (!result?.touchStart || result.pointerType !== 'touch') {
-    throw new Error(`Native touch probe failed: ${JSON.stringify(result)}`);
+    throw new Error(`Playwright touch probe failed: ${JSON.stringify(result)}`);
   }
   return { touchStart: true, pointerType: 'touch' };
 }
@@ -414,7 +414,7 @@ export async function waitForStableVisualState(page, surface) {
   });
 }
 
-export async function visualRuntimeMetadata(page, nativeTouchInput = null) {
+export async function visualRuntimeMetadata(page, playwrightTouchInput = null) {
   return page.evaluate(() => ({
     fontStatus: document.fonts?.status || 'unsupported',
     bodyFontFamily: getComputedStyle(document.body).fontFamily,
@@ -430,5 +430,5 @@ export async function visualRuntimeMetadata(page, nativeTouchInput = null) {
     primaryHover: matchMedia('(hover: hover)').matches
       ? 'hover'
       : matchMedia('(hover: none)').matches ? 'none' : 'unknown'
-  })).then(runtime => ({ ...runtime, nativeTouchInput }));
+  })).then(runtime => ({ ...runtime, playwrightTouchInput }));
 }

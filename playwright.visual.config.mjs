@@ -20,7 +20,12 @@ export default defineConfig({
   use: {
     baseURL,
     browserName: 'chromium',
-    channel: 'chromium',
+    // Intentionally omit `channel`: Playwright then uses its version-pinned
+    // Chromium headless shell instead of the opt-in new-headless executable.
+    headless: true,
+    // Browser.getBrowserCommandLine is intentionally enabled so the capture
+    // can prove the actual Playwright executable without persisting its path.
+    launchOptions: { args: ['--enable-automation'] },
     colorScheme: 'light',
     locale: 'uk-UA',
     timezoneId: 'UTC',
@@ -30,7 +35,7 @@ export default defineConfig({
     screenshot: 'off',
     video: 'off'
   },
-  projects: [{ name: 'visual-chromium', use: { browserName: 'chromium', channel: 'chromium' } }],
+  projects: [{ name: 'visual-chromium-headless-shell', use: { browserName: 'chromium', headless: true } }],
   webServer: {
     command: 'node src/server.mjs',
     url: `${baseURL}/api/health`,

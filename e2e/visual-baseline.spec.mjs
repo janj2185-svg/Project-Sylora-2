@@ -2,8 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
+import { isDeepStrictEqual } from 'node:util';
 import { test } from '@playwright/test';
+import {
+  VISUAL_PLAYWRIGHT_VERSION,
+  assertNoVisualBrowserConnectionEnvironment,
+  assertVisualProjectConfiguration,
+  inspectVisualBrowserRuntime
+} from '../scripts/visual-browser-contract.mjs';
 import {
   FIXED_VISUAL_ACCOUNT,
   FIXED_VISUAL_TIME,
@@ -22,19 +28,28 @@ import {
   visualRuntimeMetadata
 } from './visual-helpers.mjs';
 
-const require = createRequire(import.meta.url);
-const { version: playwrightVersion } = require('@playwright/test/package.json');
+assertNoVisualBrowserConnectionEnvironment(process.env);
+
+const playwrightVersion = VISUAL_PLAYWRIGHT_VERSION;
 const outputRoot = path.resolve(process.env.SYLORA_VISUAL_OUTPUT_DIR || 'tmp/visual-candidate');
 const resultsRoot = path.resolve(process.env.SYLORA_VISUAL_RESULTS_DIR || 'tmp/playwright-visual-results');
 const records = [];
-let browserVersion = '';
+let browserFingerprint = null;
 
 fs.mkdirSync(outputRoot, { recursive: true });
 fs.mkdirSync(resultsRoot, { recursive: true });
 
 for (const viewport of VISUAL_VIEWPORTS) {
-  test(`candidate baseline ${viewport.id}`, async ({ browser, baseURL }) => {
-    browserVersion ||= browser.version();
+  test(`candidate baseline ${viewport.id}`, async ({ browser, baseURL, connectOptions }, testInfo) => {
+    assertVisualProjectConfiguration(testInfo.project.use);
+    if (connectOptions !== undefined && connectOptions !== null) {
+      throw new Error('Visual browser contract: resolved connectOptions must be absent');
+    }
+    const observedBrowser = await inspectVisualBrowserRuntime(browser);
+    if (browserFingerprint && !isDeepStrictEqual(browserFingerprint, observedBrowser)) {
+      throw new Error(`Visual browser fingerprint drifted: ${JSON.stringify({ expected: browserFingerprint, observed: observedBrowser })}`);
+    }
+    browserFingerprint ||= observedBrowser;
     const context = await createVisualContext(browser, viewport, baseURL);
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage();
@@ -50,11 +65,11 @@ for (const viewport of VISUAL_VIEWPORTS) {
 
       for (const surface of VISUAL_SURFACES) {
         await test.step(surface.id, async () => {
-          let nativeTouchInput = null;
+          let playwrightTouchInput = null;
           await gotoVisualSurface(page, surface, {
             afterNavigation: async () => {
               await applyVisualTouchEmulation(touchEmulationSession, viewport);
-              nativeTouchInput = await verifyVisualTouchInput(page, viewport);
+              playwrightTouchInput = await verifyVisualTouchInput(page, viewport);
             }
           });
           diagnostics.assertClean(surface.id);
@@ -69,7 +84,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
             caret: 'hide',
             scale: 'css'
           });
-          const runtime = await visualRuntimeMetadata(page, nativeTouchInput);
+          const runtime = await visualRuntimeMetadata(page, playwrightTouchInput);
           if (runtime.devicePixelRatio !== 1) throw new Error(`Unexpected DPR ${runtime.devicePixelRatio}`);
           if (runtime.fontStatus !== 'loaded') throw new Error(`Fonts are not loaded: ${runtime.fontStatus}`);
           if (runtime.locale !== VISUAL_LOCALE) throw new Error(`Unexpected locale ${runtime.locale}`);
@@ -136,8 +151,15 @@ test.afterAll(() => {
   );
 
   const expectedFiles = VISUAL_SURFACES.length * VISUAL_VIEWPORTS.length;
+  const browserMetadata = browserFingerprint || {
+    name: 'chromium',
+    distribution: 'unverified',
+    revision: 'unverified',
+    executable: 'unverified',
+    version: 'unverified'
+  };
   const metadata = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     status: 'CANDIDATE_RESTORED_BASELINE',
     complete: records.length === expectedFiles,
     expectedFiles,
@@ -154,7 +176,7 @@ test.afterAll(() => {
       locale: VISUAL_LOCALE,
       dailyBrief: false
     },
-    browser: { name: 'chromium', version: browserVersion, playwrightVersion },
+    browser: { ...browserMetadata, playwrightVersion },
     runner: { platform: process.platform, arch: process.arch, release: os.release() },
     surfaces: VISUAL_SURFACES.map(surface => surface.id),
     viewports: VISUAL_VIEWPORTS,
@@ -192,7 +214,7 @@ test.afterAll(() => {
         headSha: renderedFromCommit
       },
       playwright: { version: playwrightVersion },
-      browser: { name: 'chromium', version: browserVersion },
+      browser: browserMetadata,
       os: {
         name: String(process.env.RUNNER_OS || process.platform),
         version: String(process.env.ImageVersion || os.release()),

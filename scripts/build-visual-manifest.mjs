@@ -5,14 +5,36 @@ import {copyFile,link,lstat,mkdir,mkdtemp,readFile,readdir,rename,rm,unlink,writ
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
+import {
+  VISUAL_BROWSER_DISTRIBUTION,
+  VISUAL_BROWSER_EXECUTABLE,
+  VISUAL_BROWSER_REVISION,
+  VISUAL_BROWSER_VERSION,
+  VISUAL_PLAYWRIGHT_VERSION
+} from './visual-browser-contract.mjs';
+import {
+  FIXED_VISUAL_ACCOUNT,
+  FIXED_VISUAL_TIME,
+  VISUAL_FIXTURE_ID,
+  VISUAL_LOCALE,
+  VISUAL_RANDOM_SEED
+} from './visual-fixture.mjs';
+
+export {
+  VISUAL_BROWSER_DISTRIBUTION,
+  VISUAL_BROWSER_EXECUTABLE,
+  VISUAL_BROWSER_REVISION,
+  VISUAL_BROWSER_VERSION,
+  VISUAL_PLAYWRIGHT_VERSION
+};
 
 export const CANDIDATE_STATUS='CANDIDATE_RESTORED_BASELINE';
 export const NOT_CAPTURED_STATUS='NOT_CAPTURED';
 export const INCOMPLETE_STATUS='INCOMPLETE';
 export const READY_FOR_VALIDATION_STATUS='READY_FOR_VALIDATION';
 export const PENDING_RUN_CONCLUSION='pending-terminal-verification';
-export const MANIFEST_SCHEMA_VERSION=1;
-export const BASELINE_LOCALE='uk';
+export const MANIFEST_SCHEMA_VERSION=2;
+export const BASELINE_LOCALE=VISUAL_LOCALE;
 
 export const SURFACES=Object.freeze([
   'home',
@@ -211,15 +233,26 @@ export function validateCaptureMetadata(metadata,{expectedCommit}={}){
   requireString(metadata.sourceRun.url,'metadata.sourceRun.url');
   let runUrl;
   try{runUrl=new URL(metadata.sourceRun.url)}catch{fail('metadata.sourceRun.url must be a valid URL')}
-  if(runUrl.protocol!=='https:'||runUrl.hostname!=='github.com'||!runUrl.pathname.endsWith(`/actions/runs/${metadata.sourceRun.id}`))fail('metadata.sourceRun.url must identify the recorded GitHub Actions run');
+  const runPathPattern=new RegExp(`^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/runs/${metadata.sourceRun.id}$`);
+  const canonicalRunUrl=`https://github.com${runUrl.pathname}`;
+  if(
+    runUrl.protocol!=='https:'||
+    runUrl.hostname!=='github.com'||
+    runUrl.port||runUrl.username||runUrl.password||runUrl.search||runUrl.hash||
+    !runPathPattern.test(runUrl.pathname)||
+    metadata.sourceRun.url!==canonicalRunUrl
+  )fail('metadata.sourceRun.url must identify the exact recorded GitHub Actions run without credentials or URL suffixes');
   if(metadata.sourceRun.conclusion!=='success')fail('metadata.sourceRun.conclusion must be success');
   if(metadata.sourceRun.headSha!==metadata.renderedFromCommit)fail('metadata.sourceRun.headSha must equal metadata.renderedFromCommit');
 
   requireExactObject(metadata.playwright,'metadata.playwright',['version']);
-  requireString(metadata.playwright.version,'metadata.playwright.version');
-  requireExactObject(metadata.browser,'metadata.browser',['name','version']);
+  if(metadata.playwright.version!==VISUAL_PLAYWRIGHT_VERSION)fail(`metadata.playwright.version must be ${VISUAL_PLAYWRIGHT_VERSION}`);
+  requireExactObject(metadata.browser,'metadata.browser',['name','distribution','revision','executable','version']);
   if(metadata.browser.name!=='chromium')fail('metadata.browser.name must be chromium');
-  requireString(metadata.browser.version,'metadata.browser.version');
+  if(metadata.browser.distribution!==VISUAL_BROWSER_DISTRIBUTION)fail(`metadata.browser.distribution must be ${VISUAL_BROWSER_DISTRIBUTION}`);
+  if(metadata.browser.revision!==VISUAL_BROWSER_REVISION)fail(`metadata.browser.revision must be ${VISUAL_BROWSER_REVISION}`);
+  if(metadata.browser.executable!==VISUAL_BROWSER_EXECUTABLE)fail(`metadata.browser.executable must be ${VISUAL_BROWSER_EXECUTABLE}`);
+  if(metadata.browser.version!==VISUAL_BROWSER_VERSION)fail(`metadata.browser.version must be ${VISUAL_BROWSER_VERSION}`);
   requireExactObject(metadata.os,'metadata.os',['name','version','runnerImage']);
   requireString(metadata.os.name,'metadata.os.name');
   requireString(metadata.os.version,'metadata.os.version');
@@ -229,6 +262,8 @@ export function validateCaptureMetadata(metadata,{expectedCommit}={}){
   requireExactObject(metadata.fixture,'metadata.fixture',['id','fixedTime']);
   requireString(metadata.fixture.id,'metadata.fixture.id');
   requireCanonicalIso(metadata.fixture.fixedTime,'metadata.fixture.fixedTime');
+  if(metadata.fixture.id!==VISUAL_FIXTURE_ID)fail(`metadata.fixture.id must be ${VISUAL_FIXTURE_ID}`);
+  if(metadata.fixture.fixedTime!==FIXED_VISUAL_TIME)fail(`metadata.fixture.fixedTime must be ${FIXED_VISUAL_TIME}`);
   if(Date.parse(metadata.capturedAt)<Date.parse(metadata.fixture.fixedTime))fail('metadata.capturedAt cannot precede metadata.fixture.fixedTime');
   requireExactObject(metadata.font,'metadata.font',['ready','computedFamily']);
   if(metadata.font.ready!==true)fail('metadata.font.ready must be true before candidate promotion');
@@ -252,7 +287,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==3)fail('capture report.schemaVersion must be 3');
+  if(report.schemaVersion!==4)fail('capture report.schemaVersion must be 4');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -268,14 +303,22 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
   requireString(report.fixture.displayName,'capture report.fixture.displayName');
   requireCanonicalIso(report.fixture.fixedTime,'capture report.fixture.fixedTime');
   requirePositiveInteger(report.fixture.randomSeed,'capture report.fixture.randomSeed');
+  if(report.fixture.id!==VISUAL_FIXTURE_ID)fail(`capture report.fixture.id must be ${VISUAL_FIXTURE_ID}`);
+  if(report.fixture.username!==FIXED_VISUAL_ACCOUNT.username)fail(`capture report.fixture.username must be ${FIXED_VISUAL_ACCOUNT.username}`);
+  if(report.fixture.displayName!==FIXED_VISUAL_ACCOUNT.displayName)fail(`capture report.fixture.displayName must be ${FIXED_VISUAL_ACCOUNT.displayName}`);
+  if(report.fixture.fixedTime!==FIXED_VISUAL_TIME)fail(`capture report.fixture.fixedTime must be ${FIXED_VISUAL_TIME}`);
+  if(report.fixture.randomSeed!==VISUAL_RANDOM_SEED)fail(`capture report.fixture.randomSeed must be ${VISUAL_RANDOM_SEED}`);
   if(report.fixture.locale!==BASELINE_LOCALE)fail(`capture report.fixture.locale must be ${BASELINE_LOCALE}`);
   if(report.fixture.dailyBrief!==false)fail('capture report.fixture.dailyBrief must be false');
   if(Date.parse(report.generatedAt)<Date.parse(report.fixture.fixedTime))fail('capture report.generatedAt cannot precede fixture.fixedTime');
 
-  requireExactObject(report.browser,'capture report.browser',['name','version','playwrightVersion']);
+  requireExactObject(report.browser,'capture report.browser',['name','distribution','revision','executable','version','playwrightVersion']);
   if(report.browser.name!=='chromium')fail('capture report.browser.name must be chromium');
-  requireString(report.browser.version,'capture report.browser.version');
-  requireString(report.browser.playwrightVersion,'capture report.browser.playwrightVersion');
+  if(report.browser.distribution!==VISUAL_BROWSER_DISTRIBUTION)fail(`capture report.browser.distribution must be ${VISUAL_BROWSER_DISTRIBUTION}`);
+  if(report.browser.revision!==VISUAL_BROWSER_REVISION)fail(`capture report.browser.revision must be ${VISUAL_BROWSER_REVISION}`);
+  if(report.browser.executable!==VISUAL_BROWSER_EXECUTABLE)fail(`capture report.browser.executable must be ${VISUAL_BROWSER_EXECUTABLE}`);
+  if(report.browser.version!==VISUAL_BROWSER_VERSION)fail(`capture report.browser.version must be ${VISUAL_BROWSER_VERSION}`);
+  if(report.browser.playwrightVersion!==VISUAL_PLAYWRIGHT_VERSION)fail(`capture report.browser.playwrightVersion must be ${VISUAL_PLAYWRIGHT_VERSION}`);
   requireExactObject(report.runner,'capture report.runner',['platform','arch','release']);
   requireString(report.runner.platform,'capture report.runner.platform');
   requireString(report.runner.arch,'capture report.runner.arch');
@@ -315,7 +358,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
     requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
       'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','touchPoints',
-      'primaryPointer','primaryHover','nativeTouchInput'
+      'primaryPointer','primaryHover','playwrightTouchInput'
     ]);
     if(record.runtime.fontStatus!=='loaded')fail(`capture report ${record.file} fonts were not loaded`);
     requireString(record.runtime.bodyFontFamily,`capture report ${record.file} bodyFontFamily`);
@@ -325,14 +368,18 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     if(record.runtime.devicePixelRatio!==viewport.devicePixelRatio)fail(`capture report ${record.file} DPR drifted`);
     if(record.runtime.locale!==BASELINE_LOCALE)fail(`capture report ${record.file} runtime locale drifted`);
     if(record.runtime.reducedMotion!==true)fail(`capture report ${record.file} reduced motion is not active`);
-    if(touch?record.runtime.touchPoints<1:record.runtime.touchPoints!==0)fail(`capture report ${record.file} touch contract drifted`);
+    if(
+      !Number.isSafeInteger(record.runtime.touchPoints)||
+      record.runtime.touchPoints<0||
+      (touch?record.runtime.touchPoints<1:record.runtime.touchPoints!==0)
+    )fail(`capture report ${record.file} touch contract drifted`);
     if(touch){
-      requireExactObject(record.runtime.nativeTouchInput,`capture report ${record.file} runtime.nativeTouchInput`,['touchStart','pointerType']);
-      if(record.runtime.nativeTouchInput.touchStart!==true||record.runtime.nativeTouchInput.pointerType!=='touch'){
-        fail(`capture report ${record.file} native touch evidence drifted`);
+      requireExactObject(record.runtime.playwrightTouchInput,`capture report ${record.file} runtime.playwrightTouchInput`,['touchStart','pointerType']);
+      if(record.runtime.playwrightTouchInput.touchStart!==true||record.runtime.playwrightTouchInput.pointerType!=='touch'){
+        fail(`capture report ${record.file} Playwright touch evidence drifted`);
       }
-    }else if(record.runtime.nativeTouchInput!==null){
-      fail(`capture report ${record.file} desktop nativeTouchInput must be null`);
+    }else if(record.runtime.playwrightTouchInput!==null){
+      fail(`capture report ${record.file} desktop playwrightTouchInput must be null`);
     }
     const expectedPointer=touch?'coarse':'fine';
     const expectedHover=touch?'none':'hover';
@@ -503,7 +550,14 @@ function assertCaptureReportMatchesMetadata(report,metadata){
   if(report.renderedFromCommit!==metadata.renderedFromCommit)fail('capture report commit does not match finalized metadata');
   if(report.status!==metadata.status||report.fixture.id!==metadata.fixture.id||report.fixture.fixedTime!==metadata.fixture.fixedTime)fail('capture report fixture does not match finalized metadata');
   if(report.fixture.locale!==metadata.locale)fail('capture report locale does not match finalized metadata');
-  if(report.browser.name!==metadata.browser.name||report.browser.version!==metadata.browser.version||report.browser.playwrightVersion!==metadata.playwright.version)fail('capture report browser does not match finalized metadata');
+  if(
+    report.browser.name!==metadata.browser.name||
+    report.browser.distribution!==metadata.browser.distribution||
+    report.browser.revision!==metadata.browser.revision||
+    report.browser.executable!==metadata.browser.executable||
+    report.browser.version!==metadata.browser.version||
+    report.browser.playwrightVersion!==metadata.playwright.version
+  )fail('capture report browser does not match finalized metadata');
   if(Date.parse(report.generatedAt)>Date.parse(metadata.capturedAt))fail('capture report was generated after its capture provenance timestamp');
   const fontFamilies=[...new Set(report.files.map(record=>record.runtime.bodyFontFamily))];
   if(fontFamilies.length!==1||fontFamilies[0]!==metadata.font.computedFamily)fail('capture report font evidence does not match finalized metadata');

@@ -52,8 +52,10 @@ The pinned runner must:
 - start both passes from independent copies of the same fixed fixture;
 - freeze browser time and seeded randomness;
 - wait for the capability state, `document.fonts.ready`, DOM images and CSS background images;
-- record the exact rendered head commit, Playwright/Chromium versions, runner OS/image, font family, DPR and input mode;
-- reapply the explicit Chromium touch override after every navigation and record a native `touchstart` plus `PointerEvent.pointerType = touch` probe for every mobile screenshot;
+- launch headless with no browser channel or custom executable, then use browser-level CDP to prove the actual pinned `chromium-headless-shell` distribution, revision and executable before capturing;
+- record the exact rendered head commit, verified browser fingerprint, Playwright/Chromium versions, runner OS/image, font family, DPR and input mode without persisting the absolute executable path;
+- reapply the explicit Chromium touch override after every navigation and require `navigator.maxTouchPoints >= 1`, primary coarse pointer and no primary hover for every mobile screenshot;
+- record a Playwright-emulated `touchstart` plus `PointerEvent.pointerType = touch` probe for every mobile screenshot; this proves the configured Playwright input path, not physical/native hardware;
 - produce exactly 44 unique canonical paths in each pass;
 - prove that all 44 PNG SHA-256 digests match between capture and repeat.
 
@@ -145,6 +147,7 @@ node scripts/build-visual-manifest.mjs validate \
 - the manifest status is `CANDIDATE_RESTORED_BASELINE`;
 - every matrix entry is present once, in canonical order;
 - every file dimension and SHA-256 matches the current bytes;
+- the browser metadata identifies the pinned Playwright `chromium-headless-shell` distribution, revision and normalized executable proven at runtime;
 - all run, fixture, locale, font, DPR and input metadata is complete and internally consistent.
 
 Run the contract tests independently with:

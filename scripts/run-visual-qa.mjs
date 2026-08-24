@@ -10,6 +10,7 @@ import {
   validatePendingCaptureSource,
   validateRawCaptureMetadata
 } from './build-visual-manifest.mjs';
+import {assertNoVisualBrowserConnectionEnvironment} from './visual-browser-contract.mjs';
 import {createVisualFixtureData} from './visual-fixture.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,6 +21,8 @@ if (!['capture', 'repeat'].includes(mode)) {
   console.error('Usage: node scripts/run-visual-qa.mjs [capture|repeat]');
   process.exit(2);
 }
+
+assertNoVisualBrowserConnectionEnvironment(process.env);
 
 const candidateDir = path.join(tmpRoot, 'visual-candidate');
 const outputDir = mode === 'capture' ? candidateDir : path.join(tmpRoot, 'visual-repeat');
