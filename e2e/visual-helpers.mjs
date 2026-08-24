@@ -556,6 +556,23 @@ async function restoreInlineStyle(target, originalStyle) {
   }
 }
 
+function assertNonOverlappingCanonicalTargets(targets) {
+  for (let leftIndex = 0; leftIndex < targets.length; leftIndex += 1) {
+    const left = targets[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < targets.length; rightIndex += 1) {
+      const right = targets[rightIndex];
+      const overlaps =
+        left.clip.x < right.clip.x + right.clip.width &&
+        left.clip.x + left.clip.width > right.clip.x &&
+        left.clip.y < right.clip.y + right.clip.height &&
+        left.clip.y + left.clip.height > right.clip.y;
+      if (overlaps) {
+        throw new Error(`Canonical paint targets overlap: ${left.role} and ${right.role}`);
+      }
+    }
+  }
+}
+
 async function rawScreenshotCropDigests(page, png, clips) {
   const encoded = png.toString('base64');
   return page.evaluate(async ({ encodedPng, cropList }) => {
@@ -602,10 +619,6 @@ async function rawScreenshotCropDigests(page, png, clips) {
       bitmap.close?.();
     }
   }, { encodedPng: encoded, cropList: clips });
-}
-
-async function rawClipScreenshotEvidence(page, png, clip) {
-  return (await rawScreenshotCropDigests(page, png, [{ x: 0, y: 0, width: clip.width, height: clip.height }]))[0];
 }
 
 async function collectCanonicalPaintTargets(page) {
@@ -658,6 +671,7 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
   }
 
   const { targets, canonicalImagesChecked, canonicalBackgroundsChecked } = await collectCanonicalPaintTargets(page);
+  assertNonOverlappingCanonicalTargets(targets);
   await assertVisualScrollOrigin(page);
   await waitForCompositorFrames(page);
   const first = await takeCheckedScreenshot(
@@ -671,75 +685,79 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
   await assertClean('full-page-stability-first-raster');
 
   for (let index = 0; index < targets.length; index += 1) {
-    await assertVisualScrollOrigin(page);
-    const { target, clip, role, hideProperty, minimumContrast } = targets[index];
-    const originalStyle = await target.getAttribute('style');
-    const fullPageCropEvidence = fullPageCropDigests[index];
-    if (!Number.isFinite(fullPageCropEvidence.contrast) || fullPageCropEvidence.contrast < minimumContrast) {
+    const { role, minimumContrast } = targets[index];
+    const visibleEvidence = fullPageCropDigests[index];
+    if (!Number.isFinite(visibleEvidence.contrast) || visibleEvidence.contrast < minimumContrast) {
       throw new Error(
-        `Canonical ${role} content contrast is below the locked paint threshold: observed=${fullPageCropEvidence.contrast} minimum=${minimumContrast}`
+        `Canonical ${role} content contrast is below the locked paint threshold: observed=${visibleEvidence.contrast} minimum=${minimumContrast}`
       );
     }
-    const visibleBefore = await takeCheckedScreenshot(
-      page,
-      { ...VISUAL_SCREENSHOT_OPTIONS, clip },
-      `canonical-${role}-visible-before`,
-      assertClean
-    );
-    const visibleBeforeEvidence = await rawClipScreenshotEvidence(page, visibleBefore, clip);
-    if (visibleBeforeEvidence.sha256 !== fullPageCropEvidence.sha256) {
-      throw new Error(
-        `Canonical ${role} full-page crop did not match its visible raster: full=${fullPageCropEvidence.sha256} clip=${visibleBeforeEvidence.sha256}`
-      );
-    }
+  }
 
-    let hiddenFirst;
-    let hiddenSecond;
-    try {
+  // Keep every exact pixel comparison in the same full-page capture mode. A
+  // tight CDP clip changes the sampling boundary for the shell's
+  // backdrop-filter layers and is therefore not a valid byte oracle for a crop
+  // taken from the persisted full-page frame. Hiding every non-overlapping
+  // target together also keeps the proof to exactly four full-page captures.
+  const originalStyles = [];
+  for (const { target } of targets) {
+    originalStyles.push(await target.getAttribute('style'));
+  }
+  let hiddenFirst;
+  let hiddenSecond;
+  try {
+    for (const { target, hideProperty } of targets) {
       await target.evaluate((element, property) => {
         element.style.setProperty(property, property === 'visibility' ? 'hidden' : 'none', 'important');
       }, hideProperty);
-      await waitForCompositorFrames(page);
-      hiddenFirst = await takeCheckedScreenshot(
-        page,
-        { ...VISUAL_SCREENSHOT_OPTIONS, clip },
-        `canonical-${role}-hidden-first`,
-        assertClean
-      );
-      await waitForCompositorFrames(page);
-      hiddenSecond = await takeCheckedScreenshot(
-        page,
-        { ...VISUAL_SCREENSHOT_OPTIONS, clip },
-        `canonical-${role}-hidden-second`,
-        assertClean
-      );
-    } finally {
-      await restoreInlineStyle(target, originalStyle);
-      await waitForCompositorFrames(page);
     }
-
-    const hiddenFirstEvidence = await rawClipScreenshotEvidence(page, hiddenFirst, clip);
-    const hiddenSecondEvidence = await rawClipScreenshotEvidence(page, hiddenSecond, clip);
-    const visibleAfter = await takeCheckedScreenshot(
+    await waitForCompositorFrames(page);
+    hiddenFirst = await takeCheckedScreenshot(
       page,
-      { ...VISUAL_SCREENSHOT_OPTIONS, clip },
-      `canonical-${role}-visible-after`,
+      { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+      'canonical-hidden-full-page-first',
       assertClean
     );
-    const visibleAfterEvidence = await rawClipScreenshotEvidence(page, visibleAfter, clip);
+    await waitForCompositorFrames(page);
+    hiddenSecond = await takeCheckedScreenshot(
+      page,
+      { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
+      'canonical-hidden-full-page-second',
+      assertClean
+    );
+  } finally {
+    let restorationFailure = null;
+    for (let index = 0; index < targets.length; index += 1) {
+      try {
+        await restoreInlineStyle(targets[index].target, originalStyles[index]);
+      } catch (error) {
+        restorationFailure ||= error;
+      }
+    }
+    await waitForCompositorFrames(page);
+    if (restorationFailure) throw restorationFailure;
+  }
+
+  if (!hiddenFirst.equals(hiddenSecond)) {
+    throw new Error(
+      `Canonical hidden full-page raster is not byte-stable: first=${screenshotDigest(hiddenFirst)} second=${screenshotDigest(hiddenSecond)}`
+    );
+  }
+  const hiddenFirstCropDigests = await rawScreenshotCropDigests(page, hiddenFirst, targets.map(({ clip }) => clip));
+  const hiddenSecondCropDigests = await rawScreenshotCropDigests(page, hiddenSecond, targets.map(({ clip }) => clip));
+  for (let index = 0; index < targets.length; index += 1) {
+    const { role } = targets[index];
+    const visibleEvidence = fullPageCropDigests[index];
+    const hiddenFirstEvidence = hiddenFirstCropDigests[index];
+    const hiddenSecondEvidence = hiddenSecondCropDigests[index];
     if (hiddenFirstEvidence.sha256 !== hiddenSecondEvidence.sha256) {
       throw new Error(
-        `Canonical ${role} hidden raster is not deterministic: first=${hiddenFirstEvidence.sha256} second=${hiddenSecondEvidence.sha256}`
+        `Canonical ${role} hidden crop is not deterministic: first=${hiddenFirstEvidence.sha256} second=${hiddenSecondEvidence.sha256}`
       );
     }
-    if (visibleBeforeEvidence.sha256 === hiddenSecondEvidence.sha256) {
+    if (visibleEvidence.sha256 === hiddenSecondEvidence.sha256) {
       throw new Error(
-        `Canonical ${role} paint sentinel saw no pixel contribution: sha256=${visibleBeforeEvidence.sha256}`
-      );
-    }
-    if (visibleBeforeEvidence.sha256 !== visibleAfterEvidence.sha256) {
-      throw new Error(
-        `Canonical ${role} paint did not restore deterministically: before=${visibleBeforeEvidence.sha256} after=${visibleAfterEvidence.sha256}`
+        `Canonical ${role} paint sentinel saw no full-page pixel contribution: sha256=${visibleEvidence.sha256}`
       );
     }
   }

@@ -598,62 +598,92 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const stableCaptureSource=captureStableVisualScreenshot.toString();
   const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const cropProofIndex=stableCaptureSource.indexOf('rawScreenshotCropDigests');
-  const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-first");
-  const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-second");
+  const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-full-page-first");
+  const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-full-page-second");
   const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
   const byteGateIndex=stableCaptureSource.indexOf('if (!first.equals(second))');
   for(const index of [fullFirstIndex,cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
   assert.ok(fullFirstIndex<cropProofIndex&&cropProofIndex<hiddenFirstIndex&&hiddenFirstIndex<hiddenSecondIndex);
   assert.ok(hiddenSecondIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
+  assert.doesNotMatch(stableCaptureSource,/VISUAL_SCREENSHOT_OPTIONS,\s*clip/,'tight clips are not exact compositor oracles for full-page evidence');
+  assert.doesNotMatch(visualHelpersSource,/rawClipScreenshotEvidence/);
+  assert.match(stableCaptureSource,/canonical-hidden-full-page-first/);
+  assert.match(stableCaptureSource,/canonical-hidden-full-page-second/);
   assert.match(visualHelpersSource,/const binary = atob\(encodedPng\)/);
   assert.doesNotMatch(visualHelpersSource,/fetch\(`data:image\/png/,'PNG evidence decoding must not violate the application connect-src CSP');
 });
 
 test('visual screenshots prove canonical pixel contribution, exact restoration and fixed full-page stability',async()=>{
-  function capturePage(frameNames,{rawDigests={},rawContrasts={},scrollPosition={x:0,y:0}}={}){
+  function capturePage(frameNames,{
+    rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],restoreFailureIndexes=[]
+  }={}){
     const frames=[...frameNames];
-    let inlineStyle=null;
+    const inlineStyles=targetRoles.map((_,index)=>initialStyles[index]??null);
     let screenshotCalls=0;
-    const target={
+    const screenshotOptions=[];
+    const screenshotStyleSnapshots=[];
+    const cropLists=[];
+    const targets=targetRoles.map((role,index)=>({
       async isVisible(){return true},
-      async boundingBox(){return {x:10,y:8,width:120,height:71}},
-      async getAttribute(name){return name==='style'?inlineStyle:null},
+      async boundingBox(){
+        return targetBoxes[index]??{x:10.4+index*150,y:8.2+index*90,width:119.2,height:70.1};
+      },
+      async getAttribute(name){return name==='style'?inlineStyles[index]:null},
       async evaluate(callback,arg){
         const element={
-          closest(selector){return selector==='.brand'?{}:null},
-          style:{setProperty(property,value){inlineStyle=`${property}:${value}!important`}},
-          removeAttribute(name){if(name==='style')inlineStyle=null},
-          setAttribute(name,value){if(name==='style')inlineStyle=value}
+          closest(selector){return selector==='.brand'&&role==='header'?{}:null},
+          style:{setProperty(property,value){inlineStyles[index]=`${property}:${value}!important`}},
+          removeAttribute(name){
+            if(name!=='style')return;
+            if(restoreFailureIndexes.includes(index))throw new Error(`restore target ${index} failed`);
+            inlineStyles[index]=null;
+          },
+          setAttribute(name,value){
+            if(name!=='style')return;
+            if(restoreFailureIndexes.includes(index))throw new Error(`restore target ${index} failed`);
+            inlineStyles[index]=value;
+          }
         };
         return callback(element,arg);
       }
-    };
-    const imageLocator={async count(){return 1},nth(){return target}};
+    }));
+    const imageLocator={async count(){return targets.length},nth(index){return targets[index]}};
     const emptyLocator={async count(){return 0},nth(){throw new Error('empty locator')}};
     const page={
       locator(selector){return selector==='.sylora-presence-image'?emptyLocator:imageLocator},
       viewportSize(){return {width:390,height:844}},
-      async screenshot(){
+      async screenshot(options){
         screenshotCalls+=1;
+        screenshotOptions.push(options);
+        screenshotStyleSnapshots.push([...inlineStyles]);
         const next=frames.shift();
         if(next instanceof Error)throw next;
         return Buffer.from(next);
       },
       async evaluate(_callback,arg){
         if(!arg?.encodedPng)return scrollPosition;
+        cropLists.push(arg.cropList.map(clip=>({...clip})));
         const name=Buffer.from(arg.encodedPng,'base64').toString();
         const digest=rawDigests[name]||name;
         const contrast=rawContrasts[name]??0.2;
         return arg.cropList.map(()=>({sha256:digest,contrast}));
       }
     };
-    return {page,getStyle:()=>inlineStyle,getScreenshotCalls:()=>screenshotCalls};
+    return {
+      page,
+      getStyle:()=>inlineStyles[0],
+      getStyles:()=>[...inlineStyles],
+      getScreenshotCalls:()=>screenshotCalls,
+      getScreenshotOptions:()=>screenshotOptions,
+      getScreenshotStyleSnapshots:()=>screenshotStyleSnapshots,
+      getCropLists:()=>cropLists
+    };
   }
 
   const cleanLabels=[];
   const stable=capturePage(
-    ['full','visible','hidden','hidden','visible','full'],
+    ['full','hidden','hidden','full'],
     {rawDigests:{full:'visible'}}
   );
   const capture=await captureStableVisualScreenshot(stable.page,{
@@ -669,48 +699,70 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     hiddenScreenshotsCompared:2,
     fullPageScreenshotsCompared:2
   });
-  assert.equal(stable.getScreenshotCalls(),6);
-  assert.equal(cleanLabels.length,7);
+  assert.equal(stable.getScreenshotCalls(),4);
+  assert.equal(cleanLabels.length,5);
+  assert.ok(stable.getScreenshotOptions().every(options=>options.fullPage===true));
+  assert.deepEqual(stable.getCropLists()[0],[{x:10,y:8,width:120,height:71}]);
   assert.equal(stable.getStyle(),null);
 
+  const batched=capturePage(
+    ['full','hidden','hidden','full'],
+    {rawDigests:{full:'visible'},targetRoles:['header','wallet']}
+  );
+  const batchedCapture=await captureStableVisualScreenshot(batched.page,{assertClean:()=>{}});
+  assert.equal(batchedCapture.paintStability.canonicalImagesChecked,2);
+  assert.equal(batched.getScreenshotCalls(),4,'multi-target proof must batch both hidden frames');
+  assert.deepEqual(batched.getScreenshotStyleSnapshots(),[
+    [null,null],
+    ['visibility:hidden!important','visibility:hidden!important'],
+    ['visibility:hidden!important','visibility:hidden!important'],
+    [null,null]
+  ]);
+  assert.deepEqual(batched.getStyles(),[null,null]);
+  assert.ok(batched.getScreenshotOptions().every(options=>options.fullPage===true));
+
+  const overlapping=capturePage([],{
+    targetRoles:['header','wallet'],
+    targetBoxes:[
+      {x:10,y:10,width:120,height:71},
+      {x:20,y:20,width:56,height:34}
+    ]
+  });
+  await assert.rejects(
+    captureStableVisualScreenshot(overlapping.page,{assertClean:()=>{}}),
+    /paint targets overlap: header and wallet/
+  );
+  assert.equal(overlapping.getScreenshotCalls(),0);
+
   const stableBlank=capturePage(
-    ['full','visible','hidden','hidden','visible','full'],
-    {rawDigests:{full:'same',visible:'same',hidden:'same'}}
+    ['full','hidden','hidden'],
+    {rawDigests:{full:'same',hidden:'same'}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(stableBlank.page,{assertClean:()=>{}}),
-    /paint sentinel saw no pixel contribution/
+    /paint sentinel saw no full-page pixel contribution/
   );
 
   const blankContent=capturePage(
-    ['full','visible'],
-    {rawDigests:{full:'visible'},rawContrasts:{full:0.001}}
+    ['full'],
+    {rawContrasts:{full:0.001}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(blankContent.page,{assertClean:()=>{}}),
     /content contrast is below the locked paint threshold/
   );
 
-  const fullPageMismatch=capturePage(
-    ['full','visible'],
-    {rawDigests:{full:'blank-full-page',visible:'painted-clip'}}
-  );
-  await assert.rejects(
-    captureStableVisualScreenshot(fullPageMismatch.page,{assertClean:()=>{}}),
-    /full-page crop did not match its visible raster/
-  );
-
   const unstableHidden=capturePage(
-    ['full','visible','hidden-a','hidden-b','visible','full'],
+    ['full','hidden-a','hidden-b'],
     {rawDigests:{full:'visible'}}
   );
   await assert.rejects(
     captureStableVisualScreenshot(unstableHidden.page,{assertClean:()=>{}}),
-    /hidden raster is not deterministic/
+    /hidden full-page raster is not byte-stable/
   );
 
   const unstableFullPage=capturePage(
-    ['full-a','visible','hidden','hidden','visible','full-b'],
+    ['full-a','hidden','hidden','full-b'],
     {rawDigests:{'full-a':'visible','full-b':'visible'}}
   );
   await assert.rejects(
@@ -719,14 +771,56 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 
   const restorationFailure=capturePage(
-    ['full','visible',new Error('hidden screenshot failed')],
-    {rawDigests:{full:'visible'}}
+    ['full',new Error('hidden full-page screenshot failed')],
+    {rawDigests:{full:'visible'},initialStyles:['opacity:.9']}
   );
   await assert.rejects(
     captureStableVisualScreenshot(restorationFailure.page,{assertClean:()=>{}}),
-    /hidden screenshot failed/
+    /hidden full-page screenshot failed/
   );
-  assert.equal(restorationFailure.getStyle(),null,'inline style must be restored even when the hidden capture throws');
+  assert.equal(restorationFailure.getStyle(),'opacity:.9','inline style must be restored even when the hidden capture throws');
+
+  const secondHiddenFailure=capturePage(
+    ['full','hidden',new Error('second hidden full-page screenshot failed')],
+    {rawDigests:{full:'visible'},initialStyles:['opacity:.8']}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(secondHiddenFailure.page,{assertClean:()=>{}}),
+    /second hidden full-page screenshot failed/
+  );
+  assert.equal(secondHiddenFailure.getStyle(),'opacity:.8');
+
+  const hiddenDiagnosticsFailure=capturePage(
+    ['full','hidden','hidden'],
+    {rawDigests:{full:'visible'},initialStyles:['opacity:.7']}
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(hiddenDiagnosticsFailure.page,{
+      assertClean:label=>{
+        if(label==='canonical-hidden-full-page-second')throw new Error('second hidden diagnostics failed');
+      }
+    }),
+    /second hidden diagnostics failed/
+  );
+  assert.equal(hiddenDiagnosticsFailure.getStyle(),'opacity:.7');
+
+  const restoreAllTargets=capturePage(
+    ['full','hidden','hidden'],
+    {
+      rawDigests:{full:'visible'},
+      targetRoles:['header','wallet'],
+      restoreFailureIndexes:[0]
+    }
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(restoreAllTargets.page,{assertClean:()=>{}}),
+    /restore target 0 failed/
+  );
+  assert.deepEqual(
+    restoreAllTargets.getStyles(),
+    ['visibility:hidden!important',null],
+    'a failed first restoration must not prevent later targets from restoring'
+  );
 
   const scrolled=capturePage(['full'],{scrollPosition:{x:0,y:4}});
   await assert.rejects(

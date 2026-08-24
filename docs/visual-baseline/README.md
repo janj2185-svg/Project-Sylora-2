@@ -59,7 +59,10 @@ The pinned runner must:
 - after navigation, require the real document to report exactly `navigator.maxTouchPoints = 1`, primary coarse pointer and no primary hover for every mobile screenshot, without a `Navigator` or `matchMedia` JavaScript shim;
 - dispatch a direct CDP touch sequence and record trusted `touchstart` plus trusted `PointerEvent.pointerType = touch` evidence for every mobile screenshot; this proves the configured Chromium emulation and input path, not physical/native hardware;
 - produce exactly 44 unique canonical paths in each pass;
-- take a fixed full-page frame A, require locked content contrast so an opaque-but-blank canonical raster cannot pass, prove that its raw crop matches each visible canonical image/background clip, prove each target changes pixels when hidden, require two identical hidden clips, restore the exact inline style and require the restored clip to match;
+- take a fixed full-page frame A and require locked content contrast so an opaque-but-blank canonical raster cannot pass;
+- require the visible canonical target rectangles to be non-overlapping, preserve every exact inline style, hide all targets without changing layout, and take two byte-identical hidden full-page frames;
+- derive every target crop from both hidden frames, require the paired crops to match and require each to differ from frame A, then restore every exact inline style;
+- never use a tight-clip screenshot as the exact oracle for a full-page crop: the locked shell uses `backdrop-filter`, and Chromium legitimately samples a different compositor boundary for tight clips;
 - take one fixed full-page frame B with no retry or cherry-picking, require A and B to be byte-identical, and persist only B;
 - record the fail-closed compositor proof in raw capture schema 6, then re-read every PNG from disk, verify its recorded SHA-256 and dimensions, and prove that all 44 digests match between capture and repeat.
 
