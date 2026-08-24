@@ -27,6 +27,8 @@ import {
   VISUAL_BROWSER_EXECUTABLE,
   VISUAL_BROWSER_REVISION,
   VISUAL_BROWSER_VERSION,
+  VISUAL_COMPOSITOR_FLAG,
+  VISUAL_COMPOSITOR_SCHEDULING,
   VISUAL_PLAYWRIGHT_VERSION,
   VISUAL_SCREENSHOT_BACKEND,
   assertNoVisualBrowserConnectionEnvironment,
@@ -77,6 +79,7 @@ const visualPlaywrightConfig=await readFile(new URL('../playwright.visual.config
 const visualBaselineSpec=await readFile(new URL('../e2e/visual-baseline.spec.mjs',import.meta.url),'utf8');
 const visualHelpersSource=await readFile(new URL('../e2e/visual-helpers.mjs',import.meta.url),'utf8');
 const visualCaptureLedgerSource=await readFile(new URL('../scripts/visual-capture-ledger.mjs',import.meta.url),'utf8');
+const buildVisualManifestSource=await readFile(new URL('../scripts/build-visual-manifest.mjs',import.meta.url),'utf8');
 const runVisualQaScript=await readFile(new URL('../scripts/run-visual-qa.mjs',import.meta.url),'utf8');
 const ciWorkflow=await readFile(new URL('../.github/workflows/ci.yml',import.meta.url),'utf8');
 const packageManifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
@@ -196,7 +199,8 @@ function metadataFixture(commit='a'.repeat(40)){
       revision:VISUAL_BROWSER_REVISION,
       executable:VISUAL_BROWSER_EXECUTABLE,
       version:VISUAL_BROWSER_VERSION,
-      screenshotBackend:VISUAL_SCREENSHOT_BACKEND
+      screenshotBackend:VISUAL_SCREENSHOT_BACKEND,
+      compositorScheduling:VISUAL_COMPOSITOR_SCHEDULING
     },
     os:{name:'Ubuntu',version:'24.04.4',runnerImage:'ubuntu-24.04'},
     locale:BASELINE_LOCALE,
@@ -264,7 +268,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
     };
   });
   return {
-    schemaVersion:7,
+    schemaVersion:8,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -288,7 +292,8 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
       executable:VISUAL_BROWSER_EXECUTABLE,
       version:VISUAL_BROWSER_VERSION,
       playwrightVersion:VISUAL_PLAYWRIGHT_VERSION,
-      screenshotBackend:VISUAL_SCREENSHOT_BACKEND
+      screenshotBackend:VISUAL_SCREENSHOT_BACKEND,
+      compositorScheduling:VISUAL_COMPOSITOR_SCHEDULING
     },
     runner:{platform:'linux',arch:'x64',release:'6.11.0'},
     surfaces:[...SURFACES],
@@ -386,6 +391,8 @@ test('durable visual ledger aggregates 2 + 2 + 22 records across worker restarts
       resultsRoot,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`
     ),'utf8'));
     assert.equal(firstSidecar.schemaVersion,VISUAL_CAPTURE_LEDGER_SCHEMA_VERSION);
+    assert.equal(firstSidecar.schemaVersion,2);
+    assert.equal(firstSidecar.browser.compositorScheduling,VISUAL_COMPOSITOR_SCHEDULING);
     await assert.rejects(readFile(path.join(
       outputRoot,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`
     )),error=>error?.code==='ENOENT');
@@ -454,6 +461,34 @@ test('visual ledger rejects provenance drift, byte drift, missing records and mi
 
     const provenanceResults=path.join(root,'provenance-results');
     const provenanceOutput=path.join(root,'provenance-output');
+    assert.throws(()=>persistVisualCaptureLedgerEntry({
+      resultsRoot:path.join(root,'invalid-browser-results'),
+      outputRoot:path.join(root,'invalid-browser-output'),
+      record:first,
+      browser:{...report.browser,compositorScheduling:'default-overlap'},
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    }),/browser\.compositorScheduling must be/);
+    const {compositorScheduling:_missingLedgerScheduling,...ledgerBrowserWithoutScheduling}=report.browser;
+    assert.throws(()=>persistVisualCaptureLedgerEntry({
+      resultsRoot:path.join(root,'invalid-browser-results'),
+      outputRoot:path.join(root,'invalid-browser-output'),
+      record:first,
+      browser:ledgerBrowserWithoutScheduling,
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    }),/browser fields mismatch/);
+    assert.throws(()=>persistVisualCaptureLedgerEntry({
+      resultsRoot:path.join(root,'invalid-browser-results'),
+      outputRoot:path.join(root,'invalid-browser-output'),
+      record:first,
+      browser:{...report.browser,compositorAlias:'serialized'},
+      runner:report.runner,
+      renderedFromCommit:report.renderedFromCommit,
+      runMode:report.runMode
+    }),/browser fields mismatch/);
     await persistLedgerRecords({resultsRoot:provenanceResults,outputRoot:provenanceOutput,report,pngByViewport,records:[first]});
     assert.throws(()=>aggregateVisualCaptureLedger({
       resultsRoot:provenanceResults,
@@ -487,6 +522,31 @@ test('visual ledger rejects provenance drift, byte drift, missing records and mi
       observedBrowser:{...report.browser,version:'different'},
       observedRunner:report.runner
     }),/observedBrowser\.version must be/);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:provenanceResults,
+      outputRoot:provenanceOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:{...report.browser,compositorScheduling:'default-overlap'},
+      observedRunner:report.runner
+    }),/observedBrowser\.compositorScheduling must be/);
+
+    const oldSchemaResults=path.join(root,'old-schema-results');
+    const oldSchemaOutput=path.join(root,'old-schema-output');
+    await persistLedgerRecords({resultsRoot:oldSchemaResults,outputRoot:oldSchemaOutput,report,pngByViewport,records:[first]});
+    const oldSchemaSidecar=path.join(
+      oldSchemaResults,VISUAL_CAPTURE_LEDGER_DIRECTORY,'home','390x844',`${BASELINE_LOCALE}.json`
+    );
+    const oldSchemaEntry=JSON.parse(await readFile(oldSchemaSidecar,'utf8'));
+    await writeFile(oldSchemaSidecar,`${JSON.stringify({...oldSchemaEntry,schemaVersion:1},null,2)}\n`);
+    assert.throws(()=>aggregateVisualCaptureLedger({
+      resultsRoot:oldSchemaResults,
+      outputRoot:oldSchemaOutput,
+      expectedCommit:report.renderedFromCommit,
+      expectedRunMode:report.runMode,
+      observedBrowser:report.browser,
+      observedRunner:report.runner
+    }),/entry\.schemaVersion must be 2/);
 
     const consensusResults=path.join(root,'consensus-results');
     const consensusOutput=path.join(root,'consensus-output');
@@ -590,7 +650,9 @@ test('ordinary browser QA and deterministic visual QA have disjoint discovery',(
   assert.equal(visualPlaywrightConfigObject.retries,0);
   assert.equal(visualPlaywrightConfigObject.fullyParallel,false);
   assert.equal(Object.hasOwn(visualPlaywrightConfigObject.use,'channel'),false);
-  assert.deepEqual(visualPlaywrightConfigObject.use.launchOptions,{args:['--enable-automation']});
+  assert.deepEqual(visualPlaywrightConfigObject.use.launchOptions,{
+    args:['--enable-automation',VISUAL_COMPOSITOR_FLAG]
+  });
   assert.equal(visualPlaywrightConfigObject.projects.length,1);
   assert.equal(visualPlaywrightConfigObject.projects[0].name,'visual-chromium-headless-shell');
   assert.equal(Object.hasOwn(visualPlaywrightConfigObject.projects[0].use,'channel'),false);
@@ -618,6 +680,8 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.equal(VISUAL_BROWSER_VERSION,'151.0.7922.34');
   assert.equal(VISUAL_PLAYWRIGHT_VERSION,'1.62.1');
   assert.equal(VISUAL_SCREENSHOT_BACKEND,'legacy-force-redraw');
+  assert.equal(VISUAL_COMPOSITOR_FLAG,'--run-all-compositor-stages-before-draw');
+  assert.equal(VISUAL_COMPOSITOR_SCHEDULING,'all-stages-before-draw');
   assert.match(runVisualQaScript,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(runVisualQaScript,/PLAYWRIGHT_LEGACY_SCREENSHOT:\s*'1'/);
   assert.match(runVisualQaScript,/assertVisualScreenshotEnvironment\(visualEnvironment\)/);
@@ -633,9 +697,15 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.match(runVisualQaScript,/clean\(outputDir\);\s*clean\(resultsDir\);\s*clean\(dataFile\);/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(outputDir, outputReport\)/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(candidateDir, candidate\)/);
+  assert.match(runVisualQaScript,/isDeepStrictEqual\(candidate\.browser,repeat\.browser\)/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(visualBaselineSpec,/assertVisualScreenshotEnvironment\(process\.env\)/);
-  assert.match(visualBaselineSpec,/schemaVersion:\s*7/);
+  assert.match(visualBaselineSpec,/schemaVersion:\s*8/);
+  assert.match(visualBaselineSpec,/compositorScheduling:\s*metadata\.browser\.compositorScheduling/);
+  assert.match(
+    buildVisualManifestSource,
+    /report\.browser\.compositorScheduling!==metadata\.browser\.compositorScheduling/
+  );
   assert.match(visualBaselineSpec,/connectOptions !== undefined && connectOptions !== null/);
 
   assert.doesNotThrow(()=>assertNoVisualBrowserConnectionEnvironment({}));
@@ -648,7 +718,9 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
     assert.throws(()=>assertVisualScreenshotEnvironment({PLAYWRIGHT_LEGACY_SCREENSHOT:value}),/must be exactly 1/);
   }
 
-  const requiredArguments=['--headless','--enable-automation','--remote-debugging-pipe','--disable-field-trial-config'];
+  const requiredArguments=[
+    '--headless','--enable-automation','--remote-debugging-pipe','--disable-field-trial-config',VISUAL_COMPOSITOR_FLAG
+  ];
   const linuxCommandLine=[
     `/home/runner/.cache/ms-playwright/chromium_headless_shell-${VISUAL_BROWSER_REVISION}/chrome-headless-shell-linux64/chrome-headless-shell`,
     ...requiredArguments
@@ -657,7 +729,8 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
     distribution:VISUAL_BROWSER_DISTRIBUTION,
     revision:VISUAL_BROWSER_REVISION,
     executable:VISUAL_BROWSER_EXECUTABLE,
-    screenshotBackend:VISUAL_SCREENSHOT_BACKEND
+    screenshotBackend:VISUAL_SCREENSHOT_BACKEND,
+    compositorScheduling:VISUAL_COMPOSITOR_SCHEDULING
   };
   assert.deepEqual(normalizeVisualBrowserCommandLine(linuxCommandLine,{platform:'linux',arch:'x64'}),fingerprint);
   assert.deepEqual(normalizeVisualBrowserCommandLine([
@@ -685,6 +758,16 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
       new RegExp(required.replaceAll('-','\\-'))
     );
   }
+  assert.throws(()=>normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine,VISUAL_COMPOSITOR_FLAG
+  ],{platform:'linux',arch:'x64'}),/exactly one --run-all-compositor-stages-before-draw/);
+  assert.throws(()=>normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine.filter(argument=>argument!==VISUAL_COMPOSITOR_FLAG),
+    `${VISUAL_COMPOSITOR_FLAG}=true`
+  ],{platform:'linux',arch:'x64'}),/exactly one --run-all-compositor-stages-before-draw/);
+  assert.throws(()=>normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine,`${VISUAL_COMPOSITOR_FLAG}=true`
+  ],{platform:'linux',arch:'x64'}),/exactly one --run-all-compositor-stages-before-draw/);
   assert.throws(()=>normalizeVisualBrowserCommandLine([
     linuxCommandLine[0],'--headless=new','--enable-automation','--remote-debugging-pipe'
   ],{platform:'linux',arch:'x64'}),/--headless/);
@@ -755,14 +838,26 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   await assert.rejects(inspectVisualBrowserRuntime({...browser,version:()=> 'different'}),/browser version must be/);
   await assert.rejects(inspectVisualBrowserRuntime({...browser,browserType:()=>({name:()=> 'firefox'})}),/runtime browser type must be chromium/);
 
-  const validUse={browserName:'chromium',headless:true,launchOptions:{args:['--enable-automation']}};
+  const validUse={
+    browserName:'chromium',
+    headless:true,
+    launchOptions:{args:['--enable-automation',VISUAL_COMPOSITOR_FLAG]}
+  };
   assert.doesNotThrow(()=>assertVisualProjectConfiguration(validUse));
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,channel:'chromium'}),/channel must be omitted/);
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,connectOptions:{wsEndpoint:'ws:\/\/example'}}),/connectOptions must be omitted/);
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,headless:false}),/headless must be true/);
-  assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args:['--enable-automation'],executablePath:'/tmp/chrome'}}),/may contain only args/);
-  assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args:['--enable-automation'],ignoreDefaultArgs:[]}}),/may contain only args/);
-  assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args:['--enable-automation','--headless=new']}}),/must be exactly/);
+  assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{...validUse.launchOptions,executablePath:'/tmp/chrome'}}),/may contain only args/);
+  assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{...validUse.launchOptions,ignoreDefaultArgs:[]}}),/may contain only args/);
+  for(const args of [
+    ['--enable-automation'],
+    ['--enable-automation',VISUAL_COMPOSITOR_FLAG,VISUAL_COMPOSITOR_FLAG],
+    ['--enable-automation',`${VISUAL_COMPOSITOR_FLAG}=true`],
+    [VISUAL_COMPOSITOR_FLAG,'--enable-automation'],
+    ['--enable-automation',VISUAL_COMPOSITOR_FLAG,'--headless=new']
+  ]){
+    assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args}}),/must be exactly/);
+  }
 });
 
 test('touch visual contexts use one pre-navigation CDP owner and trusted post-navigation input evidence',async()=>{
@@ -1692,6 +1787,9 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateCaptureMetadata({
     ...metadataFixture(),browser:{...metadataFixture().browser,screenshotBackend:'new-surface'}
   }),/browser\.screenshotBackend must be/);
+  assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:{...metadataFixture().browser,compositorScheduling:'default-overlap'}
+  }),/browser\.compositorScheduling must be/);
   const {screenshotBackend:_missingFinalizedBackend,...finalizedBrowserWithoutBackend}=metadataFixture().browser;
   assert.throws(()=>validateCaptureMetadata({
     ...metadataFixture(),browser:finalizedBrowserWithoutBackend
@@ -1699,12 +1797,19 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateCaptureMetadata({
     ...metadataFixture(),browser:{...metadataFixture().browser,backendAlias:'legacy'}
   }),/metadata\.browser fields mismatch/);
+  const {compositorScheduling:_missingFinalizedScheduling,...finalizedBrowserWithoutScheduling}=metadataFixture().browser;
+  assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:finalizedBrowserWithoutScheduling
+  }),/metadata\.browser fields mismatch/);
+  assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:{...metadataFixture().browser,compositorAlias:'serialized'}
+  }),/metadata\.browser fields mismatch/);
   assert.throws(()=>validateCaptureMetadata({
     ...metadataFixture(),playwright:{version:'999.0.0'}
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:6}),/schemaVersion must be 7/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:7}),/schemaVersion must be 8/);
   for(const [field,value,message] of [
     ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
     ['canonicalBackgroundsChecked',0,/canonical background paint evidence drifted/],
@@ -1725,6 +1830,9 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validatePendingCaptureMetadata({
     ...pendingMetadataFixture(),browser:{...pendingMetadataFixture().browser,screenshotBackend:'new-surface'}
   }),/browser\.screenshotBackend must be/);
+  assert.throws(()=>validatePendingCaptureMetadata({
+    ...pendingMetadataFixture(),browser:{...pendingMetadataFixture().browser,compositorScheduling:'default-overlap'}
+  }),/browser\.compositorScheduling must be/);
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
   assert.throws(()=>validateRawCaptureMetadata({
@@ -1742,12 +1850,22 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateRawCaptureMetadata({
     ...raw,browser:{...raw.browser,screenshotBackend:'new-surface'}
   }),/browser\.screenshotBackend must be/);
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:{...raw.browser,compositorScheduling:'default-overlap'}
+  }),/browser\.compositorScheduling must be/);
   const {screenshotBackend:_missingRawBackend,...rawBrowserWithoutBackend}=raw.browser;
   assert.throws(()=>validateRawCaptureMetadata({
     ...raw,browser:rawBrowserWithoutBackend
   }),/capture report\.browser fields mismatch/);
   assert.throws(()=>validateRawCaptureMetadata({
     ...raw,browser:{...raw.browser,backendAlias:'legacy'}
+  }),/capture report\.browser fields mismatch/);
+  const {compositorScheduling:_missingRawScheduling,...rawBrowserWithoutScheduling}=raw.browser;
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:rawBrowserWithoutScheduling
+  }),/capture report\.browser fields mismatch/);
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:{...raw.browser,compositorAlias:'serialized'}
   }),/capture report\.browser fields mismatch/);
   for(const [field,value] of [
     ['id','other-fixture'],
@@ -1883,7 +2001,7 @@ test('manifest generator and validator round-trip exact bytes without inventing 
       }
     }
     const generated=await generateCandidateManifest({candidateDir:root,metadata,expectedCommit:metadata.renderedFromCommit});
-    assert.equal(generated.schemaVersion,3);
+    assert.equal(generated.schemaVersion,4);
     assert.equal(generated.fileCount,44);
     assert.equal(generated.renderedFromCommit,metadata.renderedFromCommit);
     assert.equal(generated.sourceRun.id,metadata.sourceRun.id);
@@ -1900,17 +2018,30 @@ test('manifest generator and validator round-trip exact bytes without inventing 
       ...generated,browser:{...generated.browser,screenshotBackend:'new-surface'}
     },null,2)}\n`);
     await assert.rejects(validateCandidateManifest({candidateDir:root}),/browser\.screenshotBackend must be/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:{...generated.browser,compositorScheduling:'default-overlap'}
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/browser\.compositorScheduling must be/);
     const {screenshotBackend:_missingManifestBackend,...manifestBrowserWithoutBackend}=generated.browser;
     await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
       ...generated,browser:manifestBrowserWithoutBackend
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
+    const {compositorScheduling:_missingManifestScheduling,...manifestBrowserWithoutScheduling}=generated.browser;
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:manifestBrowserWithoutScheduling
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:{...generated.browser,compositorAlias:'serialized'}
     },null,2)}\n`);
     await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
     await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
       ...generated,browser:{...generated.browser,backendAlias:'legacy'}
     },null,2)}\n`);
     await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
-    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({...generated,schemaVersion:2},null,2)}\n`);
-    await assert.rejects(validateCandidateManifest({candidateDir:root}),/manifest\.schemaVersion must be 3/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({...generated,schemaVersion:3},null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/manifest\.schemaVersion must be 4/);
     await writeFile(path.join(root,'manifest.json'),`${JSON.stringify(generated,null,2)}\n`);
     await writeFile(path.join(root,'unexpected.txt'),'must fail closed');
     await assert.rejects(validateCandidateManifest({candidateDir:root}),/extra=\[unexpected\.txt\]/);

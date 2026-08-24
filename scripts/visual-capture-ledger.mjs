@@ -10,6 +10,7 @@ import {
   VISUAL_BROWSER_EXECUTABLE,
   VISUAL_BROWSER_REVISION,
   VISUAL_BROWSER_VERSION,
+  VISUAL_COMPOSITOR_SCHEDULING,
   VISUAL_PLAYWRIGHT_VERSION,
   VISUAL_SCREENSHOT_BACKEND,
   VisualBaselineContractError,
@@ -18,7 +19,7 @@ import {
   validateRawCaptureRecord
 } from './build-visual-manifest.mjs';
 
-export const VISUAL_CAPTURE_LEDGER_SCHEMA_VERSION=1;
+export const VISUAL_CAPTURE_LEDGER_SCHEMA_VERSION=2;
 export const VISUAL_CAPTURE_LEDGER_DIRECTORY='capture-ledger';
 
 const COMMIT_PATTERN=/^[a-f0-9]{40}$/;
@@ -52,13 +53,16 @@ function validateRunMode(value,label='runMode'){
 
 function validateBrowser(browser,label='browser'){
   requireExactObject(browser,label,[
-    'name','distribution','revision','executable','screenshotBackend','version','playwrightVersion'
+    'name','distribution','revision','executable','screenshotBackend','compositorScheduling','version','playwrightVersion'
   ]);
   if(browser.name!=='chromium')fail(`${label}.name must be chromium`);
   if(browser.distribution!==VISUAL_BROWSER_DISTRIBUTION)fail(`${label}.distribution must be ${VISUAL_BROWSER_DISTRIBUTION}`);
   if(browser.revision!==VISUAL_BROWSER_REVISION)fail(`${label}.revision must be ${VISUAL_BROWSER_REVISION}`);
   if(browser.executable!==VISUAL_BROWSER_EXECUTABLE)fail(`${label}.executable must be ${VISUAL_BROWSER_EXECUTABLE}`);
   if(browser.screenshotBackend!==VISUAL_SCREENSHOT_BACKEND)fail(`${label}.screenshotBackend must be ${VISUAL_SCREENSHOT_BACKEND}`);
+  if(browser.compositorScheduling!==VISUAL_COMPOSITOR_SCHEDULING){
+    fail(`${label}.compositorScheduling must be ${VISUAL_COMPOSITOR_SCHEDULING}`);
+  }
   if(browser.version!==VISUAL_BROWSER_VERSION)fail(`${label}.version must be ${VISUAL_BROWSER_VERSION}`);
   if(browser.playwrightVersion!==VISUAL_PLAYWRIGHT_VERSION)fail(`${label}.playwrightVersion must be ${VISUAL_PLAYWRIGHT_VERSION}`);
   return structuredClone(browser);

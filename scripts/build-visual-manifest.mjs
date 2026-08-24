@@ -10,6 +10,7 @@ import {
   VISUAL_BROWSER_EXECUTABLE,
   VISUAL_BROWSER_REVISION,
   VISUAL_BROWSER_VERSION,
+  VISUAL_COMPOSITOR_SCHEDULING,
   VISUAL_PLAYWRIGHT_VERSION,
   VISUAL_SCREENSHOT_BACKEND
 } from './visual-browser-contract.mjs';
@@ -26,6 +27,7 @@ export {
   VISUAL_BROWSER_EXECUTABLE,
   VISUAL_BROWSER_REVISION,
   VISUAL_BROWSER_VERSION,
+  VISUAL_COMPOSITOR_SCHEDULING,
   VISUAL_PLAYWRIGHT_VERSION,
   VISUAL_SCREENSHOT_BACKEND
 };
@@ -35,7 +37,7 @@ export const NOT_CAPTURED_STATUS='NOT_CAPTURED';
 export const INCOMPLETE_STATUS='INCOMPLETE';
 export const READY_FOR_VALIDATION_STATUS='READY_FOR_VALIDATION';
 export const PENDING_RUN_CONCLUSION='pending-terminal-verification';
-export const MANIFEST_SCHEMA_VERSION=3;
+export const MANIFEST_SCHEMA_VERSION=4;
 export const BASELINE_LOCALE=VISUAL_LOCALE;
 
 export const SURFACES=Object.freeze([
@@ -249,13 +251,18 @@ export function validateCaptureMetadata(metadata,{expectedCommit}={}){
 
   requireExactObject(metadata.playwright,'metadata.playwright',['version']);
   if(metadata.playwright.version!==VISUAL_PLAYWRIGHT_VERSION)fail(`metadata.playwright.version must be ${VISUAL_PLAYWRIGHT_VERSION}`);
-  requireExactObject(metadata.browser,'metadata.browser',['name','distribution','revision','executable','version','screenshotBackend']);
+  requireExactObject(metadata.browser,'metadata.browser',[
+    'name','distribution','revision','executable','version','screenshotBackend','compositorScheduling'
+  ]);
   if(metadata.browser.name!=='chromium')fail('metadata.browser.name must be chromium');
   if(metadata.browser.distribution!==VISUAL_BROWSER_DISTRIBUTION)fail(`metadata.browser.distribution must be ${VISUAL_BROWSER_DISTRIBUTION}`);
   if(metadata.browser.revision!==VISUAL_BROWSER_REVISION)fail(`metadata.browser.revision must be ${VISUAL_BROWSER_REVISION}`);
   if(metadata.browser.executable!==VISUAL_BROWSER_EXECUTABLE)fail(`metadata.browser.executable must be ${VISUAL_BROWSER_EXECUTABLE}`);
   if(metadata.browser.version!==VISUAL_BROWSER_VERSION)fail(`metadata.browser.version must be ${VISUAL_BROWSER_VERSION}`);
   if(metadata.browser.screenshotBackend!==VISUAL_SCREENSHOT_BACKEND)fail(`metadata.browser.screenshotBackend must be ${VISUAL_SCREENSHOT_BACKEND}`);
+  if(metadata.browser.compositorScheduling!==VISUAL_COMPOSITOR_SCHEDULING){
+    fail(`metadata.browser.compositorScheduling must be ${VISUAL_COMPOSITOR_SCHEDULING}`);
+  }
   requireExactObject(metadata.os,'metadata.os',['name','version','runnerImage']);
   requireString(metadata.os.name,'metadata.os.name');
   requireString(metadata.os.version,'metadata.os.version');
@@ -368,7 +375,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==7)fail('capture report.schemaVersion must be 7');
+  if(report.schemaVersion!==8)fail('capture report.schemaVersion must be 8');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -393,7 +400,9 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
   if(report.fixture.dailyBrief!==false)fail('capture report.fixture.dailyBrief must be false');
   if(Date.parse(report.generatedAt)<Date.parse(report.fixture.fixedTime))fail('capture report.generatedAt cannot precede fixture.fixedTime');
 
-  requireExactObject(report.browser,'capture report.browser',['name','distribution','revision','executable','version','playwrightVersion','screenshotBackend']);
+  requireExactObject(report.browser,'capture report.browser',[
+    'name','distribution','revision','executable','version','playwrightVersion','screenshotBackend','compositorScheduling'
+  ]);
   if(report.browser.name!=='chromium')fail('capture report.browser.name must be chromium');
   if(report.browser.distribution!==VISUAL_BROWSER_DISTRIBUTION)fail(`capture report.browser.distribution must be ${VISUAL_BROWSER_DISTRIBUTION}`);
   if(report.browser.revision!==VISUAL_BROWSER_REVISION)fail(`capture report.browser.revision must be ${VISUAL_BROWSER_REVISION}`);
@@ -401,6 +410,9 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
   if(report.browser.version!==VISUAL_BROWSER_VERSION)fail(`capture report.browser.version must be ${VISUAL_BROWSER_VERSION}`);
   if(report.browser.playwrightVersion!==VISUAL_PLAYWRIGHT_VERSION)fail(`capture report.browser.playwrightVersion must be ${VISUAL_PLAYWRIGHT_VERSION}`);
   if(report.browser.screenshotBackend!==VISUAL_SCREENSHOT_BACKEND)fail(`capture report.browser.screenshotBackend must be ${VISUAL_SCREENSHOT_BACKEND}`);
+  if(report.browser.compositorScheduling!==VISUAL_COMPOSITOR_SCHEDULING){
+    fail(`capture report.browser.compositorScheduling must be ${VISUAL_COMPOSITOR_SCHEDULING}`);
+  }
   requireExactObject(report.runner,'capture report.runner',['platform','arch','release']);
   requireString(report.runner.platform,'capture report.runner.platform');
   requireString(report.runner.arch,'capture report.runner.arch');
@@ -597,6 +609,7 @@ function assertCaptureReportMatchesMetadata(report,metadata){
     report.browser.executable!==metadata.browser.executable||
     report.browser.version!==metadata.browser.version||
     report.browser.screenshotBackend!==metadata.browser.screenshotBackend||
+    report.browser.compositorScheduling!==metadata.browser.compositorScheduling||
     report.browser.playwrightVersion!==metadata.playwright.version
   )fail('capture report browser does not match finalized metadata');
   if(Date.parse(report.generatedAt)>Date.parse(metadata.capturedAt))fail('capture report was generated after its capture provenance timestamp');

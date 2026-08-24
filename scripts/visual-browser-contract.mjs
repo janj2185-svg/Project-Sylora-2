@@ -36,6 +36,8 @@ export const VISUAL_BROWSER_EXECUTABLE = 'chrome-headless-shell';
 export const VISUAL_BROWSER_VERSION = headlessShellEntries[0].browserVersion;
 export const VISUAL_PLAYWRIGHT_VERSION = playwrightTestManifest.version;
 export const VISUAL_SCREENSHOT_BACKEND = 'legacy-force-redraw';
+export const VISUAL_COMPOSITOR_FLAG = '--run-all-compositor-stages-before-draw';
+export const VISUAL_COMPOSITOR_SCHEDULING = 'all-stages-before-draw';
 
 export const FORBIDDEN_VISUAL_CONNECT_ENV = Object.freeze([
   'PW_TEST_CONNECT_WS_ENDPOINT',
@@ -86,12 +88,13 @@ export function assertVisualProjectConfiguration(use) {
   }
   const launchOptionKeys = Object.keys(use.launchOptions).sort();
   if (launchOptionKeys.length !== 1 || launchOptionKeys[0] !== 'args') fail('launchOptions may contain only args');
+  const expectedArguments = ['--enable-automation', VISUAL_COMPOSITOR_FLAG];
   if (
     !Array.isArray(use.launchOptions.args) ||
-    use.launchOptions.args.length !== 1 ||
-    use.launchOptions.args[0] !== '--enable-automation'
+    use.launchOptions.args.length !== expectedArguments.length ||
+    use.launchOptions.args.some((argument, index) => argument !== expectedArguments[index])
   ) {
-    fail('launchOptions.args must be exactly [--enable-automation]');
+    fail(`launchOptions.args must be exactly [${expectedArguments.join(', ')}]`);
   }
 }
 
@@ -122,6 +125,12 @@ export function normalizeVisualBrowserCommandLine(
   if (!commandLine.includes('--disable-field-trial-config')) {
     fail('the browser process is missing --disable-field-trial-config');
   }
+  const compositorArguments = commandLine.filter(argument =>
+    argument === VISUAL_COMPOSITOR_FLAG || argument.startsWith(`${VISUAL_COMPOSITOR_FLAG}=`)
+  );
+  if (compositorArguments.length !== 1 || compositorArguments[0] !== VISUAL_COMPOSITOR_FLAG) {
+    fail(`the browser process must contain exactly one ${VISUAL_COMPOSITOR_FLAG}`);
+  }
   if (commandLine.includes('--enable-features')) {
     fail('--enable-features must use a non-empty equals-form feature list');
   }
@@ -141,7 +150,8 @@ export function normalizeVisualBrowserCommandLine(
     distribution: VISUAL_BROWSER_DISTRIBUTION,
     revision: VISUAL_BROWSER_REVISION,
     executable: VISUAL_BROWSER_EXECUTABLE,
-    screenshotBackend: VISUAL_SCREENSHOT_BACKEND
+    screenshotBackend: VISUAL_SCREENSHOT_BACKEND,
+    compositorScheduling: VISUAL_COMPOSITOR_SCHEDULING
   };
 }
 

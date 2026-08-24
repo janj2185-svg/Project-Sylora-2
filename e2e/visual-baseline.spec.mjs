@@ -91,11 +91,12 @@ function writeAggregatedRawMetadata() {
     revision: 'unverified',
     executable: 'unverified',
     screenshotBackend: 'unverified',
+    compositorScheduling: 'unverified',
     version: 'unverified',
     playwrightVersion
   };
   const metadata = {
-    schemaVersion: 7,
+    schemaVersion: 8,
     status: aggregate.complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
     complete: aggregate.complete,
     expectedFiles: aggregate.expectedFiles,
@@ -295,6 +296,7 @@ test.afterAll(() => {
         revision: metadata.browser.revision,
         executable: metadata.browser.executable,
         screenshotBackend: metadata.browser.screenshotBackend,
+        compositorScheduling: metadata.browser.compositorScheduling,
         version: metadata.browser.version
       },
       os: {
