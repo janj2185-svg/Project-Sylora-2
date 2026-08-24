@@ -637,8 +637,14 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.ok(warmupIndex<fullFirstIndex&&fullFirstIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   const restorationIndexes=[...stableCaptureSource.matchAll(/await assertCanonicalTargetsRestored\(page, targets\)/g)].map(match=>match.index);
   assert.equal(restorationIndexes.length,2,'canonical restoration must be probed only before A and after B');
-  assert.ok(restorationIndexes[0]<fullFirstIndex);
+  assert.ok(restorationIndexes[0]<warmupIndex,'the restored-state probe must run before the discarded paint fence');
   assert.ok(restorationIndexes[1]>byteGateIndex);
+  const warmupToFirstSource=stableCaptureSource.slice(warmupIndex,fullFirstIndex);
+  assert.match(
+    warmupToFirstSource,
+    /^'full-page-post-restore-warmup',\s+assertClean\s+\);\s+await waitForCompositorFrames\(page\);\s+const finalFirst = await takeCheckedScreenshot\(\s+page,\s+\{ \.\.\.VISUAL_SCREENSHOT_OPTIONS, fullPage: true \},\s+$/
+  );
+  assert.doesNotMatch(warmupToFirstSource,/assertCanonicalTargetsRestored|assertVisualScrollOrigin|boundingBox|isVisible|getComputedStyle/);
   const interFrameSource=stableCaptureSource.slice(fullFirstIndex,fullSecondIndex);
   assert.match(
     interFrameSource,

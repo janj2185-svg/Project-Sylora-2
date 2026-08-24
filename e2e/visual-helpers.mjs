@@ -844,23 +844,24 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
     }
   }
 
-  // The first post-restore full-page capture is a fixed paint fence. Chromium
-  // can materialize offscreen tiles while producing it, so it is deliberately
-  // discarded. The persistent capture style above prevents screenshot-time
-  // caret mutation from invalidating native controls and backdrop samples. The
-  // following two captures are consecutive evidence frames in the same restored
-  // compositor state; no retry or preferred-frame selection is permitted.
+  // Prove the restored DOM, geometry and scroll origin before the paint fence.
+  // Those reads can flush layout and rebuild backdrop-filter/composited layers,
+  // so performing them after the discarded frame would make A the first capture
+  // of a newly materialized state and B the second. The fixed warmup below owns
+  // that materialization. After it, the evidence path contains only compositor
+  // frame fences and consecutive full-page captures; no DOM/layout probe, retry
+  // or preferred-frame selection is permitted.
   await waitForCompositorFrames(page);
   await assertVisualScrollOrigin(page);
+  await assertCanonicalTargetsRestored(page, targets);
+  await waitForCompositorFrames(page);
   await takeCheckedScreenshot(
     page,
     { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
     'full-page-post-restore-warmup',
     assertClean
   );
-  await assertCanonicalTargetsRestored(page, targets);
   await waitForCompositorFrames(page);
-  await assertVisualScrollOrigin(page);
   const finalFirst = await takeCheckedScreenshot(
     page,
     { ...VISUAL_SCREENSHOT_OPTIONS, fullPage: true },
