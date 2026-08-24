@@ -133,7 +133,7 @@ for (const viewport of VISUAL_VIEWPORTS) {
     } catch (error) {
       const failureScreenshot = path.join(resultsRoot, `failure-${viewport.id}.png`);
       const evidenceFailures = [];
-      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'disabled', caret: 'hide' })
+      await page.screenshot({ path: failureScreenshot, fullPage: true, animations: 'disabled', caret: 'initial' })
         .catch(evidenceError => evidenceFailures.push(`screenshot: ${evidenceError.message}`));
       try {
         fs.writeFileSync(path.join(resultsRoot, `failure-runtime-${viewport.id}.json`), `${JSON.stringify({

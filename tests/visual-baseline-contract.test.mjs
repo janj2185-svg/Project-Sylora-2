@@ -385,7 +385,8 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
 
 test('touch visual contexts use one pre-navigation CDP owner and trusted post-navigation input evidence',async()=>{
   const contextOptions=[];
-  const createdContext={async addInitScript(){}};
+  const initScripts=[];
+  const createdContext={async addInitScript(callback,arg){initScripts.push({callback,arg});}};
   const contextBrowser={
     async newContext(options){contextOptions.push(options);return createdContext;}
   };
@@ -394,6 +395,10 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.equal(contextOptions.length,1);
   assert.equal(contextOptions[0].isMobile,true);
   assert.equal(contextOptions[0].hasTouch,false);
+  assert.equal(initScripts.length,1);
+  assert.equal(initScripts[0].arg.captureStyleId,'sylora-visual-capture-style');
+  assert.equal(initScripts[0].arg.captureStyleText,'input,textarea,[contenteditable]{caret-color:transparent!important}');
+  assert.match(initScripts[0].callback.toString(),/DOMContentLoaded/);
   assert.doesNotMatch(visualHelpersSource,/Object\.defineProperty\s*\(\s*(?:Navigator|navigator)/);
   assert.doesNotMatch(visualHelpersSource,/navigator\.maxTouchPoints\s*=/);
   assert.doesNotMatch(visualHelpersSource,/\bmatchMedia\s*=/);
@@ -547,6 +552,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const gotoIndex=navigationSource.indexOf("await page.goto(surface.path, { waitUntil: 'load' })");
   const verifyIndex=navigationSource.indexOf('await afterNavigation()');
   const readinessIndex=navigationSource.indexOf('await waitForCapabilitiesState');
+  const captureStyleIndex=navigationSource.indexOf('await assertPersistentVisualCaptureStyle(page)');
   const preOpenAssetsIndex=navigationSource.indexOf('await waitForStableVisualAssets(page)');
   const preOpenPaintIndex=navigationSource.indexOf("requireScreenshotBuffer(await page.screenshot(VISUAL_SCREENSHOT_OPTIONS), 'pre-open paint fence')");
   const surfaceOpenIndex=navigationSource.indexOf('await surface.open(page)');
@@ -557,8 +563,9 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.ok(beforeIndex<gotoIndex);
   assert.ok(gotoIndex<verifyIndex);
   assert.ok(verifyIndex<readinessIndex);
-  for(const index of [preOpenAssetsIndex,preOpenPaintIndex,surfaceOpenIndex])assert.notEqual(index,-1);
-  assert.ok(readinessIndex<preOpenAssetsIndex);
+  for(const index of [captureStyleIndex,preOpenAssetsIndex,preOpenPaintIndex,surfaceOpenIndex])assert.notEqual(index,-1);
+  assert.ok(readinessIndex<captureStyleIndex);
+  assert.ok(captureStyleIndex<preOpenAssetsIndex);
   assert.ok(preOpenAssetsIndex<preOpenPaintIndex);
   assert.ok(preOpenPaintIndex<surfaceOpenIndex);
 
@@ -596,6 +603,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
   assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
   const stableCaptureSource=captureStableVisualScreenshot.toString();
+  const stableStyleIndex=stableCaptureSource.indexOf('await assertPersistentVisualCaptureStyle(page)');
   const cropProofIndex=stableCaptureSource.indexOf('rawScreenshotCropDigests');
   const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-full-page-first");
   const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-full-page-second");
@@ -603,10 +611,15 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
   const byteGateIndex=stableCaptureSource.indexOf('if (!finalFirst.equals(finalSecond))');
-  for(const index of [cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
+  for(const index of [stableStyleIndex,cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
+  assert.ok(stableStyleIndex<hiddenFirstIndex);
   assert.ok(hiddenFirstIndex<hiddenSecondIndex&&hiddenSecondIndex<cropProofIndex&&cropProofIndex<warmupIndex);
   assert.ok(warmupIndex<fullFirstIndex&&fullFirstIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
+  assert.match(visualHelpersSource,/caret:\s*'initial'/);
+  assert.doesNotMatch(visualHelpersSource,/caret:\s*'hide'/);
+  assert.match(visualBaselineSpec,/failureScreenshot[\s\S]*caret:\s*'initial'/);
+  assert.doesNotMatch(visualBaselineSpec,/caret:\s*'hide'/);
   assert.doesNotMatch(stableCaptureSource,/VISUAL_SCREENSHOT_OPTIONS,\s*clip/,'tight clips are not exact compositor oracles for full-page evidence');
   assert.doesNotMatch(stableCaptureSource,/hiddenFirst\.equals\(hiddenSecond\)/,'unrelated full-page pixels must not invalidate canonical crop evidence');
   assert.doesNotMatch(visualHelpersSource,/rawClipScreenshotEvidence/);
@@ -620,7 +633,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   function capturePage(frameNames,{
     rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],
     restoredTargetBoxes=[],restoreFailureIndexes=[],restoredInvisibleIndexes=[],restoredSourceDriftIndexes=[],
-    restoredBackgroundDriftIndexes=[]
+    restoredBackgroundDriftIndexes=[],captureStyleEvidence={count:1,textMatches:true,uncoveredCaretCount:0}
   }={}){
     const frames=[...frameNames];
     const inlineStyles=targetRoles.map((_,index)=>initialStyles[index]??null);
@@ -683,6 +696,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
         return Buffer.from(next);
       },
       async evaluate(_callback,arg){
+        if(arg?.styleId)return captureStyleEvidence;
         if(!arg?.encodedPng)return scrollPosition;
         cropLists.push(arg.cropList.map(clip=>({...clip})));
         const name=Buffer.from(arg.encodedPng,'base64').toString();
@@ -726,6 +740,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.ok(cleanLabels.includes('canonical-hidden-full-page-raster'));
   assert.ok(cleanLabels.includes('full-page-stability-second-raster'));
   assert.ok(stable.getScreenshotOptions().every(options=>options.fullPage===true));
+  assert.ok(stable.getScreenshotOptions().every(options=>options.caret==='initial'));
   assert.deepEqual(stable.getCropLists()[0],[{x:10,y:8,width:120,height:71}]);
   assert.equal(stable.getStyle(),null);
 
@@ -745,6 +760,16 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   ]);
   assert.deepEqual(batched.getStyles(),[null,null]);
   assert.ok(batched.getScreenshotOptions().every(options=>options.fullPage===true));
+  assert.ok(batched.getScreenshotOptions().every(options=>options.caret==='initial'));
+
+  const missingCaptureStyle=capturePage([],{
+    captureStyleEvidence:{count:0,textMatches:false,uncoveredCaretCount:1}
+  });
+  await assert.rejects(
+    captureStableVisualScreenshot(missingCaptureStyle.page,{assertClean:()=>{}}),
+    /Persistent visual capture style drifted/
+  );
+  assert.equal(missingCaptureStyle.getScreenshotCalls(),0);
 
   const overlapping=capturePage([],{
     targetRoles:['header','wallet'],

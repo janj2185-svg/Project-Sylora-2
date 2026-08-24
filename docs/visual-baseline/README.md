@@ -51,6 +51,7 @@ The pinned runner must:
 
 - clear stale repeat artifacts before capture, then start both passes from independent copies of the same fixed fixture;
 - freeze browser time and seeded randomness;
+- install one persistent capture-only caret rule in every navigated document, verify that it covers every editable control, and capture with Playwright `caret: 'initial'`; this keeps the caret invisible without Playwright mutating and restoring rounded controls around every frame;
 - wait for the capability state, `document.fonts.ready`, DOM images and CSS background images; decode failures are fatal and every canonical brand raster must retain its locked 1100 × 650 intrinsic dimensions;
 - run a fixed pre-open asset/paint fence before capture-only overlays are opened, so a backdrop filter cannot sample an undecoded canonical CSS background;
 - launch headless with no browser channel or custom executable, then use browser-level CDP to prove the actual pinned `chromium-headless-shell` distribution, revision and executable before capturing;
@@ -62,7 +63,7 @@ The pinned runner must:
 - require the visible canonical target rectangles to be non-overlapping, preserve every exact inline style, hide all targets without changing layout, and take two hidden full-page frames whose canonical target crops are byte-identical;
 - derive every target crop from both hidden frames, require the paired crops to match, then restore every exact inline style and require the original canonical geometry, visibility and asset predicates to match;
 - never use a tight-clip screenshot as the exact oracle for a full-page crop: the locked shell uses `backdrop-filter`, and Chromium legitimately samples a different compositor boundary for tight clips;
-- after exact style restoration, discard one fixed full-page paint-fence frame, then take consecutive final full-page frames A and B with no retry or cherry-picking, require A and B to be byte-identical, require locked canonical contrast and require every visible canonical crop to differ from its stable hidden crop, then persist only B;
+- after exact style restoration, discard one fixed full-page paint-fence frame, then take consecutive final full-page frames A and B with the already-persistent caret state and no retry or cherry-picking, require A and B to be byte-identical, require locked canonical contrast and require every visible canonical crop to differ from its stable hidden crop, then persist only B;
 - record the fail-closed compositor proof in raw capture schema 6, then re-read every PNG from disk, verify its recorded SHA-256 and dimensions, and prove that all 44 persisted digests match between independent capture and repeat passes.
 
 A raw PNG is written only after its runtime profile, diagnostics and in-memory screenshot have passed. Failed runs that reach Playwright teardown retain only the successfully validated subset, mark `metadata.json` as `INCOMPLETE_VISUAL_CAPTURE`, and omit `capture-metadata.json`. An abrupt worker termination may leave `metadata.json` absent instead. Both states are non-promotable. Visual diagnostics retain a failure screenshot plus capability-only JSON; credential-bearing Playwright traces are not produced.

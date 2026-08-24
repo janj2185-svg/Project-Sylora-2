@@ -32,10 +32,15 @@ const CANONICAL_BRAND_BACKGROUND_SELECTOR = '.sylora-presence-image';
 // raster state.
 const CANONICAL_IMAGE_MIN_CONTRAST = 0.02;
 const CANONICAL_BACKGROUND_MIN_CONTRAST = 0.003;
+const VISUAL_CAPTURE_STYLE_ID = 'sylora-visual-capture-style';
+const VISUAL_CAPTURE_STYLE_TEXT = 'input,textarea,[contenteditable]{caret-color:transparent!important}';
 const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
   type: 'png',
   animations: 'disabled',
-  caret: 'hide',
+  // A persistent capture-only rule owns the caret state. `hide` would make
+  // Playwright mutate and restore every editable element around every frame,
+  // invalidating rounded controls and any backdrop that samples them.
+  caret: 'initial',
   scale: 'css'
 });
 
@@ -83,7 +88,7 @@ export async function createVisualContext(browser, viewport, baseURL) {
     reducedMotion: 'reduce'
   });
 
-  await context.addInitScript(({ seed }) => {
+  await context.addInitScript(({ seed, captureStyleId, captureStyleText }) => {
     let state = seed >>> 0;
     Math.random = () => {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
@@ -97,7 +102,23 @@ export async function createVisualContext(browser, viewport, baseURL) {
     } catch {
       // The initial about:blank document has an opaque origin.
     }
-  }, { seed: VISUAL_RANDOM_SEED });
+    const installCaptureStyle = () => {
+      if (document.getElementById(captureStyleId)) return;
+      const style = document.createElement('style');
+      style.id = captureStyleId;
+      style.textContent = captureStyleText;
+      (document.head || document.documentElement).append(style);
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', installCaptureStyle, { once: true });
+    } else {
+      installCaptureStyle();
+    }
+  }, {
+    seed: VISUAL_RANDOM_SEED,
+    captureStyleId: VISUAL_CAPTURE_STYLE_ID,
+    captureStyleText: VISUAL_CAPTURE_STYLE_TEXT
+  });
 
   return context;
 }
@@ -362,6 +383,7 @@ export async function gotoVisualSurface(page, surface, { beforeNavigation, after
   await page.goto(surface.path, { waitUntil: 'load' });
   if (afterNavigation) await afterNavigation();
   await waitForCapabilitiesState(page,capabilitiesResponsePromise);
+  await assertPersistentVisualCaptureStyle(page);
   await expect(page.locator('body')).toHaveAttribute('data-view', surface.view);
   await expect(page.locator('#localeSwitch')).toHaveValue(VISUAL_LOCALE);
   await expect(page.locator('html')).toHaveAttribute('lang', VISUAL_LOCALE);
@@ -501,6 +523,23 @@ export async function waitForStableVisualState(page, surface) {
   if (surface.id === 'video-create') await expect(page.locator('#videoUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
 
   await waitForStableVisualAssets(page);
+}
+
+async function assertPersistentVisualCaptureStyle(page) {
+  const evidence = await page.evaluate(({ styleId, styleText }) => {
+    const styles = [...document.querySelectorAll('style')].filter(style => style.id === styleId);
+    const uncoveredCaretCount = [...document.querySelectorAll('input,textarea,[contenteditable]')]
+      .filter(element => getComputedStyle(element).caretColor !== 'rgba(0, 0, 0, 0)')
+      .length;
+    return {
+      count: styles.length,
+      textMatches: styles[0]?.textContent === styleText,
+      uncoveredCaretCount
+    };
+  }, { styleId: VISUAL_CAPTURE_STYLE_ID, styleText: VISUAL_CAPTURE_STYLE_TEXT });
+  if (evidence.count !== 1 || evidence.textMatches !== true || evidence.uncoveredCaretCount !== 0) {
+    throw new Error(`Persistent visual capture style drifted: ${JSON.stringify(evidence)}`);
+  }
 }
 
 function screenshotDigest(png) {
@@ -698,6 +737,8 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
     throw new Error('Stable visual capture requires a diagnostics assertion callback');
   }
 
+  await assertPersistentVisualCaptureStyle(page);
+
   const { targets, canonicalImagesChecked, canonicalBackgroundsChecked } = await collectCanonicalPaintTargets(page);
   assertNonOverlappingCanonicalTargets(targets);
   await assertVisualScrollOrigin(page);
@@ -766,9 +807,10 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
 
   // The first post-restore full-page capture is a fixed paint fence. Chromium
   // can materialize offscreen tiles while producing it, so it is deliberately
-  // discarded. The following two captures are consecutive evidence frames in
-  // the same restored compositor state; no retry or preferred-frame selection
-  // is permitted.
+  // discarded. The persistent capture style above prevents screenshot-time
+  // caret mutation from invalidating native controls and backdrop samples. The
+  // following two captures are consecutive evidence frames in the same restored
+  // compositor state; no retry or preferred-frame selection is permitted.
   await waitForCompositorFrames(page);
   await assertVisualScrollOrigin(page);
   await takeCheckedScreenshot(
@@ -786,6 +828,7 @@ export async function captureStableVisualScreenshot(page, { assertClean } = {}) 
     'full-page-stability-first',
     assertClean
   );
+  await assertCanonicalTargetsRestored(page, targets);
   await waitForCompositorFrames(page);
   await assertVisualScrollOrigin(page);
   const finalSecond = await takeCheckedScreenshot(
