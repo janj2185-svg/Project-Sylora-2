@@ -11,7 +11,10 @@ import {
   validateRawCaptureMetadata,
   verifyRawCaptureBytes
 } from './build-visual-manifest.mjs';
-import {assertNoVisualBrowserConnectionEnvironment} from './visual-browser-contract.mjs';
+import {
+  assertNoVisualBrowserConnectionEnvironment,
+  assertVisualScreenshotEnvironment
+} from './visual-browser-contract.mjs';
 import {createVisualFixtureData} from './visual-fixture.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,20 +84,26 @@ fs.mkdirSync(outputDir, { recursive: true });
 fs.writeFileSync(dataFile, `${JSON.stringify(createVisualFixtureData(), null, 2)}\n`, { flag: 'wx' });
 
 const cli = path.join(repoRoot, 'node_modules', '@playwright', 'test', 'cli.js');
+const visualEnvironment = {
+  ...process.env,
+  // Playwright 1.62 otherwise enables CDPScreenshotNewSurface, which asks
+  // Chromium to allocate a new LocalSurfaceId for every screenshot. Pin the
+  // legacy ForceRedraw path for both independent visual passes.
+  PLAYWRIGHT_LEGACY_SCREENSHOT: '1',
+  SYLORA_VISUAL_RUN_MODE: mode,
+  SYLORA_VISUAL_GIT_SHA: gitSha,
+  SYLORA_VISUAL_OUTPUT_DIR: outputDir,
+  SYLORA_VISUAL_DATA_FILE: dataFile,
+  SYLORA_VISUAL_RESULTS_DIR: resultsDir,
+  SYLORA_VISUAL_PORT: '8793',
+  TZ: 'UTC',
+  LANG: 'C.UTF-8'
+};
+assertVisualScreenshotEnvironment(visualEnvironment);
 const run = spawnSync(process.execPath, [cli, 'test', '--config=playwright.visual.config.mjs'], {
   cwd: repoRoot,
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    SYLORA_VISUAL_RUN_MODE: mode,
-    SYLORA_VISUAL_GIT_SHA: gitSha,
-    SYLORA_VISUAL_OUTPUT_DIR: outputDir,
-    SYLORA_VISUAL_DATA_FILE: dataFile,
-    SYLORA_VISUAL_RESULTS_DIR: resultsDir,
-    SYLORA_VISUAL_PORT: '8793',
-    TZ: 'UTC',
-    LANG: 'C.UTF-8'
-  }
+  env: visualEnvironment
 });
 
 if (run.error) {

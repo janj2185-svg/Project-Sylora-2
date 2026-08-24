@@ -28,7 +28,9 @@ import {
   VISUAL_BROWSER_REVISION,
   VISUAL_BROWSER_VERSION,
   VISUAL_PLAYWRIGHT_VERSION,
+  VISUAL_SCREENSHOT_BACKEND,
   assertNoVisualBrowserConnectionEnvironment,
+  assertVisualScreenshotEnvironment,
   assertVisualProjectConfiguration,
   inspectVisualBrowserRuntime,
   normalizeVisualBrowserCommandLine
@@ -74,7 +76,7 @@ function discoverPlaywright(configFile){
   const result=spawnSync(process.execPath,[playwrightCli,'test',`--config=${configFile}`,'--list','--reporter=json'],{
     cwd:repositoryRoot,
     encoding:'utf8',
-    env:{...process.env,NO_COLOR:'1'}
+    env:{...process.env,NO_COLOR:'1',PLAYWRIGHT_LEGACY_SCREENSHOT:'1'}
   });
   assert.equal(result.status,0,`Playwright discovery failed for ${configFile}`);
   const report=JSON.parse(result.stdout);
@@ -136,7 +138,8 @@ function metadataFixture(commit='a'.repeat(40)){
       distribution:VISUAL_BROWSER_DISTRIBUTION,
       revision:VISUAL_BROWSER_REVISION,
       executable:VISUAL_BROWSER_EXECUTABLE,
-      version:VISUAL_BROWSER_VERSION
+      version:VISUAL_BROWSER_VERSION,
+      screenshotBackend:VISUAL_SCREENSHOT_BACKEND
     },
     os:{name:'Ubuntu',version:'24.04.4',runnerImage:'ubuntu-24.04'},
     locale:BASELINE_LOCALE,
@@ -204,7 +207,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
     };
   });
   return {
-    schemaVersion:6,
+    schemaVersion:7,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -227,7 +230,8 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
       revision:VISUAL_BROWSER_REVISION,
       executable:VISUAL_BROWSER_EXECUTABLE,
       version:VISUAL_BROWSER_VERSION,
-      playwrightVersion:VISUAL_PLAYWRIGHT_VERSION
+      playwrightVersion:VISUAL_PLAYWRIGHT_VERSION,
+      screenshotBackend:VISUAL_SCREENSHOT_BACKEND
     },
     runner:{platform:'linux',arch:'x64',release:'6.11.0'},
     surfaces:[...SURFACES],
@@ -288,11 +292,23 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.equal(VISUAL_BROWSER_EXECUTABLE,'chrome-headless-shell');
   assert.equal(VISUAL_BROWSER_VERSION,'151.0.7922.34');
   assert.equal(VISUAL_PLAYWRIGHT_VERSION,'1.62.1');
+  assert.equal(VISUAL_SCREENSHOT_BACKEND,'legacy-force-redraw');
   assert.match(runVisualQaScript,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
+  assert.match(runVisualQaScript,/PLAYWRIGHT_LEGACY_SCREENSHOT:\s*'1'/);
+  assert.match(runVisualQaScript,/assertVisualScreenshotEnvironment\(visualEnvironment\)/);
+  assert.match(runVisualQaScript,/env:\s*visualEnvironment/);
+  const visualEnvironmentIndex=runVisualQaScript.indexOf('const visualEnvironment = {');
+  const ambientEnvironmentIndex=runVisualQaScript.indexOf('...process.env',visualEnvironmentIndex);
+  const legacyScreenshotIndex=runVisualQaScript.indexOf("PLAYWRIGHT_LEGACY_SCREENSHOT: '1'",visualEnvironmentIndex);
+  const visualSpawnIndex=runVisualQaScript.indexOf('const run = spawnSync',visualEnvironmentIndex);
+  for(const index of [visualEnvironmentIndex,ambientEnvironmentIndex,legacyScreenshotIndex,visualSpawnIndex])assert.notEqual(index,-1);
+  assert.ok(visualEnvironmentIndex<ambientEnvironmentIndex&&ambientEnvironmentIndex<legacyScreenshotIndex&&legacyScreenshotIndex<visualSpawnIndex);
   assert.match(runVisualQaScript,/if \(mode === 'capture'\) \{[\s\S]*clean\(repeatDir\);/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(outputDir, outputReport\)/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(candidateDir, candidate\)/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
+  assert.match(visualBaselineSpec,/assertVisualScreenshotEnvironment\(process\.env\)/);
+  assert.match(visualBaselineSpec,/schemaVersion:\s*7/);
   assert.match(visualBaselineSpec,/connectOptions !== undefined && connectOptions !== null/);
 
   assert.doesNotThrow(()=>assertNoVisualBrowserConnectionEnvironment({}));
@@ -300,8 +316,12 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   for(const name of ['PW_TEST_CONNECT_WS_ENDPOINT','PW_TEST_CONNECT_HEADERS','PW_TEST_CONNECT_EXPOSE_NETWORK']){
     assert.throws(()=>assertNoVisualBrowserConnectionEnvironment({[name]:'configured'}),new RegExp(name));
   }
+  assert.doesNotThrow(()=>assertVisualScreenshotEnvironment({PLAYWRIGHT_LEGACY_SCREENSHOT:'1'}));
+  for(const value of [undefined,'','0','true',1]){
+    assert.throws(()=>assertVisualScreenshotEnvironment({PLAYWRIGHT_LEGACY_SCREENSHOT:value}),/must be exactly 1/);
+  }
 
-  const requiredArguments=['--headless','--enable-automation','--remote-debugging-pipe'];
+  const requiredArguments=['--headless','--enable-automation','--remote-debugging-pipe','--disable-field-trial-config'];
   const linuxCommandLine=[
     `/home/runner/.cache/ms-playwright/chromium_headless_shell-${VISUAL_BROWSER_REVISION}/chrome-headless-shell-linux64/chrome-headless-shell`,
     ...requiredArguments
@@ -309,7 +329,8 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   const fingerprint={
     distribution:VISUAL_BROWSER_DISTRIBUTION,
     revision:VISUAL_BROWSER_REVISION,
-    executable:VISUAL_BROWSER_EXECUTABLE
+    executable:VISUAL_BROWSER_EXECUTABLE,
+    screenshotBackend:VISUAL_SCREENSHOT_BACKEND
   };
   assert.deepEqual(normalizeVisualBrowserCommandLine(linuxCommandLine,{platform:'linux',arch:'x64'}),fingerprint);
   assert.deepEqual(normalizeVisualBrowserCommandLine([
@@ -343,6 +364,37 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.throws(()=>normalizeVisualBrowserCommandLine([
     ...linuxCommandLine,'--headless=new'
   ],{platform:'linux',arch:'x64'}),/alternate --headless modes are forbidden/);
+  for(const featureArgument of [
+    '--enable-features=CDPScreenshotNewSurface',
+    '--enable-features=CDPScreenshotNewSurface,OtherFeature',
+    '--enable-features=OtherFeature,CDPScreenshotNewSurface',
+    '--enable-features=OtherFeature,CDPScreenshotNewSurface,LastFeature',
+    '--enable-features=CDPScreenshotNewSurface<Trial',
+    '--enable-features=CDPScreenshotNewSurface.Group<Trial',
+    '--enable-features=CDPScreenshotNewSurface:mode/value'
+  ]){
+    assert.throws(
+      ()=>normalizeVisualBrowserCommandLine([...linuxCommandLine,featureArgument],{platform:'linux',arch:'x64'}),
+      /CDPScreenshotNewSurface must be absent/
+    );
+  }
+  assert.doesNotThrow(()=>normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine,'--disable-features=CDPScreenshotNewSurface'
+  ],{platform:'linux',arch:'x64'}));
+  assert.deepEqual(normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine,'--enable-features=OtherFeature,LastFeature'
+  ],{platform:'linux',arch:'x64'}),fingerprint);
+  for(const malformedArgument of ['--enable-features','--enable-features=']){
+    assert.throws(
+      ()=>normalizeVisualBrowserCommandLine([...linuxCommandLine,malformedArgument],{platform:'linux',arch:'x64'}),
+      /non-empty equals-form feature list/
+    );
+  }
+  assert.throws(()=>normalizeVisualBrowserCommandLine([
+    ...linuxCommandLine,
+    '--enable-features=OtherFeature',
+    '--enable-features=LastFeature,CDPScreenshotNewSurface'
+  ],{platform:'linux',arch:'x64'}),/CDPScreenshotNewSurface must be absent/);
   assert.throws(()=>normalizeVisualBrowserCommandLine(linuxCommandLine,{platform:'freebsd',arch:'x64'}),/unsupported runtime platform/);
 
   const calls=[];
@@ -1286,11 +1338,21 @@ test('file-set and runner-metadata contracts fail closed',()=>{
     ...metadataFixture(),browser:{...metadataFixture().browser,version:'different'}
   }),/browser\.version must be/);
   assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:{...metadataFixture().browser,screenshotBackend:'new-surface'}
+  }),/browser\.screenshotBackend must be/);
+  const {screenshotBackend:_missingFinalizedBackend,...finalizedBrowserWithoutBackend}=metadataFixture().browser;
+  assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:finalizedBrowserWithoutBackend
+  }),/metadata\.browser fields mismatch/);
+  assert.throws(()=>validateCaptureMetadata({
+    ...metadataFixture(),browser:{...metadataFixture().browser,backendAlias:'legacy'}
+  }),/metadata\.browser fields mismatch/);
+  assert.throws(()=>validateCaptureMetadata({
     ...metadataFixture(),playwright:{version:'999.0.0'}
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:5}),/schemaVersion must be 6/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:6}),/schemaVersion must be 7/);
   for(const [field,value,message] of [
     ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
     ['canonicalBackgroundsChecked',0,/canonical background paint evidence drifted/],
@@ -1308,6 +1370,9 @@ test('file-set and runner-metadata contracts fail closed',()=>{
     }),message);
   }
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
+  assert.throws(()=>validatePendingCaptureMetadata({
+    ...pendingMetadataFixture(),browser:{...pendingMetadataFixture().browser,screenshotBackend:'new-surface'}
+  }),/browser\.screenshotBackend must be/);
   assert.doesNotThrow(()=>validatePendingCaptureSource(raw,pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validateRawCaptureMetadata({...raw,files:[...raw.files.slice(0,-1),raw.files[0]]}),/files\[43\]\.file must be/);
   assert.throws(()=>validateRawCaptureMetadata({
@@ -1322,6 +1387,16 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateRawCaptureMetadata({
     ...raw,browser:{...raw.browser,version:'different'}
   }),/browser\.version must be/);
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:{...raw.browser,screenshotBackend:'new-surface'}
+  }),/browser\.screenshotBackend must be/);
+  const {screenshotBackend:_missingRawBackend,...rawBrowserWithoutBackend}=raw.browser;
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:rawBrowserWithoutBackend
+  }),/capture report\.browser fields mismatch/);
+  assert.throws(()=>validateRawCaptureMetadata({
+    ...raw,browser:{...raw.browser,backendAlias:'legacy'}
+  }),/capture report\.browser fields mismatch/);
   for(const [field,value] of [
     ['id','other-fixture'],
     ['username','other-user'],
@@ -1456,7 +1531,7 @@ test('manifest generator and validator round-trip exact bytes without inventing 
       }
     }
     const generated=await generateCandidateManifest({candidateDir:root,metadata,expectedCommit:metadata.renderedFromCommit});
-    assert.equal(generated.schemaVersion,2);
+    assert.equal(generated.schemaVersion,3);
     assert.equal(generated.fileCount,44);
     assert.equal(generated.renderedFromCommit,metadata.renderedFromCommit);
     assert.equal(generated.sourceRun.id,metadata.sourceRun.id);
@@ -1469,8 +1544,21 @@ test('manifest generator and validator round-trip exact bytes without inventing 
     }
     const validated=await validateCandidateManifest({candidateDir:root,expectedCommit:metadata.renderedFromCommit});
     assert.deepEqual(validated,generated);
-    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({...generated,schemaVersion:1},null,2)}\n`);
-    await assert.rejects(validateCandidateManifest({candidateDir:root}),/manifest\.schemaVersion must be 2/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:{...generated.browser,screenshotBackend:'new-surface'}
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/browser\.screenshotBackend must be/);
+    const {screenshotBackend:_missingManifestBackend,...manifestBrowserWithoutBackend}=generated.browser;
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:manifestBrowserWithoutBackend
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({
+      ...generated,browser:{...generated.browser,backendAlias:'legacy'}
+    },null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/metadata\.browser fields mismatch/);
+    await writeFile(path.join(root,'manifest.json'),`${JSON.stringify({...generated,schemaVersion:2},null,2)}\n`);
+    await assert.rejects(validateCandidateManifest({candidateDir:root}),/manifest\.schemaVersion must be 3/);
     await writeFile(path.join(root,'manifest.json'),`${JSON.stringify(generated,null,2)}\n`);
     await writeFile(path.join(root,'unexpected.txt'),'must fail closed');
     await assert.rejects(validateCandidateManifest({candidateDir:root}),/extra=\[unexpected\.txt\]/);

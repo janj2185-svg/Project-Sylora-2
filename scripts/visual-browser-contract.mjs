@@ -35,6 +35,7 @@ export const VISUAL_BROWSER_REVISION = headlessShellEntries[0].revision;
 export const VISUAL_BROWSER_EXECUTABLE = 'chrome-headless-shell';
 export const VISUAL_BROWSER_VERSION = headlessShellEntries[0].browserVersion;
 export const VISUAL_PLAYWRIGHT_VERSION = playwrightTestManifest.version;
+export const VISUAL_SCREENSHOT_BACKEND = 'legacy-force-redraw';
 
 export const FORBIDDEN_VISUAL_CONNECT_ENV = Object.freeze([
   'PW_TEST_CONNECT_WS_ENDPOINT',
@@ -63,6 +64,15 @@ export function assertNoVisualBrowserConnectionEnvironment(environment) {
     return value !== undefined && value !== null && String(value).length > 0;
   });
   if (active.length) fail(`remote browser environment overrides are forbidden: ${active.join(', ')}`);
+}
+
+export function assertVisualScreenshotEnvironment(environment) {
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment)) {
+    fail('an environment object is required');
+  }
+  if (environment.PLAYWRIGHT_LEGACY_SCREENSHOT !== '1') {
+    fail('PLAYWRIGHT_LEGACY_SCREENSHOT must be exactly 1');
+  }
 }
 
 export function assertVisualProjectConfiguration(use) {
@@ -109,11 +119,29 @@ export function normalizeVisualBrowserCommandLine(
   }
   if (!commandLine.includes('--enable-automation')) fail('the browser process is missing --enable-automation');
   if (!commandLine.includes('--remote-debugging-pipe')) fail('the browser process is missing --remote-debugging-pipe');
+  if (!commandLine.includes('--disable-field-trial-config')) {
+    fail('the browser process is missing --disable-field-trial-config');
+  }
+  if (commandLine.includes('--enable-features')) {
+    fail('--enable-features must use a non-empty equals-form feature list');
+  }
+  const enableFeatureArguments = commandLine.filter(argument => argument.startsWith('--enable-features='));
+  if (enableFeatureArguments.some(argument => argument === '--enable-features=')) {
+    fail('--enable-features must use a non-empty equals-form feature list');
+  }
+  const enabledFeatures = enableFeatureArguments
+    .flatMap(argument => argument.slice('--enable-features='.length).split(','))
+    .map(feature => feature.trim().split(/[<:.]/, 1)[0])
+    .filter(Boolean);
+  if (enabledFeatures.includes('CDPScreenshotNewSurface')) {
+    fail('CDPScreenshotNewSurface must be absent for the legacy ForceRedraw screenshot backend');
+  }
 
   return {
     distribution: VISUAL_BROWSER_DISTRIBUTION,
     revision: VISUAL_BROWSER_REVISION,
-    executable: VISUAL_BROWSER_EXECUTABLE
+    executable: VISUAL_BROWSER_EXECUTABLE,
+    screenshotBackend: VISUAL_SCREENSHOT_BACKEND
   };
 }
 

@@ -7,6 +7,7 @@ import { test } from '@playwright/test';
 import {
   VISUAL_PLAYWRIGHT_VERSION,
   assertNoVisualBrowserConnectionEnvironment,
+  assertVisualScreenshotEnvironment,
   assertVisualProjectConfiguration,
   inspectVisualBrowserRuntime
 } from '../scripts/visual-browser-contract.mjs';
@@ -30,6 +31,7 @@ import {
 } from './visual-helpers.mjs';
 
 assertNoVisualBrowserConnectionEnvironment(process.env);
+assertVisualScreenshotEnvironment(process.env);
 
 const playwrightVersion = VISUAL_PLAYWRIGHT_VERSION;
 const outputRoot = path.resolve(process.env.SYLORA_VISUAL_OUTPUT_DIR || 'tmp/visual-candidate');
@@ -206,11 +208,12 @@ test.afterAll(() => {
     distribution: 'unverified',
     revision: 'unverified',
     executable: 'unverified',
+    screenshotBackend: 'unverified',
     version: 'unverified'
   };
   const complete = records.length === expectedFiles;
   const metadata = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     status: complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
     complete,
     expectedFiles,
