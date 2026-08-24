@@ -400,7 +400,12 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.equal(contextOptions[0].hasTouch,false);
   assert.equal(initScripts.length,1);
   assert.equal(initScripts[0].arg.captureStyleId,'sylora-visual-capture-style');
-  assert.equal(initScripts[0].arg.captureStyleText,'input,textarea,[contenteditable]{caret-color:transparent!important}');
+  assert.equal(
+    initScripts[0].arg.captureStyleText,
+    '@layer syloraVisualCapture{*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}input,textarea,[contenteditable]{caret-color:transparent!important}}'
+  );
+  assert.match(initScripts[0].callback.toString(),/if \(!installCaptureStyle\(\)\)/);
+  assert.match(initScripts[0].callback.toString(),/new MutationObserver/);
   assert.match(initScripts[0].callback.toString(),/DOMContentLoaded/);
   assert.doesNotMatch(visualHelpersSource,/Object\.defineProperty\s*\(\s*(?:Navigator|navigator)/);
   assert.doesNotMatch(visualHelpersSource,/navigator\.maxTouchPoints\s*=/);
@@ -623,7 +628,8 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.doesNotMatch(visualBaselineSpec,/context\.tracing|trace-[^'"`]+\.zip/);
   assert.match(visualBaselineSpec,/status: complete \? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE'/);
   const stableCaptureSource=captureStableVisualScreenshot.toString();
-  const stableStyleIndex=stableCaptureSource.indexOf('await assertPersistentVisualCaptureStyle(page)');
+  const stableStyleIndexes=[...stableCaptureSource.matchAll(/await assertPersistentVisualCaptureStyle\(page\)/g)]
+    .map(match=>match.index);
   const cropProofIndex=stableCaptureSource.indexOf('rawScreenshotCropDigests');
   const hiddenFirstIndex=stableCaptureSource.indexOf("hidden-full-page-first");
   const hiddenSecondIndex=stableCaptureSource.indexOf("hidden-full-page-second");
@@ -631,8 +637,10 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
   const byteGateIndex=stableCaptureSource.indexOf('if (!finalFirst.equals(finalSecond))');
-  for(const index of [stableStyleIndex,cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
-  assert.ok(stableStyleIndex<hiddenFirstIndex);
+  assert.equal(stableStyleIndexes.length,2,'persistent capture style must be proven before and after exact A/B evidence');
+  for(const index of [cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
+  assert.ok(stableStyleIndexes[0]<hiddenFirstIndex);
+  assert.ok(fullSecondIndex<stableStyleIndexes[1]&&stableStyleIndexes[1]<byteGateIndex);
   assert.ok(hiddenFirstIndex<hiddenSecondIndex&&hiddenSecondIndex<cropProofIndex&&cropProofIndex<warmupIndex);
   assert.ok(warmupIndex<fullFirstIndex&&fullFirstIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   const restorationIndexes=[...stableCaptureSource.matchAll(/await assertCanonicalTargetsRestored\(page, targets\)/g)].map(match=>match.index);
@@ -652,6 +660,14 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   );
   assert.doesNotMatch(interFrameSource,/assertCanonicalTargetsRestored|assertVisualScrollOrigin|boundingBox|isVisible|getComputedStyle/);
   assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
+  assert.match(
+    visualHelpersSource,
+    /@layer syloraVisualCapture\{[\s\S]*\*,\*::before,\*::after\{animation:none!important;transition:none!important;scroll-behavior:auto!important\}/
+  );
+  assert.match(visualHelpersSource,/uncoveredAnimationStyleCount/);
+  assert.match(visualHelpersSource,/uncoveredTransitionStyleCount/);
+  assert.match(visualHelpersSource,/uncoveredScrollStyleCount/);
+  assert.match(visualHelpersSource,/uncoveredMotionStyleCount/);
   assert.match(visualHelpersSource,/animations:\s*'allow'/);
   assert.doesNotMatch(visualHelpersSource,/animations:\s*'disabled'/);
   assert.match(visualHelpersSource,/caret:\s*'initial'/);
@@ -671,7 +687,11 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   function capturePage(frameNames,{
     rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],
     restoredTargetBoxes=[],restoreFailureIndexes=[],restoredInvisibleIndexes=[],restoredSourceDriftIndexes=[],
-    restoredBackgroundDriftIndexes=[],captureStyleEvidence={count:1,textMatches:true,uncoveredCaretCount:0}
+    restoredBackgroundDriftIndexes=[],captureStyleEvidence={
+      count:1,textMatches:true,uncoveredCaretCount:0,
+      uncoveredAnimationStyleCount:0,uncoveredTransitionStyleCount:0,
+      uncoveredScrollStyleCount:0,uncoveredMotionStyleCount:0
+    },postCaptureStyleEvidence=null
   }={}){
     const frames=[...frameNames];
     const inlineStyles=targetRoles.map((_,index)=>initialStyles[index]??null);
@@ -680,6 +700,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     const screenshotOptions=[];
     const screenshotStyleSnapshots=[];
     const cropLists=[];
+    let captureStyleChecks=0;
     const boxCalls=targetRoles.map(()=>0);
     const targets=targetRoles.map((role,index)=>({
       async isVisible(){return !(restoredFlags[index]&&restoredInvisibleIndexes.includes(index))},
@@ -734,7 +755,12 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
         return Buffer.from(next);
       },
       async evaluate(_callback,arg){
-        if(arg?.styleId)return captureStyleEvidence;
+        if(arg?.styleId){
+          captureStyleChecks+=1;
+          return captureStyleChecks>1&&postCaptureStyleEvidence
+            ?postCaptureStyleEvidence
+            :captureStyleEvidence;
+        }
         if(!arg?.encodedPng)return scrollPosition;
         cropLists.push(arg.cropList.map(clip=>({...clip})));
         const name=Buffer.from(arg.encodedPng,'base64').toString();
@@ -751,7 +777,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
       getScreenshotCalls:()=>screenshotCalls,
       getScreenshotOptions:()=>screenshotOptions,
       getScreenshotStyleSnapshots:()=>screenshotStyleSnapshots,
-      getCropLists:()=>cropLists
+      getCropLists:()=>cropLists,
+      getCaptureStyleChecks:()=>captureStyleChecks
     };
   }
 
@@ -778,11 +805,13 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     fullPageScreenshotsCompared:2
   });
   assert.equal(stable.getScreenshotCalls(),5);
+  assert.equal(stable.getCaptureStyleChecks(),2);
   assert.equal(stableMismatches.length,0);
   assert.equal(cleanLabels.length,7);
   assert.ok(cleanLabels.includes('canonical-hidden-full-page-raster'));
   assert.ok(cleanLabels.includes('full-page-stability-second-raster'));
   assert.ok(stable.getScreenshotOptions().every(options=>options.fullPage===true));
+  assert.ok(stable.getScreenshotOptions().every(options=>options.animations==='allow'));
   assert.ok(stable.getScreenshotOptions().every(options=>options.caret==='initial'));
   assert.deepEqual(stable.getCropLists()[0],[{x:10,y:8,width:120,height:71}]);
   assert.equal(stable.getStyle(),null);
@@ -803,16 +832,65 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   ]);
   assert.deepEqual(batched.getStyles(),[null,null]);
   assert.ok(batched.getScreenshotOptions().every(options=>options.fullPage===true));
+  assert.ok(batched.getScreenshotOptions().every(options=>options.animations==='allow'));
   assert.ok(batched.getScreenshotOptions().every(options=>options.caret==='initial'));
 
-  const missingCaptureStyle=capturePage([],{
-    captureStyleEvidence:{count:0,textMatches:false,uncoveredCaretCount:1}
-  });
+  const missingCaptureStyle=capturePage(
+    [],
+    {
+      captureStyleEvidence:{
+        count:0,textMatches:false,uncoveredCaretCount:1,
+        uncoveredAnimationStyleCount:1,uncoveredTransitionStyleCount:1,
+        uncoveredScrollStyleCount:1,uncoveredMotionStyleCount:3
+      }
+    }
+  );
   await assert.rejects(
     captureStableVisualScreenshot(missingCaptureStyle.page,captureOptions()),
     /Persistent visual capture style drifted/
   );
   assert.equal(missingCaptureStyle.getScreenshotCalls(),0);
+
+  for (const uncoveredField of [
+    'uncoveredAnimationStyleCount',
+    'uncoveredTransitionStyleCount',
+    'uncoveredScrollStyleCount'
+  ]) {
+    const uncoveredMotionStyle=capturePage(
+      [],
+      {
+        captureStyleEvidence:{
+          count:1,textMatches:true,uncoveredCaretCount:0,
+          uncoveredAnimationStyleCount:0,uncoveredTransitionStyleCount:0,
+          uncoveredScrollStyleCount:0,uncoveredMotionStyleCount:1,
+          [uncoveredField]:1
+        }
+      }
+    );
+    await assert.rejects(
+      captureStableVisualScreenshot(uncoveredMotionStyle.page,captureOptions()),
+      /Persistent visual capture style drifted/
+    );
+    assert.equal(uncoveredMotionStyle.getScreenshotCalls(),0);
+  }
+
+  const postCaptureStyleDrift=capturePage(
+    ['hidden','hidden','warmup','final','final'],
+    {
+      rawDigests:{final:'visible'},
+      postCaptureStyleEvidence:{
+        count:1,textMatches:true,uncoveredCaretCount:0,
+        uncoveredAnimationStyleCount:1,uncoveredTransitionStyleCount:0,
+        uncoveredScrollStyleCount:0,uncoveredMotionStyleCount:1
+      }
+    }
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(postCaptureStyleDrift.page,captureOptions()),
+    /Persistent visual capture style drifted/
+  );
+  assert.equal(postCaptureStyleDrift.getScreenshotCalls(),5);
+  assert.equal(postCaptureStyleDrift.getCaptureStyleChecks(),2);
 
   const overlapping=capturePage([],{
     targetRoles:['header','wallet'],
@@ -889,11 +967,37 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     /Post-restore full-page paint is not byte-stable/
   );
   assert.equal(unstableFullPage.getScreenshotCalls(),5,'a final mismatch must fail without an extra capture or retry');
+  assert.equal(unstableFullPage.getCaptureStyleChecks(),2);
   assert.equal(mismatchEvidence.length,1);
   assert.equal(mismatchEvidence[0].first.toString(),'final-a');
   assert.equal(mismatchEvidence[0].second.toString(),'final-b');
   assert.equal(mismatchEvidence[0].firstSha256,createHash('sha256').update('final-a').digest('hex'));
   assert.equal(mismatchEvidence[0].secondSha256,createHash('sha256').update('final-b').digest('hex'));
+
+  const driftedUnstableFullPage=capturePage(
+    ['hidden','hidden','warmup','final-a','final-b'],
+    {
+      rawDigests:{'final-a':'visible','final-b':'visible'},
+      postCaptureStyleEvidence:{
+        count:1,textMatches:true,uncoveredCaretCount:0,
+        uncoveredAnimationStyleCount:0,uncoveredTransitionStyleCount:1,
+        uncoveredScrollStyleCount:0,uncoveredMotionStyleCount:1
+      }
+    }
+  );
+  const driftedMismatchEvidence=[];
+  await assert.rejects(
+    captureStableVisualScreenshot(driftedUnstableFullPage.page,captureOptions(
+      ()=>{},
+      evidence=>driftedMismatchEvidence.push(evidence)
+    )),
+    error=>/Persistent visual capture style drifted/.test(error.message)&&
+      /Post-restore full-page paint also mismatched/.test(error.message)&&
+      error.cause?.message.includes('Persistent visual capture style drifted')
+  );
+  assert.equal(driftedUnstableFullPage.getScreenshotCalls(),5);
+  assert.equal(driftedUnstableFullPage.getCaptureStyleChecks(),2);
+  assert.equal(driftedMismatchEvidence.length,1,'style drift must not suppress raw A/B mismatch evidence');
 
   const evidenceWriteFailure=capturePage(
     ['hidden','hidden','warmup','final-a','final-b'],
@@ -1012,7 +1116,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   );
 });
 
-test('visual quiescence requires zero transient ripples and zero active Web Animations',async()=>{
+test('visual quiescence requires zero transient ripples and an empty Web Animations graph',async()=>{
   const predicates=[];
   const evaluatePredicate=(predicate,{ripple=false,animations=[]}={})=>runInNewContext(
     `(${predicate.toString()})()`,
@@ -1024,22 +1128,21 @@ test('visual quiescence requires zero transient ripples and zero active Web Anim
       assert.deepEqual(options,{timeout:15_000});
       assert.equal(evaluatePredicate(predicate),true);
     },
-    async evaluate(){return {pressRippleCount:0,activeAnimationCount:0}}
+    async evaluate(){return {pressRippleCount:0,webAnimationCount:0}}
   };
   await waitForVisualQuiescence(settledPage);
   assert.equal(predicates.length,1);
   const predicateSource=predicates[0].toString();
   assert.match(predicateSource,/sylora-press-ripple/);
-  assert.match(predicateSource,/animation\.pending/);
-  assert.match(predicateSource,/playState === 'running'/);
+  assert.match(predicateSource,/document\.getAnimations\(\)\.length === 0/);
   assert.equal(evaluatePredicate(predicates[0],{ripple:true}),false);
   assert.equal(evaluatePredicate(predicates[0],{animations:[{pending:true,playState:'idle'}]}),false);
   assert.equal(evaluatePredicate(predicates[0],{animations:[{pending:false,playState:'running'}]}),false);
-  assert.equal(evaluatePredicate(predicates[0],{animations:[{pending:false,playState:'paused'}]}),true);
+  assert.equal(evaluatePredicate(predicates[0],{animations:[{pending:false,playState:'paused'}]}),false);
 
   const unsettledPage={
     async waitForFunction(){},
-    async evaluate(){return {pressRippleCount:1,activeAnimationCount:1}}
+    async evaluate(){return {pressRippleCount:1,webAnimationCount:1}}
   };
   await assert.rejects(
     waitForVisualQuiescence(unsettledPage),
@@ -1048,13 +1151,13 @@ test('visual quiescence requires zero transient ripples and zero active Web Anim
 
   const timedOutPage={
     async waitForFunction(){throw new Error('Timeout 15000ms exceeded')},
-    async evaluate(){return {pressRippleCount:1,activeAnimationCount:2}}
+    async evaluate(){return {pressRippleCount:1,webAnimationCount:2}}
   };
   await assert.rejects(
     waitForVisualQuiescence(timedOutPage),
     error=>/within 15000ms/.test(error.message)&&
       /"pressRippleCount":1/.test(error.message)&&
-      /"activeAnimationCount":2/.test(error.message)&&
+      /"webAnimationCount":2/.test(error.message)&&
       error.cause?.message==='Timeout 15000ms exceeded'
   );
 });

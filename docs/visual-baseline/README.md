@@ -51,8 +51,8 @@ The pinned runner must:
 
 - clear stale repeat artifacts before capture, then start both passes from independent copies of the same fixed fixture;
 - freeze browser time and seeded randomness;
-- install one persistent capture-only caret rule in every navigated document, verify that it covers every editable control, and capture with Playwright `caret: 'initial'`; this keeps the caret invisible without Playwright mutating and restoring rounded controls around every frame;
-- require zero transient press ripples and zero running or pending Web Animations before the pre-open paint fence and again after each surface opens, before its canonical evidence pipeline begins; then capture with Playwright `animations: 'allow'`, so the settled reduced-motion state remains unchanged instead of Playwright finishing, cancelling or resuming animations around each screenshot;
+- install one persistent capture-only stylesheet in every navigated document that disables CSS animations, transitions and smooth scrolling and hides editable carets; verify its exact text plus computed coverage, then capture with Playwright `animations: 'allow'` and `caret: 'initial'` so Playwright cannot mutate and restore compositor state around individual frames; this is static reduced-motion evidence for deterministic capture and does not change or certify production motion;
+- require zero transient press ripples and an empty Web Animations graph before the pre-open paint fence and again after each surface opens, before its canonical evidence pipeline begins;
 - wait for the capability state, `document.fonts.ready`, DOM images and CSS background images; decode failures are fatal and every canonical brand raster must retain its locked 1100 × 650 intrinsic dimensions;
 - run a fixed pre-open asset/paint fence before capture-only overlays are opened, so a backdrop filter cannot sample an undecoded canonical CSS background;
 - launch headless with no browser channel or custom executable, then use browser-level CDP to prove the actual pinned `chromium-headless-shell` distribution, revision and executable before capturing;

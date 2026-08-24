@@ -33,13 +33,19 @@ const CANONICAL_BRAND_BACKGROUND_SELECTOR = '.sylora-presence-image';
 const CANONICAL_IMAGE_MIN_CONTRAST = 0.02;
 const CANONICAL_BACKGROUND_MIN_CONTRAST = 0.003;
 const VISUAL_CAPTURE_STYLE_ID = 'sylora-visual-capture-style';
-const VISUAL_CAPTURE_STYLE_TEXT = 'input,textarea,[contenteditable]{caret-color:transparent!important}';
+const VISUAL_CAPTURE_STYLE_TEXT = [
+  '@layer syloraVisualCapture{',
+  '*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}',
+  'input,textarea,[contenteditable]{caret-color:transparent!important}',
+  '}'
+].join('');
 const VISUAL_QUIESCENCE_TIMEOUT_MS = 15_000;
 const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
   type: 'png',
-  // Capture readiness proves that no Web Animation or transient press effect
-  // remains active. `allow` therefore preserves that settled state instead of
-  // making Playwright finish/cancel/restore animations around every frame.
+  // The persistent capture-only stylesheet disables CSS motion once per
+  // document and readiness proves that the Web Animations graph is empty.
+  // `allow` keeps Playwright from finishing/cancelling/restoring animations
+  // around every individual screenshot and rebuilding compositor state.
   animations: 'allow',
   // A persistent capture-only rule owns the caret state. `hide` would make
   // Playwright mutate and restore every editable element around every frame,
@@ -107,16 +113,24 @@ export async function createVisualContext(browser, viewport, baseURL) {
       // The initial about:blank document has an opaque origin.
     }
     const installCaptureStyle = () => {
-      if (document.getElementById(captureStyleId)) return;
+      if (document.getElementById(captureStyleId)) return true;
+      if (!document.head) return false;
       const style = document.createElement('style');
       style.id = captureStyleId;
       style.textContent = captureStyleText;
-      (document.head || document.documentElement).append(style);
+      document.head.append(style);
+      return true;
     };
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', installCaptureStyle, { once: true });
-    } else {
-      installCaptureStyle();
+    if (!installCaptureStyle()) {
+      const observer = new MutationObserver(() => {
+        if (!installCaptureStyle()) return;
+        observer.disconnect();
+      });
+      observer.observe(document, { childList: true, subtree: true });
+      document.addEventListener('DOMContentLoaded', () => {
+        observer.disconnect();
+        installCaptureStyle();
+      }, { once: true });
     }
   }, {
     seed: VISUAL_RANDOM_SEED,
@@ -471,16 +485,12 @@ async function waitForStableVisualAssets(page) {
 export async function waitForVisualQuiescence(page) {
   try {
     await page.waitForFunction(() => {
-      const activeAnimations = document.getAnimations()
-        .filter(animation => animation.pending || animation.playState === 'running');
-      return !document.querySelector('.sylora-press-ripple') && activeAnimations.length === 0;
+      return !document.querySelector('.sylora-press-ripple') && document.getAnimations().length === 0;
     }, undefined, { timeout: VISUAL_QUIESCENCE_TIMEOUT_MS });
   } catch (error) {
     const evidence = await page.evaluate(() => ({
       pressRippleCount: document.querySelectorAll('.sylora-press-ripple').length,
-      activeAnimationCount: document.getAnimations()
-        .filter(animation => animation.pending || animation.playState === 'running')
-        .length
+      webAnimationCount: document.getAnimations().length
     })).catch(() => null);
     throw new Error(
       `Visual capture did not reach animation quiescence within ${VISUAL_QUIESCENCE_TIMEOUT_MS}ms: ${JSON.stringify(evidence)}`,
@@ -489,11 +499,9 @@ export async function waitForVisualQuiescence(page) {
   }
   const evidence = await page.evaluate(() => ({
     pressRippleCount: document.querySelectorAll('.sylora-press-ripple').length,
-    activeAnimationCount: document.getAnimations()
-      .filter(animation => animation.pending || animation.playState === 'running')
-      .length
+    webAnimationCount: document.getAnimations().length
   }));
-  if (evidence.pressRippleCount !== 0 || evidence.activeAnimationCount !== 0) {
+  if (evidence.pressRippleCount !== 0 || evidence.webAnimationCount !== 0) {
     throw new Error(`Visual capture did not reach animation quiescence: ${JSON.stringify(evidence)}`);
   }
 }
@@ -567,13 +575,43 @@ async function assertPersistentVisualCaptureStyle(page) {
     const uncoveredCaretCount = [...document.querySelectorAll('input,textarea,[contenteditable]')]
       .filter(element => getComputedStyle(element).caretColor !== 'rgba(0, 0, 0, 0)')
       .length;
+    let uncoveredAnimationStyleCount = 0;
+    let uncoveredTransitionStyleCount = 0;
+    let uncoveredScrollStyleCount = 0;
+    const elements = [document.documentElement, ...document.querySelectorAll('body,body *')]
+      .filter(Boolean);
+    for (const element of elements) {
+      for (const pseudo of [null, '::before', '::after']) {
+        const computed = getComputedStyle(element, pseudo);
+        const hasAnimation = computed.animationName.split(',').some(name => name.trim() !== 'none') ||
+          computed.animationDuration.split(',').some(duration => Number.parseFloat(duration) !== 0) ||
+          computed.animationDelay.split(',').some(delay => Number.parseFloat(delay) !== 0);
+        const hasTransition = computed.transitionDuration.split(',')
+          .some(duration => Number.parseFloat(duration) !== 0) ||
+          computed.transitionDelay.split(',').some(delay => Number.parseFloat(delay) !== 0);
+        if (hasAnimation) uncoveredAnimationStyleCount += 1;
+        if (hasTransition) uncoveredTransitionStyleCount += 1;
+        if (computed.scrollBehavior !== 'auto') uncoveredScrollStyleCount += 1;
+      }
+    }
+    const uncoveredMotionStyleCount = uncoveredAnimationStyleCount +
+      uncoveredTransitionStyleCount + uncoveredScrollStyleCount;
     return {
       count: styles.length,
       textMatches: styles[0]?.textContent === styleText,
-      uncoveredCaretCount
+      uncoveredCaretCount,
+      uncoveredAnimationStyleCount,
+      uncoveredTransitionStyleCount,
+      uncoveredScrollStyleCount,
+      uncoveredMotionStyleCount
     };
   }, { styleId: VISUAL_CAPTURE_STYLE_ID, styleText: VISUAL_CAPTURE_STYLE_TEXT });
-  if (evidence.count !== 1 || evidence.textMatches !== true || evidence.uncoveredCaretCount !== 0) {
+  if (
+    evidence.count !== 1 || evidence.textMatches !== true ||
+    evidence.uncoveredCaretCount !== 0 || evidence.uncoveredAnimationStyleCount !== 0 ||
+    evidence.uncoveredTransitionStyleCount !== 0 || evidence.uncoveredScrollStyleCount !== 0 ||
+    evidence.uncoveredMotionStyleCount !== 0
+  ) {
     throw new Error(`Persistent visual capture style drifted: ${JSON.stringify(evidence)}`);
   }
 }
@@ -875,6 +913,12 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
     'full-page-stability-second',
     assertClean
   );
+  let postCaptureStyleFailure = null;
+  try {
+    await assertPersistentVisualCaptureStyle(page);
+  } catch (error) {
+    postCaptureStyleFailure = error;
+  }
   if (!finalFirst.equals(finalSecond)) {
     const firstSha256 = screenshotDigest(finalFirst);
     const secondSha256 = screenshotDigest(finalSecond);
@@ -884,12 +928,21 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
     } catch (error) {
       evidenceFailure = error;
     }
+    if (postCaptureStyleFailure) {
+      throw new Error(
+        `${postCaptureStyleFailure.message}\n` +
+        `Post-restore full-page paint also mismatched: first=${firstSha256} second=${secondSha256}` +
+        (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
+        { cause: postCaptureStyleFailure }
+      );
+    }
     throw new Error(
       `Post-restore full-page paint is not byte-stable: first=${firstSha256} second=${secondSha256}` +
       (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
       evidenceFailure ? { cause: evidenceFailure } : undefined
     );
   }
+  if (postCaptureStyleFailure) throw postCaptureStyleFailure;
   const finalClips = await assertCanonicalTargetsRestored(page, targets);
   const finalCropDigests = await rawScreenshotCropDigests(page, finalSecond, finalClips);
   await assertClean('full-page-stability-second-raster');
