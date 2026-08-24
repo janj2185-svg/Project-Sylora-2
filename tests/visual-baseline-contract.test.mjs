@@ -607,6 +607,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.ok(hiddenSecondIndex<fullSecondIndex&&fullSecondIndex<byteGateIndex);
   assert.doesNotMatch(stableCaptureSource,/maxAttempts|while\s*\(/,'paint evidence must not retry until a preferred frame appears');
   assert.doesNotMatch(stableCaptureSource,/VISUAL_SCREENSHOT_OPTIONS,\s*clip/,'tight clips are not exact compositor oracles for full-page evidence');
+  assert.doesNotMatch(stableCaptureSource,/hiddenFirst\.equals\(hiddenSecond\)/,'unrelated full-page pixels must not invalidate canonical crop evidence');
   assert.doesNotMatch(visualHelpersSource,/rawClipScreenshotEvidence/);
   assert.match(stableCaptureSource,/canonical-hidden-full-page-first/);
   assert.match(stableCaptureSource,/canonical-hidden-full-page-second/);
@@ -665,9 +666,10 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
         if(!arg?.encodedPng)return scrollPosition;
         cropLists.push(arg.cropList.map(clip=>({...clip})));
         const name=Buffer.from(arg.encodedPng,'base64').toString();
-        const digest=rawDigests[name]||name;
-        const contrast=rawContrasts[name]??0.2;
-        return arg.cropList.map(()=>({sha256:digest,contrast}));
+        return arg.cropList.map((_clip,index)=>({
+          sha256:rawDigests[`${name}:${index}`]??rawDigests[name]??name,
+          contrast:rawContrasts[`${name}:${index}`]??rawContrasts[name]??0.2
+        }));
       }
     };
     return {
@@ -752,13 +754,37 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     /content contrast is below the locked paint threshold/
   );
 
-  const unstableHidden=capturePage(
+  const unrelatedHiddenDifference=capturePage(
+    ['full','hidden-frame-a','hidden-frame-b','full'],
+    {rawDigests:{full:'visible','hidden-frame-a':'hidden','hidden-frame-b':'hidden'}}
+  );
+  const unrelatedHiddenCapture=await captureStableVisualScreenshot(unrelatedHiddenDifference.page,{assertClean:()=>{}});
+  assert.equal(unrelatedHiddenCapture.png.toString(),'full');
+  assert.equal(unrelatedHiddenDifference.getScreenshotCalls(),4);
+
+  const unstableHiddenCrop=capturePage(
     ['full','hidden-a','hidden-b'],
     {rawDigests:{full:'visible'}}
   );
   await assert.rejects(
-    captureStableVisualScreenshot(unstableHidden.page,{assertClean:()=>{}}),
-    /hidden full-page raster is not byte-stable/
+    captureStableVisualScreenshot(unstableHiddenCrop.page,{assertClean:()=>{}}),
+    /hidden crop is not deterministic/
+  );
+
+  const unstableSecondHiddenCrop=capturePage(
+    ['full','hidden-a','hidden-b'],
+    {
+      targetRoles:['header','wallet'],
+      rawDigests:{
+        'full:0':'visible-header','full:1':'visible-wallet',
+        'hidden-a:0':'hidden-header','hidden-b:0':'hidden-header',
+        'hidden-a:1':'hidden-wallet-a','hidden-b:1':'hidden-wallet-b'
+      }
+    }
+  );
+  await assert.rejects(
+    captureStableVisualScreenshot(unstableSecondHiddenCrop.page,{assertClean:()=>{}}),
+    /Canonical wallet hidden crop is not deterministic/
   );
 
   const unstableFullPage=capturePage(

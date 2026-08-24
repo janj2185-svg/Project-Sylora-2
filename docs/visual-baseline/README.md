@@ -60,7 +60,7 @@ The pinned runner must:
 - dispatch a direct CDP touch sequence and record trusted `touchstart` plus trusted `PointerEvent.pointerType = touch` evidence for every mobile screenshot; this proves the configured Chromium emulation and input path, not physical/native hardware;
 - produce exactly 44 unique canonical paths in each pass;
 - take a fixed full-page frame A and require locked content contrast so an opaque-but-blank canonical raster cannot pass;
-- require the visible canonical target rectangles to be non-overlapping, preserve every exact inline style, hide all targets without changing layout, and take two byte-identical hidden full-page frames;
+- require the visible canonical target rectangles to be non-overlapping, preserve every exact inline style, hide all targets without changing layout, and take two hidden full-page frames whose canonical target crops are byte-identical;
 - derive every target crop from both hidden frames, require the paired crops to match and require each to differ from frame A, then restore every exact inline style;
 - never use a tight-clip screenshot as the exact oracle for a full-page crop: the locked shell uses `backdrop-filter`, and Chromium legitimately samples a different compositor boundary for tight clips;
 - take one fixed full-page frame B with no retry or cherry-picking, require A and B to be byte-identical, and persist only B;
