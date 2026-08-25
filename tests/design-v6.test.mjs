@@ -42,6 +42,8 @@ test('route visual identities remain distinct without another global override la
   assert.match(system,/body\[data-view="live"\]\{--sy-route-accent:/);
   assert.match(system,/body\[data-view="ai"\]\{--sy-route-accent:/);
   assert.match(ai,/ai-presence-container/);
+  assert.match(ai,/\.sy-ai-context-status\{pointer-events:none\}/);
+  assert.match(ai,/@media\(max-width:620px\)\{\s*body\[data-view="ai"\] \.ai-visual-toggle\{top:14px/);
   for(const route of ['profile','messages','more'])assert.match(account,new RegExp(`body\\[data-view="${route}"\\]`));
 });
 

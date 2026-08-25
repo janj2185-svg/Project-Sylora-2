@@ -58,6 +58,7 @@ body[data-view="ai"] .ai-send{width:46px;height:46px;padding:0!important}
 body[data-view="ai"] #syloraDegraded.sy-ai-context-status{display:flex!important;position:static!important;width:auto!important;max-width:none!important;margin:0 0 10px!important;padding:9px 12px!important;align-items:center;gap:8px;border-radius:var(--sy-r-pill)!important;background:rgba(248,241,226,.82)!important;border:1px solid rgba(168,139,94,.16)!important;color:#6d5633!important;font-size:11px!important;box-shadow:none!important;backdrop-filter:blur(12px)}
 body[data-view="ai"] #syloraDegraded.sy-ai-context-status[hidden]{display:none!important}
 body[data-view="ai"] #syloraDegraded.sy-ai-context-status:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--sy-warning);flex:0 0 7px}
+body[data-view="ai"] .sy-ai-context-status{pointer-events:none}
 
 @keyframes syVoicePresence{from{transform:scaleY(.7);opacity:.48}to{transform:scaleY(2.1);opacity:.95}}
 
@@ -69,7 +70,7 @@ body[data-view="ai"] #syloraDegraded.sy-ai-context-status:before{content:"";widt
 }
 
 @media(max-width:620px){
-  body[data-view="ai"] .ai-visual-toggle{top:58px;right:16px;min-height:34px}
+  body[data-view="ai"] .ai-visual-toggle{top:14px;right:16px;min-height:34px}
   body[data-view="ai"] .sylora-ai-hero{min-height:330px;padding:78px 16px 96px!important}
   body[data-view="ai"] .sylora-ai-hero h1{font-size:34px}
   body[data-view="ai"] .sylora-ai-hero>p{font-size:12px;line-height:1.55}

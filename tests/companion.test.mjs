@@ -31,6 +31,14 @@ test('companion URL is restricted to loopback HTTP',()=>{
   assert.throws(()=>normalizeCompanionUrl('http://example.com:43179'),/COMPANION_LOCALHOST_ONLY/);
 });
 
+test('companion client preserves the browser fetch receiver',async()=>{
+  let receiver=null;
+  const fetchImpl=function(){receiver=this;return Promise.resolve(new Response(JSON.stringify({service:'sylora-companion'}),{status:200,headers:{'content-type':'application/json'}}))};
+  const client=new SyloraCompanionClient({url:'http://127.0.0.1:43179',fetchImpl});
+  assert.equal((await client.health()).service,'sylora-companion');
+  assert.equal(receiver,globalThis);
+});
+
 test('companion requires pairing, origin allowlist and bounded OBS actions',async()=>{
   const token='12345678901234567890123456789012',companion=createCompanionServer({token,allowedOrigins:['https://sylora.example'],ObsClient:FakeObsClient,TikTokBridge:FakeTikTokBridge,allowSimulation:true});
   const address=await companion.listen(0),base=`http://127.0.0.1:${address.port}`;

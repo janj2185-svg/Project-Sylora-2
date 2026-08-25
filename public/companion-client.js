@@ -18,7 +18,7 @@ export class SyloraCompanionClient {
     const headers={accept:'application/json'};
     if(this.token)headers.authorization=`Bearer ${this.token}`;
     if(body!==undefined)headers['content-type']='application/json';
-    const response=await this.fetch(`${this.url}${path}`,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+    const response=await this.fetch.call(globalThis,`${this.url}${path}`,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||`COMPANION_HTTP_${response.status}`);
     return data;
