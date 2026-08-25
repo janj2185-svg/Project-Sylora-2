@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { VISUAL_COMPOSITOR_FLAG } from './scripts/visual-browser-contract.mjs';
+import { VISUAL_DETERMINISM_FLAGS } from './scripts/visual-browser-contract.mjs';
 
 const port = Number(process.env.SYLORA_VISUAL_PORT || 8793);
 const baseURL = `http://127.0.0.1:${port}`;
@@ -26,7 +26,7 @@ export default defineConfig({
     headless: true,
     // Browser.getBrowserCommandLine is intentionally enabled so the capture
     // can prove the actual Playwright executable without persisting its path.
-    launchOptions: { args: ['--enable-automation', VISUAL_COMPOSITOR_FLAG] },
+    launchOptions: { args: ['--enable-automation', ...VISUAL_DETERMINISM_FLAGS] },
     colorScheme: 'light',
     locale: 'uk-UA',
     timezoneId: 'UTC',

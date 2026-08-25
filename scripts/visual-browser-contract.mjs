@@ -37,7 +37,16 @@ export const VISUAL_BROWSER_VERSION = headlessShellEntries[0].browserVersion;
 export const VISUAL_PLAYWRIGHT_VERSION = playwrightTestManifest.version;
 export const VISUAL_SCREENSHOT_BACKEND = 'legacy-force-redraw';
 export const VISUAL_COMPOSITOR_FLAG = '--run-all-compositor-stages-before-draw';
-export const VISUAL_COMPOSITOR_SCHEDULING = 'all-stages-before-draw';
+export const VISUAL_DETERMINISM_FLAGS = Object.freeze([
+  VISUAL_COMPOSITOR_FLAG,
+  '--disable-new-content-rendering-timeout',
+  '--disable-threaded-animation',
+  '--disable-threaded-scrolling',
+  '--disable-checker-imaging',
+  '--disable-image-animation-resync',
+  '--num-raster-threads=1'
+]);
+export const VISUAL_COMPOSITOR_SCHEDULING = 'chromium-pixel-dump-single-raster';
 
 export const FORBIDDEN_VISUAL_CONNECT_ENV = Object.freeze([
   'PW_TEST_CONNECT_WS_ENDPOINT',
@@ -88,7 +97,7 @@ export function assertVisualProjectConfiguration(use) {
   }
   const launchOptionKeys = Object.keys(use.launchOptions).sort();
   if (launchOptionKeys.length !== 1 || launchOptionKeys[0] !== 'args') fail('launchOptions may contain only args');
-  const expectedArguments = ['--enable-automation', VISUAL_COMPOSITOR_FLAG];
+  const expectedArguments = ['--enable-automation', ...VISUAL_DETERMINISM_FLAGS];
   if (
     !Array.isArray(use.launchOptions.args) ||
     use.launchOptions.args.length !== expectedArguments.length ||
@@ -125,11 +134,14 @@ export function normalizeVisualBrowserCommandLine(
   if (!commandLine.includes('--disable-field-trial-config')) {
     fail('the browser process is missing --disable-field-trial-config');
   }
-  const compositorArguments = commandLine.filter(argument =>
-    argument === VISUAL_COMPOSITOR_FLAG || argument.startsWith(`${VISUAL_COMPOSITOR_FLAG}=`)
-  );
-  if (compositorArguments.length !== 1 || compositorArguments[0] !== VISUAL_COMPOSITOR_FLAG) {
-    fail(`the browser process must contain exactly one ${VISUAL_COMPOSITOR_FLAG}`);
+  for (const requiredFlag of VISUAL_DETERMINISM_FLAGS) {
+    const flagName = requiredFlag.split('=', 1)[0];
+    const matchingArguments = commandLine.filter(argument =>
+      argument === requiredFlag || argument === flagName || argument.startsWith(`${flagName}=`)
+    );
+    if (matchingArguments.length !== 1 || matchingArguments[0] !== requiredFlag) {
+      fail(`the browser process must contain exactly one ${requiredFlag}`);
+    }
   }
   if (commandLine.includes('--enable-features')) {
     fail('--enable-features must use a non-empty equals-form feature list');

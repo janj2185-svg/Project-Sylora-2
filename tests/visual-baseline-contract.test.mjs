@@ -29,6 +29,7 @@ import {
   VISUAL_BROWSER_VERSION,
   VISUAL_COMPOSITOR_FLAG,
   VISUAL_COMPOSITOR_SCHEDULING,
+  VISUAL_DETERMINISM_FLAGS,
   VISUAL_PLAYWRIGHT_VERSION,
   VISUAL_SCREENSHOT_BACKEND,
   assertNoVisualBrowserConnectionEnvironment,
@@ -651,7 +652,7 @@ test('ordinary browser QA and deterministic visual QA have disjoint discovery',(
   assert.equal(visualPlaywrightConfigObject.fullyParallel,false);
   assert.equal(Object.hasOwn(visualPlaywrightConfigObject.use,'channel'),false);
   assert.deepEqual(visualPlaywrightConfigObject.use.launchOptions,{
-    args:['--enable-automation',VISUAL_COMPOSITOR_FLAG]
+    args:['--enable-automation',...VISUAL_DETERMINISM_FLAGS]
   });
   assert.equal(visualPlaywrightConfigObject.projects.length,1);
   assert.equal(visualPlaywrightConfigObject.projects[0].name,'visual-chromium-headless-shell');
@@ -681,7 +682,16 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.equal(VISUAL_PLAYWRIGHT_VERSION,'1.62.1');
   assert.equal(VISUAL_SCREENSHOT_BACKEND,'legacy-force-redraw');
   assert.equal(VISUAL_COMPOSITOR_FLAG,'--run-all-compositor-stages-before-draw');
-  assert.equal(VISUAL_COMPOSITOR_SCHEDULING,'all-stages-before-draw');
+  assert.deepEqual(VISUAL_DETERMINISM_FLAGS,[
+    '--run-all-compositor-stages-before-draw',
+    '--disable-new-content-rendering-timeout',
+    '--disable-threaded-animation',
+    '--disable-threaded-scrolling',
+    '--disable-checker-imaging',
+    '--disable-image-animation-resync',
+    '--num-raster-threads=1'
+  ]);
+  assert.equal(VISUAL_COMPOSITOR_SCHEDULING,'chromium-pixel-dump-single-raster');
   assert.match(runVisualQaScript,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(runVisualQaScript,/PLAYWRIGHT_LEGACY_SCREENSHOT:\s*'1'/);
   assert.match(runVisualQaScript,/assertVisualScreenshotEnvironment\(visualEnvironment\)/);
@@ -719,7 +729,7 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   }
 
   const requiredArguments=[
-    '--headless','--enable-automation','--remote-debugging-pipe','--disable-field-trial-config',VISUAL_COMPOSITOR_FLAG
+    '--headless','--enable-automation','--remote-debugging-pipe','--disable-field-trial-config',...VISUAL_DETERMINISM_FLAGS
   ];
   const linuxCommandLine=[
     `/home/runner/.cache/ms-playwright/chromium_headless_shell-${VISUAL_BROWSER_REVISION}/chrome-headless-shell-linux64/chrome-headless-shell`,
@@ -841,7 +851,7 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   const validUse={
     browserName:'chromium',
     headless:true,
-    launchOptions:{args:['--enable-automation',VISUAL_COMPOSITOR_FLAG]}
+    launchOptions:{args:['--enable-automation',...VISUAL_DETERMINISM_FLAGS]}
   };
   assert.doesNotThrow(()=>assertVisualProjectConfiguration(validUse));
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,channel:'chromium'}),/channel must be omitted/);
@@ -851,10 +861,10 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{...validUse.launchOptions,ignoreDefaultArgs:[]}}),/may contain only args/);
   for(const args of [
     ['--enable-automation'],
-    ['--enable-automation',VISUAL_COMPOSITOR_FLAG,VISUAL_COMPOSITOR_FLAG],
+    ['--enable-automation',...VISUAL_DETERMINISM_FLAGS,VISUAL_COMPOSITOR_FLAG],
     ['--enable-automation',`${VISUAL_COMPOSITOR_FLAG}=true`],
     [VISUAL_COMPOSITOR_FLAG,'--enable-automation'],
-    ['--enable-automation',VISUAL_COMPOSITOR_FLAG,'--headless=new']
+    ['--enable-automation',...VISUAL_DETERMINISM_FLAGS,'--headless=new']
   ]){
     assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args}}),/must be exactly/);
   }
