@@ -26,6 +26,7 @@ test('assembled avatar mounts whole-character images and final CSS loads last', 
 
   const css = fs.readFileSync('public/design-avatar-assembled.css', 'utf8');
   assert.match(css, /object-fit:cover!important/);
+  assert.match(css, /sylora-visual-hidden \.sylora-avatar-motion,[\s\S]*sylora-visual-hidden \.ai-human-presence\{[\s\S]*display:none!important/);
   assert.match(css, /max-width:980px/);
   assert.match(css, /realtime-live/);
 });

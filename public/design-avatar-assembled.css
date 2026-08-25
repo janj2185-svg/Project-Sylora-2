@@ -42,6 +42,11 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
   pointer-events:none!important;
 }
 
+body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-visual-hidden .sylora-avatar-motion,
+body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-visual-hidden .ai-human-presence{
+  display:none!important;
+}
+
 /* Whole-character <img> plates only. */
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion>img{
   position:absolute!important;
