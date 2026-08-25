@@ -108,7 +108,6 @@ body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.
 }
 
 @media(max-width:390px){
-  body[data-view="feed"] .living-horizon.home-compact{border-radius:24px}
   body[data-view="feed"] .horizon-copy h1{font-size:31px;letter-spacing:-.045em}
   body[data-view="feed"] .post{padding:16px;border-radius:20px!important}
   body[data-view="feed"] .post .actions button{min-height:40px}

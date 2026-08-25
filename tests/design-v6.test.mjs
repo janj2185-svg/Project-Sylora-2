@@ -44,6 +44,7 @@ test('route visual identities remain distinct without another global override la
   assert.match(ai,/ai-presence-container/);
   assert.match(ai,/\.sy-ai-context-status\{pointer-events:none\}/);
   assert.match(ai,/@media\(max-width:620px\)\{\s*body\[data-view="ai"\] \.ai-visual-toggle\{top:14px/);
+  assert.doesNotMatch(home,/@media\(max-width:390px\)\{\s*body\[data-view="feed"\] \.living-horizon\.home-compact\{border-radius:/);
   for(const route of ['profile','messages','more'])assert.match(account,new RegExp(`body\\[data-view="${route}"\\]`));
 });
 
