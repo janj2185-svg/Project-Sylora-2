@@ -61,6 +61,7 @@ test('canonical and route layers retain responsive and reduced-motion contracts'
     assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   }
   assert.match(system,/safe-area-inset-bottom/);
+  assert.match(system,/@media\(max-width:900px\)\{[\s\S]*?body\{background-attachment:scroll\}/);
   assert.match(system,/@media\(min-width:901px\) and \(max-width:980px\)\{\s*:root\{--sy-left-w:72px\}/);
   assert.match(system,/\.side-nav \.nav\[data-view="profile"\]::before\{content:"○"\}/);
   assert.match(system,/\.side-nav \.nav\[data-create-hub\]::before\{content:"\+"\}/);

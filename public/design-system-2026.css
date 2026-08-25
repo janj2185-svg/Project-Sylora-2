@@ -305,6 +305,7 @@ input,textarea,select{border-radius:var(--sy-r-md)!important;border:1px solid rg
 
 @media(max-width:900px){
   :root{--sy-header-h:66px}
+  body{background-attachment:scroll}
   body>header{padding:0 12px!important;gap:8px!important}
   .brand{width:98px!important;min-width:98px!important;flex-basis:98px!important}
   .brand-lockup{width:98px}
