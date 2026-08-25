@@ -303,7 +303,7 @@ Bottom dock + contextual sheets. Core dock:
 
 - Home;
 - LIVE;
-- Sylora;
+- Create;
 - Inbox;
 - Profile.
 
@@ -317,16 +317,15 @@ Home is the proof of the complete system. It is not a Facebook feed with a new s
 
 ### Top scene: Living Horizon
 
-The scene gives a calm summary of the user's world:
+The scene gives a calm summary of the user's world. Sylora is deliberately absent from Home and remains available only in contextual AI/LIVE workspaces:
 
-- contextual Sylora presence;
 - upcoming LIVE;
 - important conversations;
 - active project or idea;
 - useful quick actions;
 - ecosystem activity.
 
-Example contextual copy may be generated only from real available data. Sylora remains helpful but not permanently intrusive.
+Example contextual copy may be generated only from real available data. Home itself does not render Sylora; assistance opens only from a task-specific AI or LIVE surface.
 
 ### Quick actions
 

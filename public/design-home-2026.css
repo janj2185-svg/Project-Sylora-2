@@ -25,26 +25,10 @@ body[data-view="feed"] .living-horizon.home-compact:after{
   background:linear-gradient(95deg,transparent,rgba(224,237,234,.70),rgba(226,211,183,.24),rgba(206,224,221,.55),transparent);
   filter:blur(24px);transform:rotate(-4deg);opacity:.68;pointer-events:none;z-index:-1;animation:syHorizonDrift 18s ease-in-out infinite alternate
 }
-body[data-view="feed"] .horizon-copy{position:relative;top:auto;left:auto;max-width:620px;z-index:3;padding-right:190px}
+body[data-view="feed"] .horizon-copy{position:relative;top:auto;left:auto;max-width:720px;z-index:3}
 body[data-view="feed"] .horizon-copy .eyebrow{font-size:10px;color:#76684f;letter-spacing:.18em}
 body[data-view="feed"] .horizon-copy h1{font-size:clamp(40px,4.5vw,62px);line-height:.98;letter-spacing:-.055em;margin:12px 0 14px;color:var(--sy-ink);font-weight:630;overflow-wrap:anywhere}
 body[data-view="feed"] .horizon-copy p{max-width:470px;font-size:14px;line-height:1.65;color:var(--sy-muted)}
-
-/* Contextual AI entry point: no portrait on Home. */
-body[data-view="feed"] .sylora-presence{
-  position:absolute;right:28px;top:26px;width:auto;height:50px;min-width:164px;
-  display:flex;align-items:center;justify-content:flex-start;padding:7px 13px 7px 10px;gap:9px;
-  border-radius:var(--sy-r-pill);border:1px solid rgba(255,255,255,.95);
-  background:rgba(255,255,255,.72);box-shadow:var(--sy-shadow-1),inset 0 1px 0 #fff;
-  backdrop-filter:blur(18px);color:var(--sy-ink);transition:transform var(--sy-motion-fast) var(--sy-ease),box-shadow var(--sy-motion-ui) var(--sy-ease)
-}
-body[data-view="feed"] .sylora-presence:hover{transform:translateY(-1px);box-shadow:var(--sy-shadow-2),inset 0 1px 0 #fff}
-body[data-view="feed"] .sylora-presence:active{transform:scale(.985)}
-body[data-view="feed"] .sylora-presence-image{position:static;width:54px;height:32px;flex:0 0 54px;border-radius:0;background-image:url('/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png');background-size:contain;background-position:center;background-repeat:no-repeat;filter:none}
-body[data-view="feed"] .sylora-presence-copy{margin:0;padding:0;display:flex;align-items:center;gap:0}
-body[data-view="feed"] .sylora-presence-copy small,body[data-view="feed"] .sylora-presence-copy b,body[data-view="feed"] .sylora-presence-copy em{display:none}
-body[data-view="feed"] .sylora-presence-copy strong{margin:0;font-size:12px;color:var(--sy-ink);font-weight:680;white-space:nowrap}
-body[data-view="feed"] .sylora-presence-copy strong span{margin-left:4px;color:#8b7652}
 
 body[data-view="feed"] .horizon-flow{position:absolute;left:26px;right:26px;bottom:24px;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px;z-index:3}
 body[data-view="feed"] .horizon-flow button{
@@ -93,9 +77,8 @@ body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.
 /* First mobile visit may feel cinematic, but the scene is still content-respectful. */
 @media(max-width:900px){
   body[data-view="feed"] .living-horizon.home-compact{min-height:300px;padding:28px 20px 102px;border-radius:28px}
-  body[data-view="feed"] .horizon-copy{max-width:100%;padding-right:190px}
+  body[data-view="feed"] .horizon-copy{max-width:100%}
   body[data-view="feed"] .horizon-copy h1{font-size:40px;max-width:540px}
-  body[data-view="feed"] .sylora-presence{top:22px;right:20px}
   body[data-view="feed"] .horizon-flow{left:18px;right:18px;bottom:18px;grid-template-columns:repeat(7,minmax(76px,1fr));overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x mandatory;scroll-padding-inline:8px;padding:1px 18px 2px 2px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
   body[data-view="feed"] .horizon-flow::-webkit-scrollbar{display:none}
   body[data-view="feed"] .horizon-flow button{min-width:76px;height:68px;scroll-snap-align:start}
@@ -103,11 +86,9 @@ body[data-view="feed"] .post .actions button:hover{background:rgba(255,255,255,.
 
 @media(max-width:620px){
   body[data-view="feed"] .living-horizon.home-compact{min-height:270px;padding:24px 16px 98px}
-  body[data-view="feed"] .horizon-copy{padding-top:54px;padding-right:0}
+  body[data-view="feed"] .horizon-copy{padding-top:0}
   body[data-view="feed"] .horizon-copy h1{font-size:34px;margin-top:8px}
   body[data-view="feed"] .horizon-copy p{font-size:13px;line-height:1.55;max-width:92%}
-  body[data-view="feed"] .sylora-presence{left:16px;right:auto;top:16px;height:44px;min-width:150px;padding-top:6px;padding-bottom:6px}
-  body[data-view="feed"] .sylora-presence-image{width:28px;height:28px;flex-basis:28px}
   body[data-view="feed"] .horizon-flow{left:12px;right:12px;bottom:12px;gap:7px}
   body[data-view="feed"] .horizon-flow button{min-width:72px;height:64px;border-radius:17px}
   body[data-view="feed"] .eco-strip{border-radius:20px;padding:14px}

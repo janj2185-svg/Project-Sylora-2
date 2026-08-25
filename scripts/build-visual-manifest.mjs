@@ -314,7 +314,7 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
     'hiddenScreenshotsCompared','fullPageScreenshotsCompared'
   ]);
   const expectedCanonicalImages=touch?1:2;
-  const expectedCanonicalBackgrounds=['home','create-hub-open'].includes(surface)?1:0;
+  const expectedCanonicalBackgrounds=0;
   if(record.paintStability.canonicalImagesChecked!==expectedCanonicalImages){
     fail(`capture report ${record.file} canonical image paint evidence drifted`);
   }

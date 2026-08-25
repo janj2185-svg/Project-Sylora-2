@@ -38,9 +38,18 @@ test('route visual identities remain distinct without another global override la
   assert.match(ai,/body\[data-view="ai"\]/);
   assert.match(live,/--sy-void/);
   assert.match(studio,/PROGRAM PREVIEW/);
-  assert.match(home,/sylora-presence-image/);
+  assert.doesNotMatch(home,/sylora-presence-image/);
+  assert.match(system,/body\[data-view="live"\]\{--sy-route-accent:/);
+  assert.match(system,/body\[data-view="ai"\]\{--sy-route-accent:/);
   assert.match(ai,/ai-presence-container/);
   for(const route of ['profile','messages','more'])assert.match(account,new RegExp(`body\\[data-view="${route}"\\]`));
+});
+
+test('Home and global navigation do not duplicate the contextual Sylora workspace',()=>{
+  assert.doesNotMatch(html,/sylora-mini|ai-rail|mobile-dock[^\n]*data-view="ai"/);
+  assert.doesNotMatch(appJs,/class="sylora-presence"/);
+  assert.match(html,/class="mobile-create" data-create-hub/);
+  assert.match(appJs,/id="aiVisualToggle"/);
 });
 
 test('canonical and route layers retain responsive and reduced-motion contracts',()=>{

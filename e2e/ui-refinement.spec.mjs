@@ -37,12 +37,9 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   expect(values).toEqual(['uk','en','pl','de','ru']);
   expect(labels).toEqual(['UA','EN','PL','DE','RU']);
 
-  const presence=page.locator('.sylora-presence');
-  await expect(presence).toBeVisible();
-  const presenceBox=await presence.boundingBox();
-  expect(presenceBox?.height).toBeLessThanOrEqual(58);
-  const imageStyle=await page.locator('.sylora-presence-image').evaluate(el=>getComputedStyle(el).backgroundImage);
-  expect(imageStyle).toContain(canonicalLogo);
+  await expect(page.locator('.sylora-presence,.sylora-mini,.ai-rail')).toHaveCount(0);
+  await expect(page.locator('.mobile-dock [data-view="ai"]')).toHaveCount(0);
+  await expect(page.locator('.mobile-dock [data-create-hub]')).toHaveCount(1);
 
   for(const [locale,home] of Object.entries(localeExpectations)){
     await page.locator('#localeSwitch').selectOption(locale);
@@ -130,9 +127,15 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await registerViaUi(page,account);
   expect(await page.locator('.horizon-copy h1').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
 
-  await page.locator('.mobile-dock button[data-view="ai"]').click();
+  await page.goto('/ai');
   await expect(page.locator('body')).toHaveAttribute('data-view','ai');
   await expect(page.locator('.sylora-ai-hero.ai-presence-container')).toBeVisible();
+  await expect(page.locator('#aiVisualToggle')).toHaveText('Сховати Sylora');
+  await page.locator('#aiVisualToggle').click();
+  await expect(page.locator('.sylora-ai-hero')).toHaveClass(/sylora-visual-hidden/);
+  await expect(page.locator('.sylora-avatar-motion')).toBeHidden();
+  await page.locator('#aiVisualToggle').click();
+  await expect(page.locator('.sylora-ai-hero')).not.toHaveClass(/sylora-visual-hidden/);
   const source=page.locator('#syloraDegraded');
   await expect(source).toBeHidden();
   await expectNoHorizontalOverflow(page);

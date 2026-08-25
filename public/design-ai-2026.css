@@ -13,6 +13,9 @@ body[data-view="ai"] .sylora-ai-hero:before{content:"";position:absolute;left:9%
 body[data-view="ai"] .sylora-ai-hero:after{content:"";position:absolute;width:270px;height:270px;right:6%;top:15%;border-radius:50%;border:1px solid rgba(106,139,134,.10);box-shadow:0 0 0 34px rgba(255,255,255,.10),0 0 0 68px rgba(168,139,94,.035);pointer-events:none;z-index:-1;transition:transform var(--sy-motion-scene) var(--sy-ease),opacity var(--sy-motion-scene) var(--sy-ease)}
 body[data-view="ai"] .sylora-ai-hero h1{font-size:clamp(40px,5vw,64px);letter-spacing:-.055em;margin:12px 0;color:var(--sy-ink)}
 body[data-view="ai"] .sylora-ai-hero>p{max-width:570px;line-height:1.65;color:var(--sy-muted)}
+body[data-view="ai"] .ai-visual-toggle{position:absolute;z-index:12;right:266px;top:28px;min-height:38px;padding:0 13px;font-size:10px}
+body[data-view="ai"] .sylora-ai-hero.sylora-visual-hidden :is(.sylora-avatar-motion,.ai-human-presence){display:none!important}
+body[data-view="ai"] .sylora-ai-hero.sylora-visual-hidden>p{max-width:760px}
 
 /* Presence state is environmental, independent of the underlying image/renderer. */
 body[data-view="ai"] .sylora-ai-hero[data-presence="listening"]:after{transform:scale(1.035);opacity:.92;box-shadow:0 0 0 34px rgba(138,187,178,.10),0 0 0 69px rgba(138,187,178,.05)}
@@ -66,6 +69,7 @@ body[data-view="ai"] #syloraDegraded.sy-ai-context-status:before{content:"";widt
 }
 
 @media(max-width:620px){
+  body[data-view="ai"] .ai-visual-toggle{top:58px;right:16px;min-height:34px}
   body[data-view="ai"] .sylora-ai-hero{min-height:330px;padding:78px 16px 96px!important}
   body[data-view="ai"] .sylora-ai-hero h1{font-size:34px}
   body[data-view="ai"] .sylora-ai-hero>p{font-size:12px;line-height:1.55}

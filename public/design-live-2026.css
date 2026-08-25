@@ -110,3 +110,30 @@ body[data-view="live"] #liveChatForm .primary{min-width:104px}
 }
 
 @media(prefers-reduced-motion:reduce){body[data-view="live"] *{scroll-behavior:auto!important}}
+/* TikTok owner pilot — contextual to LIVE and honest about the local bridge. */
+body[data-view="live"] .tiktok-owner-pilot{margin:16px 0;padding:20px;border:1px solid rgba(255,255,255,.92);border-radius:28px;background:radial-gradient(circle at 88% 4%,rgba(217,80,104,.13),transparent 28%),linear-gradient(145deg,rgba(255,255,255,.88),rgba(240,245,243,.74));box-shadow:var(--sy-shadow-2),inset 0 1px 0 #fff;overflow:hidden}
+body[data-view="live"] .tiktok-pilot-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+body[data-view="live"] .tiktok-pilot-head h2{margin:7px 0 5px;font-size:clamp(24px,3vw,38px);letter-spacing:-.04em}
+body[data-view="live"] .tiktok-pilot-head p{max-width:720px;margin:0;color:var(--sy-muted);font-size:12px;line-height:1.55}
+body[data-view="live"] .tiktok-pilot-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+body[data-view="live"] .tiktok-state{padding:8px 10px;border-radius:999px;background:rgba(83,99,101,.08);color:var(--sy-muted);font-size:8px;font-weight:800;letter-spacing:.10em;white-space:nowrap}
+body[data-view="live"] .tiktok-state[data-state="online"]{background:rgba(57,127,118,.13);color:#2f7169;box-shadow:0 0 0 4px rgba(57,127,118,.05)}
+body[data-view="live"] .tiktok-state[data-state="error"]{background:rgba(217,80,104,.12);color:#a63c51}
+body[data-view="live"] .tiktok-truth{margin:16px 0;padding:12px 14px;border-radius:17px;background:rgba(31,39,41,.88);color:rgba(255,255,255,.76);font-size:11px;line-height:1.55}
+body[data-view="live"] .tiktok-truth b{color:#fff}
+body[data-view="live"] .tiktok-pilot-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(260px,.85fr);gap:12px}
+body[data-view="live"] :is(.tiktok-connect-card,.tiktok-control-card,.tiktok-journal){padding:15px;border:1px solid rgba(255,255,255,.9);border-radius:21px;background:rgba(255,255,255,.60);box-shadow:inset 0 1px 0 #fff}
+body[data-view="live"] :is(.tiktok-connect-card,.tiktok-control-card){display:grid;gap:10px}
+body[data-view="live"] :is(.tiktok-connect-card,.tiktok-control-card) label{display:grid;gap:5px;color:var(--sy-muted);font-size:9px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+body[data-view="live"] :is(.tiktok-connect-card,.tiktok-control-card) :is(input,select){min-height:42px;padding:0 12px;text-transform:none;letter-spacing:0;font-size:11px}
+body[data-view="live"] .tiktok-journal{margin-top:12px}
+body[data-view="live"] .tiktok-journal>.row{align-items:flex-start;justify-content:space-between}
+body[data-view="live"] .tiktok-journal h3{margin:5px 0 0}
+body[data-view="live"] #tiktokEventJournal{display:grid;gap:7px;max-height:330px;margin-top:12px;overflow:auto}
+body[data-view="live"] .tiktok-event{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 10px;border-radius:15px;background:rgba(255,255,255,.68);border:1px solid rgba(255,255,255,.92)}
+body[data-view="live"] .tiktok-event p{margin:0;min-width:0;overflow-wrap:anywhere;color:var(--sy-ink);font-size:11px;line-height:1.45}
+body[data-view="live"] .tiktok-event-sylora{background:linear-gradient(145deg,rgba(234,243,241,.9),rgba(255,255,255,.68))}
+body[data-view="live"] .tiktok-event-error{background:rgba(217,80,104,.08)}
+body[data-view="live"] .tiktok-owner-pilot.is-collapsed .tiktok-pilot-body{display:none}
+body[data-view="live"] .tiktok-simulator{padding-top:9px;border-top:1px solid var(--sy-line)}
+@media(max-width:760px){body[data-view="live"] .tiktok-owner-pilot{padding:15px;border-radius:23px}body[data-view="live"] .tiktok-pilot-head{display:grid}body[data-view="live"] .tiktok-pilot-actions{justify-content:space-between}body[data-view="live"] .tiktok-pilot-grid{grid-template-columns:1fr}body[data-view="live"] .tiktok-event{grid-template-columns:auto minmax(0,1fr)}body[data-view="live"] .tiktok-event button{grid-column:2;justify-self:start}}

@@ -240,7 +240,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
       bytes:png.length,
       paintStability:{
         canonicalImagesChecked:touch?1:2,
-        canonicalBackgroundsChecked:['home','create-hub-open'].includes(surface)?1:0,
+        canonicalBackgroundsChecked:0,
         canonicalPixelContribution:true,
         canonicalContentContrast:true,
         canonicalRestoreMatch:true,
@@ -1812,7 +1812,7 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:7}),/schemaVersion must be 8/);
   for(const [field,value,message] of [
     ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
-    ['canonicalBackgroundsChecked',0,/canonical background paint evidence drifted/],
+    ['canonicalBackgroundsChecked',1,/canonical background paint evidence drifted/],
     ['canonicalPixelContribution',false,/compositor paint stability evidence drifted/],
     ['canonicalContentContrast',false,/compositor paint stability evidence drifted/],
     ['canonicalRestoreMatch',false,/compositor paint stability evidence drifted/],

@@ -29,7 +29,7 @@ test('canonical production logo bytes are immutable and retain master dimensions
   assert.equal(png.readUInt32BE(20),650,'canonical height changed');
 });
 
-test('web shell, favicon, and contextual presence use the canonical master directly',async()=>{
+test('web shell, favicon, and wallet use the canonical master directly',async()=>{
   const html=await readFile(path.join(PUBLIC_DIR,'index.html'),'utf8');
   const phoenixPreview=await readFile(path.join(PUBLIC_DIR,'phoenix-preview.html'),'utf8');
   const homeCss=await readFile(path.join(PUBLIC_DIR,'design-home-2026.css'),'utf8');
@@ -52,14 +52,13 @@ test('web shell, favicon, and contextual presence use the canonical master direc
   }
   assert.doesNotMatch(systemCss,/\.brand-lockup\{[^}]*transform:translateZ\(0\)/,'resting brand must not be forced into a transient compositor layer');
   assert.match(systemCss,/\.brand:hover \.brand-lockup\{transform:translateY\(-1px\) scale\(1\.012\)/,'approved hover composition changed');
-  assert.ok(homeCss.includes(`url('${CANONICAL_URL}')`),'Home presence is not the canonical master');
+  assert.ok(!homeCss.includes(CANONICAL_URL),'Home must not render a Sylora brand presence');
   const canonicalCssReferences=[];
   for(const file of await uiSourceFiles(PUBLIC_DIR)){
     if(path.extname(file)!=='.css')continue;
     if((await readFile(file,'utf8')).includes(CANONICAL_URL))canonicalCssReferences.push(path.relative(PUBLIC_DIR,file));
   }
-  assert.deepEqual(canonicalCssReferences,['design-home-2026.css'],'visual paint sentinel coverage must expand with any new canonical CSS background');
-  assert.match(homeCss,/body\[data-view="feed"\] \.sylora-presence-image\{[^}]*background-image:url\('\/assets\/brand\/canonical\/SYLORA_CANONICAL_LOGO_MASTER\.png'\)/);
+  assert.deepEqual(canonicalCssReferences,[],'canonical brand must remain an image element, not a CSS background');
   assert.match(phoenixPreview,new RegExp(`<link rel="icon" type="image/png" href="${CANONICAL_URL.replaceAll('/','\\/')}"`));
   assert.match(phoenixPreview,new RegExp(`<img class="brand-mark" src="${CANONICAL_URL.replaceAll('/','\\/')}"`));
   assert.doesNotMatch(phoenixPreview,/class="brand-mark"[^>]*>\s*S\s*</,'standalone preview must not recreate the brand with text/CSS');

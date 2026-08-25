@@ -28,4 +28,8 @@ export class SyloraCompanionClient {
   connectObs({url,password}){return this.request('/v1/obs/connect',{method:'POST',body:{url,password}})}
   obsAction(action,sceneName){return this.request('/v1/obs/action',{method:'POST',body:{action,sceneName}})}
   disconnectObs(){return this.request('/v1/obs/disconnect',{method:'POST',body:{}})}
+  connectTikTok(url='ws://127.0.0.1:21213'){return this.request('/v1/tiktok/connect',{method:'POST',body:{url}})}
+  disconnectTikTok(){return this.request('/v1/tiktok/disconnect',{method:'POST',body:{}})}
+  tiktokEvents(after=0,limit=100){return this.request(`/v1/tiktok/events?after=${encodeURIComponent(after)}&limit=${encodeURIComponent(limit)}`)}
+  simulateTikTok(event){return this.request('/v1/tiktok/simulate',{method:'POST',body:event})}
 }

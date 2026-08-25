@@ -29,6 +29,7 @@ The canonical visual direction is defined in [SYLORA Canonical Product Design](d
 - server-persisted Creator Studio scene presets plus local logo/image overlay sources rendered into recording and LIVE composition
 - direct local OBS WebSocket 5.x client with challenge/salt authentication, capability discovery, program-scene switching, Virtual Camera and OBS Stream start/stop controls plus bounded exponential reconnect after unexpected disconnects; stream service/key configuration remains inside OBS and the OBS password stays in browser memory rather than being sent to the SYLORA API
 - loopback-only SYLORA Companion bridge for Creator Studio: pairing-token authentication, explicit browser-origin allowlist, bounded JSON requests and a small OBS action allowlist; Studio can route scene/Virtual Camera/stream controls through the local companion so OBS credentials remain on the creator PC
+- TikTok LIVE owner pilot through the same loopback Companion: local TikFinity WebSocket ingestion, normalized/deduplicated chat, gift and host/guest events, manual-first Sylora responses, bounded automation cooldown and a development simulator; it is explicitly not presented as an official TikTok API or as direct TikTok message delivery
 - recoverable Creator Studio working state plus server scene presets for output profile, overlay style/title and microphone gain/mute; selected presets can be updated in place instead of duplicating a scene on every save
 - host-only, expiring (2 hour) OBS Browser Source URLs for a selected SYLORA LIVE; the transparent overlay receives that room's chat and gift events over a dedicated SSE channel without counting itself as a viewer
 - Gift Engine V2 procedural renderer: tiered particles/shockwaves, Legendary fullscreen phoenix scene and generated Web Audio sound
@@ -62,6 +63,8 @@ The canonical visual direction is defined in [SYLORA Canonical Product Design](d
 AI uses a real OpenAI provider when `OPENAI_API_KEY` is configured and fails explicitly when it is not. Payments, object storage/CDN, production SFU/RTMP streaming, a managed ephemeral TURN credential service, creator payouts, native apps and large-scale infrastructure are not implemented in this slice. The current WebRTC transport is deliberately P2P; external STUN/TURN can be configured, and the current media/HLS pipeline is local-server based.
 
 OBS control is real and deliberately restricted to `localhost` / `127.0.0.1`. Creator Studio now includes a local Companion route in addition to direct development-time OBS WebSocket access. The Companion binds only to `127.0.0.1`, requires its generated pairing token, checks an origin allowlist and holds the OBS password only in process memory. Browser Source itself works as a normal OBS browser page and does not require exposing the OBS WebSocket password. Native installer/signing and automatic Companion updates are still future release-engineering work and are not claimed complete.
+
+The TikTok owner pilot uses TikFinity Desktop's local DAPI WebSocket (normally `ws://127.0.0.1:21213`). It reads events on the creator PC; it does not claim access to a general official TikTok LIVE chat/gift API. Sylora's pilot reply is local browser speech and is never marked as sent to TikTok. TikTok LIVE Studio or OBS must capture the browser/system audio for the audience to hear it.
 
 The regenerated arm/wrist assets passed local anatomy/alpha separation checks and their independent sprite layers are enabled in the web avatar. Shoulder, elbow and wrist transforms are rendered as a nested kinematic chain. Each hand now has four anatomy-preserving pose frames (neutral, open, conversational curl and emphasis) selected by the semantic gesture system, with a short cross-fade between frames so finger posture changes naturally together with Sylora's spring-driven arm movement. This avoids assembling a hand from disconnected finger sprites. It is pose-based finger articulation, not a per-finger skeletal rig. Exact browser/device shoulder/wrist/hand alignment still needs visual-regression QA on the target browsers before the Digital Human phase can be marked complete.
 
@@ -142,6 +145,7 @@ The V2 foundation lives in `public/gift-v2/` and starts from story beats and sem
 - `POST/DELETE /api/ai/memory`
 - `POST /api/ai/actions/:id/confirm` and `/cancel`
 - `POST /api/ai/chat` (OpenAI Responses API)
+- `POST /api/ai/live-copilot/respond` (authenticated, untrusted-event boundary, never direct TikTok delivery)
 - `POST /api/ai/realtime` (authenticated WebRTC SDP exchange)
 - `POST /api/ai/realtime/transcript` (idempotent final voice-turn persistence)
 
