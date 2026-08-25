@@ -689,7 +689,6 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
     '--disable-threaded-scrolling',
     '--disable-checker-imaging',
     '--disable-image-animation-resync',
-    '--disable-gpu',
     '--num-raster-threads=1'
   ]);
   assert.equal(VISUAL_COMPOSITOR_SCHEDULING,'chromium-pixel-dump-single-raster');

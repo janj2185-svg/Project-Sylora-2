@@ -44,7 +44,6 @@ export const VISUAL_DETERMINISM_FLAGS = Object.freeze([
   '--disable-threaded-scrolling',
   '--disable-checker-imaging',
   '--disable-image-animation-resync',
-  '--disable-gpu',
   '--num-raster-threads=1'
 ]);
 export const VISUAL_COMPOSITOR_SCHEDULING = 'chromium-pixel-dump-single-raster';
