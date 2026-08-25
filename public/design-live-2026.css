@@ -1,6 +1,7 @@
 /* LIVE — immersive VOID environment inside the Living Horizon system. */
 body[data-view="live"] #app{position:relative;min-width:0}
 body[data-view="live"] #app>.hero{padding:28px 30px;border-radius:var(--sy-r-xl);background:linear-gradient(135deg,rgba(255,255,255,.86),rgba(235,242,240,.64));box-shadow:var(--sy-shadow-1)!important}
+body[data-view="live"] .live-dot{background:#d95068;box-shadow:none}
 body[data-view="live"] .live-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:4px;margin:10px 0 16px;border-radius:var(--sy-r-pill);background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.82)}
 body[data-view="live"] .live-tabs::-webkit-scrollbar{display:none}
 body[data-view="live"] .live-tabs button{flex:0 0 auto;min-height:40px;padding:0 14px;border:0;border-radius:var(--sy-r-pill);background:transparent;color:var(--sy-muted);font-weight:680}

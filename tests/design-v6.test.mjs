@@ -34,6 +34,7 @@ test('canonical material system defines Pearl Frost Crystal Metal and Void',()=>
 test('route visual identities remain distinct without another global override layer',()=>{
   assert.match(home,/body\[data-view="feed"\]/);
   assert.match(live,/body\[data-view="live"\]/);
+  assert.match(live,/body\[data-view="live"\] \.live-dot\{background:#d95068;box-shadow:none\}/);
   assert.match(studio,/body\[data-view="studio"\]/);
   assert.match(ai,/body\[data-view="ai"\]/);
   assert.match(live,/--sy-void/);
