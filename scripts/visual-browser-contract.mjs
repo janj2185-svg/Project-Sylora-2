@@ -44,6 +44,11 @@ export const VISUAL_DETERMINISM_FLAGS = Object.freeze([
   '--disable-threaded-scrolling',
   '--disable-checker-imaging',
   '--disable-image-animation-resync',
+  // Keep GPU compositing/WebGL available for fidelity, but make CSS tile
+  // rasterization single-threaded on the CPU. This avoids frame-to-frame
+  // antialias drift on rounded translucent edges without flattening the
+  // premium materials or disabling the cinematic WebGL surfaces.
+  '--disable-gpu-rasterization',
   '--num-raster-threads=1'
 ]);
 export const VISUAL_COMPOSITOR_SCHEDULING = 'chromium-pixel-dump-single-raster';

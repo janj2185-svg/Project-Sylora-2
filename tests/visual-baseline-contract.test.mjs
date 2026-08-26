@@ -689,8 +689,11 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
     '--disable-threaded-scrolling',
     '--disable-checker-imaging',
     '--disable-image-animation-resync',
+    '--disable-gpu-rasterization',
     '--num-raster-threads=1'
   ]);
+  assert.equal(VISUAL_DETERMINISM_FLAGS.includes('--disable-gpu'),false);
+  assert.equal(VISUAL_DETERMINISM_FLAGS.includes('--disable-gpu-compositing'),false);
   assert.equal(VISUAL_COMPOSITOR_SCHEDULING,'chromium-pixel-dump-single-raster');
   assert.match(runVisualQaScript,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(runVisualQaScript,/PLAYWRIGHT_LEGACY_SCREENSHOT:\s*'1'/);
