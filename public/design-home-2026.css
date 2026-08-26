@@ -35,7 +35,7 @@ body[data-view="feed"] .living-horizon.home-compact:after{
   animation:syHorizonDrift 18s ease-in-out infinite alternate;
 }
 
-body[data-view="feed"] .horizon-copy{position:relative;z-index:3;min-width:0;padding-top:7px}
+body[data-view="feed"] .horizon-copy{position:relative;z-index:3;min-width:0;max-width:none;width:auto;padding-top:7px}
 body[data-view="feed"] .horizon-copy .eyebrow{font-size:10px!important;color:#76684f!important;letter-spacing:.19em!important}
 body[data-view="feed"] .horizon-copy h1{
   max-width:780px;margin:13px 0 15px;color:var(--sy-ink);

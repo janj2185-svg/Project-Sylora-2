@@ -2,7 +2,7 @@
 
 .create-hub{
   position:fixed;inset:0;z-index:120;display:grid;place-items:center;
-  background:rgba(18,24,26,.42);backdrop-filter:blur(16px) saturate(.8);
+  background:rgba(18,24,26,.32);backdrop-filter:blur(10px) saturate(.9);
   padding:max(18px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));
 }
 .create-hub-sheet{

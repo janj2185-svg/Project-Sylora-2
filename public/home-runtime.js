@@ -17,9 +17,9 @@ function boot(){
   const bodyObserver=new MutationObserver(sync);
   bodyObserver.observe(document.body,{attributes:true,attributeFilter:['data-view']});
   window.addEventListener('scroll',()=>{if(window.scrollY>72)markEngaged()},{passive:true});
-  document.addEventListener('pointerdown',event=>{
+  document.addEventListener('click',event=>{
     if(event.target?.closest?.('.living-horizon.home-compact'))markEngaged();
-  },{passive:true});
+  });
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
