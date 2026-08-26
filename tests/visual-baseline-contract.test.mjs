@@ -50,6 +50,7 @@ import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
   VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
   comparePngBuffers,
   visualRasterDifferenceWithinTolerance
 } from '../scripts/visual-raster-contract.mjs';
@@ -263,9 +264,11 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
         rasterMismatchPixels:0,
         rasterMismatchRatio:0,
         rasterMaxChannelDelta:0,
+        rasterTotalChannelDelta:0,
         rasterMaxMismatchRatio:VISUAL_RASTER_MAX_MISMATCH_RATIO,
         rasterMaxMismatchPixelsAllowed:VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-        rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA
+        rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA,
+        rasterMaxTotalChannelDeltaAllowed:VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
       },
       runtime:{
         fontStatus:'loaded',
@@ -288,7 +291,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
     };
   });
   return {
-    schemaVersion:10,
+    schemaVersion:11,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -735,7 +738,7 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.doesNotMatch(runVisualQaScript,/candidate PNG digests match exactly/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(visualBaselineSpec,/assertVisualScreenshotEnvironment\(process\.env\)/);
-  assert.match(visualBaselineSpec,/schemaVersion:\s*10/);
+  assert.match(visualBaselineSpec,/schemaVersion:\s*11/);
   assert.match(visualBaselineSpec,/compositorScheduling:\s*metadata\.browser\.compositorScheduling/);
   assert.match(
     buildVisualManifestSource,
@@ -1241,6 +1244,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_MISMATCH_RATIO/);
   assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_MISMATCH_PIXELS/);
   assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_CHANNEL_DELTA/);
+  assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA/);
   assert.doesNotMatch(visualHelpersSource,/fetch\(`data:image\/png/,'PNG evidence decoding must not violate the application connect-src CSP');
 });
 
@@ -1337,7 +1341,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
             pixelCount,
             mismatchPixels,
             mismatchRatio:mismatchPixels/pixelCount,
-            maxChannelDelta:mismatchPixels?255:0
+            maxChannelDelta:mismatchPixels?255:0,
+            totalChannelDelta:mismatchPixels?mismatchPixels*4*255:0
           };
         }
         if(!arg?.encodedPng)return scrollPosition;
@@ -1387,9 +1392,11 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     rasterMismatchPixels:0,
     rasterMismatchRatio:0,
     rasterMaxChannelDelta:0,
+    rasterTotalChannelDelta:0,
     rasterMaxMismatchRatio:VISUAL_RASTER_MAX_MISMATCH_RATIO,
     rasterMaxMismatchPixelsAllowed:VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-    rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA
+    rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA,
+    rasterMaxTotalChannelDeltaAllowed:VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
   });
   assert.equal(stable.getScreenshotCalls(),6);
   assert.equal(stable.getCaptureStyleChecks(),2);
@@ -1563,7 +1570,8 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
         pixelCount:toleratedPixelCount,
         mismatchPixels:10,
         mismatchRatio:10/toleratedPixelCount,
-        maxChannelDelta:4
+        maxChannelDelta:4,
+        totalChannelDelta:40
       }
     }
   );
@@ -1577,6 +1585,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(toleratedCapture.paintStability.rasterMismatchPixels,10);
   assert.equal(toleratedCapture.paintStability.rasterMismatchRatio,10/toleratedPixelCount);
   assert.equal(toleratedCapture.paintStability.rasterMaxChannelDelta,4);
+  assert.equal(toleratedCapture.paintStability.rasterTotalChannelDelta,40);
   assert.equal(toleratedMismatchCalls,0,'accepted bounded anti-aliasing drift is recorded in metadata, not failure evidence');
 
   const unstableFullPage=capturePage(
@@ -1824,12 +1833,14 @@ test('strict PNG raster comparison accepts only bounded edge noise',()=>{
   assert.equal(exact.withinTolerance,true);
   assert.equal(exact.mismatchPixels,0);
   assert.equal(exact.maxChannelDelta,0);
+  assert.equal(exact.totalChannelDelta,0);
 
-  const bounded=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:8}]));
+  const bounded=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:40}]));
   assert.equal(bounded.withinTolerance,true);
   assert.equal(bounded.mismatchPixels,1);
   assert.equal(bounded.mismatchRatio,1/40_000);
   assert.equal(bounded.maxChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA);
+  assert.equal(bounded.totalChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA);
 
   const tooMany=comparePngBuffers(baseline,validPng(200,200,[
     {x:0,y:0,r:1},{x:1,y:0,r:1},{x:2,y:0,r:1},{x:3,y:0,r:1},{x:4,y:0,r:1}
@@ -1837,7 +1848,7 @@ test('strict PNG raster comparison accepts only bounded edge noise',()=>{
   assert.equal(tooMany.mismatchRatio>VISUAL_RASTER_MAX_MISMATCH_RATIO,true);
   assert.equal(tooMany.withinTolerance,false);
 
-  const tooStrong=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:9}]));
+  const tooStrong=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:41}]));
   assert.equal(tooStrong.mismatchPixels,1);
   assert.equal(tooStrong.maxChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA+1);
   assert.equal(tooStrong.withinTolerance,false);
@@ -1851,13 +1862,29 @@ test('strict PNG raster comparison accepts only bounded edge noise',()=>{
     pixelCount:2_000_000,
     mismatchPixels:VISUAL_RASTER_MAX_MISMATCH_PIXELS+1,
     mismatchRatio:(VISUAL_RASTER_MAX_MISMATCH_PIXELS+1)/2_000_000,
-    maxChannelDelta:1
+    maxChannelDelta:1,
+    totalChannelDelta:VISUAL_RASTER_MAX_MISMATCH_PIXELS+1
   };
   assert.equal(absoluteCapExceeded.mismatchRatio<VISUAL_RASTER_MAX_MISMATCH_RATIO,true);
   assert.equal(visualRasterDifferenceWithinTolerance(absoluteCapExceeded),false);
 
+  const totalDeltaExceeded={
+    dimensionsMatch:true,
+    width:2000,
+    height:1000,
+    repeatWidth:2000,
+    repeatHeight:1000,
+    pixelCount:2_000_000,
+    mismatchPixels:10,
+    mismatchRatio:10/2_000_000,
+    maxChannelDelta:VISUAL_RASTER_MAX_CHANNEL_DELTA,
+    totalChannelDelta:VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA+1
+  };
+  assert.equal(visualRasterDifferenceWithinTolerance(totalDeltaExceeded),false);
+
   const resized=comparePngBuffers(baseline,validPng(201,200));
   assert.equal(resized.dimensionsMatch,false);
+  assert.equal(resized.totalChannelDelta,1020);
   assert.equal(resized.withinTolerance,false);
 });
 
@@ -1949,7 +1976,7 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:9}),/schemaVersion must be 10/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:10}),/schemaVersion must be 11/);
   for(const [field,value,message] of [
     ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
     ['canonicalBackgroundsChecked',1,/canonical background paint evidence drifted/],
@@ -1972,9 +1999,11 @@ test('file-set and runner-metadata contracts fail closed',()=>{
     ['rasterMismatchPixels',raw.files[0].paintStability.rasterPixelsCompared+1],
     ['rasterMismatchRatio',VISUAL_RASTER_MAX_MISMATCH_RATIO+Number.EPSILON],
     ['rasterMaxChannelDelta',VISUAL_RASTER_MAX_CHANNEL_DELTA+1],
+    ['rasterTotalChannelDelta',VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA+1],
     ['rasterMaxMismatchRatio',0.1],
     ['rasterMaxMismatchPixelsAllowed',1000],
-    ['rasterMaxChannelDeltaAllowed',255]
+    ['rasterMaxChannelDeltaAllowed',255],
+    ['rasterMaxTotalChannelDeltaAllowed',10_000]
   ]){
     assert.throws(()=>validateRawCaptureMetadata({
       ...raw,

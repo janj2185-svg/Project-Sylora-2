@@ -20,6 +20,7 @@ import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
   VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
   comparePngBuffers
 } from './visual-raster-contract.mjs';
 
@@ -194,7 +195,8 @@ if (mode === 'repeat') {
       tolerance: {
         maxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
         maxMismatchPixels: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-        maxChannelDelta: VISUAL_RASTER_MAX_CHANNEL_DELTA
+        maxChannelDelta: VISUAL_RASTER_MAX_CHANNEL_DELTA,
+        maxTotalChannelDelta: VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
       },
       mismatches
     }, null, 2));
@@ -202,11 +204,13 @@ if (mode === 'repeat') {
   }
   const maximumObservedRatio = Math.max(...comparisons.map(comparison => comparison.mismatchRatio || 0));
   const maximumObservedChannelDelta = Math.max(...comparisons.map(comparison => comparison.maxChannelDelta || 0));
+  const maximumObservedTotalChannelDelta = Math.max(...comparisons.map(comparison => comparison.totalChannelDelta || 0));
   console.log(
     `Repeatability PASS: ${actual.size} candidate PNGs match within strict raster tolerance; ` +
     `byte-identical=${actual.size-toleratedRasterDrift.length}/${actual.size}, ` +
     `tolerated=${toleratedRasterDrift.length}, maxObservedRatio=${maximumObservedRatio}, ` +
-    `maxObservedChannelDelta=${maximumObservedChannelDelta}.`
+    `maxObservedChannelDelta=${maximumObservedChannelDelta}, ` +
+    `maxObservedTotalChannelDelta=${maximumObservedTotalChannelDelta}.`
   );
 } else {
   console.log(`Candidate capture complete: ${outputReport.actualFiles}/${outputReport.expectedFiles} PNGs in ${outputDir}`);

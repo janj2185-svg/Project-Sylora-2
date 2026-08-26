@@ -2,7 +2,8 @@ import {inflateSync} from 'node:zlib';
 
 export const VISUAL_RASTER_MAX_MISMATCH_RATIO=0.0001;
 export const VISUAL_RASTER_MAX_MISMATCH_PIXELS=100;
-export const VISUAL_RASTER_MAX_CHANNEL_DELTA=8;
+export const VISUAL_RASTER_MAX_CHANNEL_DELTA=40;
+export const VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA=1000;
 
 const PNG_SIGNATURE=Buffer.from([137,80,78,71,13,10,26,10]);
 const MAX_DECODED_BYTES=512*1024*1024;
@@ -133,7 +134,9 @@ function decodePng(buffer,label){
 
 export function visualRasterDifferenceWithinTolerance(difference){
   if(!difference||difference.dimensionsMatch!==true)return false;
-  const {width,height,repeatWidth,repeatHeight,pixelCount,mismatchPixels,mismatchRatio,maxChannelDelta}=difference;
+  const {
+    width,height,repeatWidth,repeatHeight,pixelCount,mismatchPixels,mismatchRatio,maxChannelDelta,totalChannelDelta
+  }=difference;
   if(
     !Number.isSafeInteger(width)||width<=0||!Number.isSafeInteger(height)||height<=0||
     repeatWidth!==width||repeatHeight!==height||
@@ -141,11 +144,14 @@ export function visualRasterDifferenceWithinTolerance(difference){
     !Number.isSafeInteger(mismatchPixels)||mismatchPixels<0||mismatchPixels>pixelCount||
     !Number.isFinite(mismatchRatio)||mismatchRatio<0||
     Math.abs(mismatchRatio-mismatchPixels/pixelCount)>Number.EPSILON||
-    !Number.isSafeInteger(maxChannelDelta)||maxChannelDelta<0
+    !Number.isSafeInteger(maxChannelDelta)||maxChannelDelta<0||
+    !Number.isSafeInteger(totalChannelDelta)||totalChannelDelta<mismatchPixels||
+    maxChannelDelta>totalChannelDelta||totalChannelDelta>mismatchPixels*4*255
   )return false;
   return mismatchPixels<=VISUAL_RASTER_MAX_MISMATCH_PIXELS&&
     mismatchRatio<=VISUAL_RASTER_MAX_MISMATCH_RATIO&&
-    maxChannelDelta<=VISUAL_RASTER_MAX_CHANNEL_DELTA;
+    maxChannelDelta<=VISUAL_RASTER_MAX_CHANNEL_DELTA&&
+    totalChannelDelta<=VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA;
 }
 
 export function comparePngBuffers(first,second){
@@ -163,18 +169,21 @@ export function comparePngBuffers(first,second){
       mismatchPixels:0,
       mismatchRatio:1,
       maxChannelDelta:255,
+      totalChannelDelta:1020,
       withinTolerance:false
     };
   }
   const pixelCount=before.width*before.height;
   let mismatchPixels=0;
   let maxChannelDelta=0;
+  let totalChannelDelta=0;
   for(let offset=0;offset<before.rgba.length;offset+=4){
     let pixelMismatch=false;
     for(let channel=0;channel<4;channel+=1){
       const delta=Math.abs(before.rgba[offset+channel]-after.rgba[offset+channel]);
       if(delta>0)pixelMismatch=true;
       if(delta>maxChannelDelta)maxChannelDelta=delta;
+      totalChannelDelta+=delta;
     }
     if(pixelMismatch)mismatchPixels+=1;
   }
@@ -187,7 +196,8 @@ export function comparePngBuffers(first,second){
     pixelCount,
     mismatchPixels,
     mismatchRatio:mismatchPixels/pixelCount,
-    maxChannelDelta
+    maxChannelDelta,
+    totalChannelDelta
   };
   return {...difference,withinTolerance:visualRasterDifferenceWithinTolerance(difference)};
 }

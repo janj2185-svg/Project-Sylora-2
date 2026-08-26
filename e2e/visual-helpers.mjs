@@ -12,6 +12,7 @@ import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
   VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
   visualRasterDifferenceWithinTolerance
 } from '../scripts/visual-raster-contract.mjs';
 
@@ -804,18 +805,21 @@ async function rawScreenshotRasterDifference(page, first, second) {
         pixelCount: 0,
         mismatchPixels: 0,
         mismatchRatio: 1,
-        maxChannelDelta: 255
+        maxChannelDelta: 255,
+        totalChannelDelta: 1020
       };
     }
     const pixelCount = before.width * before.height;
     let mismatchPixels = 0;
     let maxChannelDelta = 0;
+    let totalChannelDelta = 0;
     for (let offset = 0; offset < before.pixels.length; offset += 4) {
       let pixelMismatch = false;
       for (let channel = 0; channel < 4; channel += 1) {
         const delta = Math.abs(before.pixels[offset + channel] - after.pixels[offset + channel]);
         if (delta > 0) pixelMismatch = true;
         if (delta > maxChannelDelta) maxChannelDelta = delta;
+        totalChannelDelta += delta;
       }
       if (pixelMismatch) mismatchPixels += 1;
     }
@@ -828,7 +832,8 @@ async function rawScreenshotRasterDifference(page, first, second) {
       pixelCount,
       mismatchPixels,
       mismatchRatio: mismatchPixels / pixelCount,
-      maxChannelDelta
+      maxChannelDelta,
+      totalChannelDelta
     };
   }, {
     encodedFirst: first.toString('base64'),
@@ -1038,7 +1043,8 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
       `pixels=${rasterDifference.mismatchPixels}/${rasterDifference.pixelCount} ` +
       `maxMismatchPixels=${VISUAL_RASTER_MAX_MISMATCH_PIXELS} ` +
       `ratio=${rasterDifference.mismatchRatio}/${VISUAL_RASTER_MAX_MISMATCH_RATIO} ` +
-      `maxChannelDelta=${rasterDifference.maxChannelDelta}/${VISUAL_RASTER_MAX_CHANNEL_DELTA}` +
+      `maxChannelDelta=${rasterDifference.maxChannelDelta}/${VISUAL_RASTER_MAX_CHANNEL_DELTA} ` +
+      `totalChannelDelta=${rasterDifference.totalChannelDelta}/${VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA}` +
       (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
       evidenceFailure ? { cause: evidenceFailure } : undefined
     );
@@ -1077,9 +1083,11 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
       rasterMismatchPixels: rasterDifference.mismatchPixels,
       rasterMismatchRatio: rasterDifference.mismatchRatio,
       rasterMaxChannelDelta: rasterDifference.maxChannelDelta,
+      rasterTotalChannelDelta: rasterDifference.totalChannelDelta,
       rasterMaxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
       rasterMaxMismatchPixelsAllowed: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-      rasterMaxChannelDeltaAllowed: VISUAL_RASTER_MAX_CHANNEL_DELTA
+      rasterMaxChannelDeltaAllowed: VISUAL_RASTER_MAX_CHANNEL_DELTA,
+      rasterMaxTotalChannelDeltaAllowed: VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
     }
   };
 }
