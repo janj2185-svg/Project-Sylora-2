@@ -20,6 +20,19 @@ body[data-view="live"] .live-empty-state h2{margin:8px 0 6px;font-size:clamp(22p
 body[data-view="live"] .live-empty-state p{max-width:620px;margin:0;color:var(--sy-muted);font-size:13px;line-height:1.6}
 body[data-view="live"] .live-empty-state :is(.primary,.ghost){margin-top:16px;min-height:42px;padding:0 18px}
 
+/* Creator controls use an opaque crystal plate on mobile instead of asking
+   Chromium to resample a blurred backdrop below every rounded control. The
+   two-pixel pearl rim keeps the high-contrast gradient inside a stable paint
+   boundary while retaining the premium illuminated button treatment. */
+body[data-view="live"] .live-creator-launchpad{
+  background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(239,245,243,.92))!important;
+  backdrop-filter:none!important;
+}
+body[data-view="live"] .live-creator-launchpad :is(#goLive,#openStudioFromLive,#createEventBtn){
+  border:2px solid rgba(255,255,255,.94)!important;
+  background-clip:padding-box!important;
+}
+
 body[data-view="live"] .live-room-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
 body[data-view="live"] .live-room-card{padding:18px;border-radius:22px!important;background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(238,244,242,.58))!important;border:1px solid rgba(255,255,255,.92)!important;box-shadow:var(--sy-shadow-1)!important}
 body[data-view="live"] .live-room-card h3{font-size:17px;margin:9px 0 3px;color:var(--sy-ink)}

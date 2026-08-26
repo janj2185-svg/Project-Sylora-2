@@ -35,6 +35,9 @@ test('route visual identities remain distinct without another global override la
   assert.match(home,/body\[data-view="feed"\]/);
   assert.match(live,/body\[data-view="live"\]/);
   assert.match(live,/body\[data-view="live"\] \.live-dot\{background:#d95068;box-shadow:none\}/);
+  assert.match(appJs,/class="card fields live-creator-launchpad"/);
+  assert.match(live,/body\[data-view="live"\] \.live-creator-launchpad\{[\s\S]*?backdrop-filter:none!important;/);
+  assert.match(live,/\.live-creator-launchpad :is\(#goLive,#openStudioFromLive,#createEventBtn\)\{[\s\S]*?border:2px solid rgba\(255,255,255,\.94\)!important;[\s\S]*?background-clip:padding-box!important;/);
   assert.match(studio,/body\[data-view="studio"\]/);
   assert.match(ai,/body\[data-view="ai"\]/);
   assert.match(live,/--sy-void/);
