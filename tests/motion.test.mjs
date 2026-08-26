@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SpringValue, SyloraMotionRig, handPoseForGesture } from '../public/sylora-motion.js';
+import {
+  SYLORA_AVATAR_VERSION,
+  SYLORA_FRAME_SRC,
+  SYLORA_GESTURE_SEQUENCES,
+  syloraBlinkSequence,
+  syloraFrameSrc,
+  syloraGestureSequence,
+  syloraRestingFrame
+} from '../public/sylora-avatar-runtime.js';
 
 test('motion spring converges without snapping', () => {
   const spring = new SpringValue(0);
@@ -36,14 +45,30 @@ test('semantic gestures choose anatomical whole-hand poses', () => {
   assert.equal(handPoseForGesture('unknown'), 'neutral');
 });
 
-test('assembled Digital Human uses whole-character images, not collage layers', async () => {
+test('canonical avatar runtime uses validated single-plate full-body assets', async () => {
   const fs = await import('node:fs');
   const path = await import('node:path');
-  const root = path.resolve('public/assets');
-  assert.ok(fs.existsSync(path.join(root, 'sylora-avatar-v2-base.png')));
-  for (const name of ['neutral', 'explain', 'empathy', 'welcome', 'emphasis', 'wave', 'thinking', 'positive']) {
-    assert.ok(fs.existsSync(path.join(root, 'gestures', `sylora-gesture-${name}.png`)), name);
+  assert.equal(SYLORA_AVATAR_VERSION, '2.1.0');
+  assert.equal(Object.keys(SYLORA_GESTURE_SEQUENCES).length, 8);
+  for (const [frame, source] of Object.entries(SYLORA_FRAME_SRC)) {
+    const file = path.resolve('public', source.replace(/^\//, ''));
+    assert.ok(fs.existsSync(file), frame);
+    const bytes = fs.readFileSync(file);
+    assert.equal(bytes.subarray(0, 4).toString('ascii'), 'RIFF', frame);
+    assert.equal(bytes.subarray(8, 12).toString('ascii'), 'WEBP', frame);
   }
+  assert.equal(syloraFrameSrc('unknown'), SYLORA_FRAME_SRC.neutral);
+  assert.equal(syloraRestingFrame('wave'), 'greeting');
+  assert.equal(syloraGestureSequence('unknown'), SYLORA_GESTURE_SEQUENCES.neutral);
+  assert.deepEqual(syloraBlinkSequence('thinking'), []);
+
+  const manifest = JSON.parse(fs.readFileSync('public/assets/avatar/sylora-v2/runtime.json', 'utf8'));
+  assert.equal(manifest.renderMode, 'single_plate_2d_fallback');
+  assert.equal(manifest.isRigged3DModel, false);
+  assert.equal(manifest.logo.separateOverlay, false);
+  assert.equal(manifest.motion.crossFadeBetweenBodyPlates, false);
+  assert.equal(manifest.threeD.runtimeGlb, null);
+
   const finalCss = fs.readFileSync('public/design-avatar-assembled.css', 'utf8');
   assert.match(finalCss, /position:absolute!important/);
   assert.match(finalCss, /object-fit:cover!important/);
@@ -55,8 +80,10 @@ test('assembled Digital Human uses whole-character images, not collage layers', 
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /sylora-assembled/);
   assert.match(app, /createElement\('img'\)/);
-  assert.match(app, /\/assets\/gestures\/sylora-gesture-/);
+  assert.match(app, /single-plate-2d/);
+  assert.doesNotMatch(app, /\/assets\/gestures\/sylora-gesture-/);
   const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
+  assert.equal((mount.match(/createElement\('img'\)/g)||[]).length, 1);
   assert.doesNotMatch(mount, /sylora-rig-arm/);
   assert.doesNotMatch(mount, /sylora-avatar-head/);
   assert.doesNotMatch(mount, /['"]eyes['"]/);

@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "assetVersion": "2.1.0",
+  "project": "SYLORA",
+  "renderMode": "single_plate_2d_fallback",
+  "isRigged3DModel": false,
+  "identityLocked": true,
+  "frame": {
+    "format": "webp",
+    "width": 940,
+    "height": 1254,
+    "aspectRatio": "3:4",
+    "directory": "/assets/avatar/sylora-v2/frames"
+  },
+  "logo": {
+    "sourceSha256": "6cac2119d31a8ef1aeedc10ca09a7e47b1647104808cdd5f042db951d946e038",
+    "clothingLockupSha256": "251d998504e4304ab8e7839bb18d411d02e4b448d456ae3cf55e67420d077c7e",
+    "integration": "baked_into_fabric_plate",
+    "separateOverlay": false,
+    "taglineOnClothing": false
+  },
+  "motion": {
+    "fullBodyFrameReplacementOnly": true,
+    "crossFadeBetweenBodyPlates": false,
+    "reducedMotionSupported": true
+  },
+  "frameSha256": {
+    "blink-closed": "461a9c46be94c4576e8ac2674a5d41fcba6e31b00dfbb93b2abe4576ad93b4d7",
+    "blink-half": "bdba9e4c0184d7c6de60511d53223eafe0c58fc08698c97d69c418fe18c22bad",
+    "explain-speaking": "bbbac0d27dcd5f87b538054b76821a888e01b3b16dd0d2ef9d6e2d406ce9de9c",
+    "explain-to-listening": "471c07d007fb7cf50ac049b535d92eb4fa14e600fe276ed0eef26dc89f6151ce",
+    "explain": "d8aa4e6fec5157b66bda4176fc64159cc2d4dab1727d2540525710ad74a3d7ad",
+    "greeting-half": "fef9651f2b741eeb5cd878a8e337d4b226e3920c4ef361ffe764557d393fb4b6",
+    "greeting-quarter": "f8b320ee899bbdaf5e1801684d399648afc70cfa51319558cb1458915a2c40c9",
+    "greeting-to-explain": "242c28a31f500143d588e2af5a9edb17b84e05c196b367ad3329b2609c01fa01",
+    "greeting": "407f6d3c2408e02fcf31a32b84471857fd6c0fefb081fa930db8a35e95c282fb",
+    "head-left": "89f35afb7281805a1541ef03da3324f1bc6e469f00040ff91491255b4d07f919",
+    "head-right": "8dee2ceaaa56bfd2b7202428abaaddeade761832270b4de24cd72e26162c4af7",
+    "listening-blink": "4cbb6eb5c893d5225e9cf21b09aeec8345ed5f9747fb602d9f7b3450743bda5b",
+    "listening-release": "f68a0e5caf41189637bdc68341d0718d1b38a7eb31e3bad461c7ce642c7252ee",
+    "listening": "d124da9b00e490f9e9397fe4d9ad5c89ef485b93345d4c2e8f3bd51c52a6ab2b",
+    "neutral": "fcdf723ea0d3290e81d2228202d9dc8003a2934e0f35d730cd3d49c86c5ccbf9",
+    "smile": "25559773963f37677c6bf6c4fd962314f600658f8f11e156d8cb0b3c0a56160c"
+  },
+  "threeD": {
+    "status": "awaiting_external_dcc_mesh_rig_and_export",
+    "runtimeGlb": null,
+    "runtimeVrm": null,
+    "editableMaster": null
+  }
+}

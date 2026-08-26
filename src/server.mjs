@@ -702,8 +702,24 @@ function staticFile(req, res, url) {
     res.writeHead(404);
     return res.end('Not found');
   }
-  const ext = path.extname(finalResolved); const types = { '.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png' };
-  res.writeHead(200, { 'content-type': types[ext] || 'application/octet-stream' }); fs.createReadStream(finalResolved).pipe(res);
+  const ext = path.extname(finalResolved);
+  const types = {
+    '.html':'text/html; charset=utf-8',
+    '.css':'text/css; charset=utf-8',
+    '.js':'text/javascript; charset=utf-8',
+    '.json':'application/json; charset=utf-8',
+    '.svg':'image/svg+xml',
+    '.png':'image/png',
+    '.webp':'image/webp'
+  };
+  const stats=fs.statSync(finalResolved),versionedAvatarFrame=url.pathname.startsWith('/assets/avatar/sylora-v2/frames/');
+  res.writeHead(200,{
+    'content-type':types[ext]||'application/octet-stream',
+    'content-length':stats.size,
+    ...(versionedAvatarFrame?{'cache-control':'public, max-age=31536000, immutable'}:{})
+  });
+  if(req.method==='HEAD')return res.end();
+  fs.createReadStream(finalResolved).pipe(res);
 }
 
 export const server = http.createServer(async (req, res) => {

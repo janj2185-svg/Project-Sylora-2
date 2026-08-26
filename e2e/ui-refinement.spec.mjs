@@ -142,6 +142,16 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await page.locator('#aiVisualToggle').click();
   await expect(page.locator('.sylora-ai-hero')).not.toHaveClass(/sylora-visual-hidden/);
   await expect(page.locator('.sylora-avatar-motion')).toBeVisible();
+  await expect(page.locator('.sylora-avatar-motion')).toHaveAttribute('data-avatar-version','2.1.0');
+  await expect(page.locator('.sylora-avatar-motion')).toHaveAttribute('data-render-mode','single-plate-2d');
+  await expect(page.locator('.sylora-avatar-frame')).toHaveCount(1);
+  await expect(page.locator('.sylora-avatar-gesture')).toHaveCount(0);
+  await expect.poll(()=>page.locator('.sylora-avatar-frame').evaluate(image=>({
+    complete:image.complete,
+    width:image.naturalWidth,
+    height:image.naturalHeight,
+    frame:image.dataset.frame
+  }))).toEqual({complete:true,width:940,height:1254,frame:'neutral'});
   const mobilePresenceLayout=await page.locator('.sylora-ai-hero').evaluate(hero=>{
     const visible=node=>getComputedStyle(node).display!=='none';
     const copy=[...hero.querySelectorAll(':scope > .eyebrow,:scope > h1,:scope > p,:scope > .sy-ai-context-status')].filter(visible);

@@ -17,15 +17,18 @@ test('assembled avatar mounts whole-character images and final CSS loads last', 
 
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /createElement\('img'\)/);
-  assert.match(app, /\/assets\/gestures\/sylora-gesture-/);
+  assert.match(app, /sylora-avatar-runtime\.js/);
+  assert.doesNotMatch(app, /\/assets\/gestures\/sylora-gesture-/);
   assert.match(app, /\/api\/kg/);
   assert.match(app, /type:'knowledge'/);
   const mount = app.split('function mountSyloraAvatarLayers')[1].split('function ')[0];
+  assert.equal((mount.match(/createElement\('img'\)/g)||[]).length, 1);
   assert.doesNotMatch(mount, /sylora-rig-arm/);
   assert.doesNotMatch(mount, /createElement\('i'\)/);
 
   const css = fs.readFileSync('public/design-avatar-assembled.css', 'utf8');
   assert.match(css, /object-fit:cover!important/);
+  assert.match(css, /\.sylora-avatar-gesture\{[\s\S]*display:none!important/);
   assert.match(css, /sylora-visual-hidden \.sylora-avatar-motion,[\s\S]*sylora-visual-hidden \.ai-human-presence\{[\s\S]*display:none!important/);
   assert.match(css, /max-width:980px/);
   assert.match(css, /realtime-live/);

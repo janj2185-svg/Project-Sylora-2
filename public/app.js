@@ -2,6 +2,15 @@ import { t, setLocale, getLocale, humanError } from './i18n.js?v=20260818-i18n3'
 import { openCreateHub } from './create-hub.js';
 import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';
+import {
+  SYLORA_AVATAR_VERSION,
+  SYLORA_GESTURE_SEQUENCES,
+  preloadSyloraAvatarFrames,
+  syloraBlinkSequence,
+  syloraFrameSrc,
+  syloraGestureSequence,
+  syloraRestingFrame
+} from './sylora-avatar-runtime.js?v=20260826-avatar4';
 import { ObsWebSocketClient, normalizeObsUrl } from './obs-client.js';
 import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client.js';
 import { mountTikTokOwnerPilot } from './tiktok-live-pilot.js';
@@ -614,7 +623,7 @@ function setSyloraPresence(mode='ready'){
   hero?._syloraMotionRig?.setPresence(mode);
   if(hero&&mode!=='speaking')hero._syloraHairVoice=0;
   if(label)label.textContent=mode==='listening'?'СЛУХАЮ':mode==='thinking'?'ДУМАЮ':mode==='speaking'?'ГОВОРЮ':mode==='muted'?'МІКРОФОН ВИМКНЕНО':'Я ПОРУЧ';
-  if(mode==='thinking')setSyloraGesture('thinking');else if(mode==='speaking')setSyloraGesture('explain');else if(mode==='listening'||mode==='muted')setSyloraGesture('neutral');else if(hero?.dataset.emotion==='neutral'||!hero?.dataset.emotion)setSyloraGesture('neutral');
+  if(mode==='thinking')setSyloraGesture('thinking');else if(mode==='speaking')setSyloraGesture('explain');else if(mode==='listening')setSyloraGesture('empathy');else if(mode==='muted')setSyloraGesture('neutral');else if(hero?.dataset.emotion==='neutral'||!hero?.dataset.emotion)setSyloraGesture('neutral');
 }
 function stopSyloraVoice(){syloraRecognition?.stop?.();syloraRecognition=null;window.speechSynthesis?.cancel();setSyloraPresence('ready')}
 function speakSylora(text){
@@ -632,20 +641,51 @@ function setRealtimeButton(active,label){const button=document.querySelector('#a
 function realtimeClock(){const elapsed=Math.max(0,Date.now()-syloraCallStartedAt),minutes=String(Math.floor(elapsed/60000)).padStart(2,'0'),seconds=String(Math.floor(elapsed/1000)%60).padStart(2,'0'),el=document.querySelector('#realtimeTimer');if(el)el.textContent=`${minutes}:${seconds}`}
 function setRealtimeUi(active){const hero=document.querySelector('.sylora-ai-hero'),deck=document.querySelector('#realtimeDeck');hero?.classList.toggle('realtime-live',active);if(deck)deck.hidden=!active;if(active){syloraCallStartedAt=Date.now();clearInterval(syloraCallTimer);syloraCallTimer=setInterval(realtimeClock,1000);realtimeClock()}else{clearInterval(syloraCallTimer);syloraCallTimer=null}}
 function toggleSyloraRealtimeMute(){const track=syloraRealtimeStream?.getAudioTracks?.()[0],button=document.querySelector('#aiMute');if(!track)return;track.enabled=!track.enabled;if(button){button.classList.toggle('muted',!track.enabled);button.textContent=track.enabled?'Мікрофон':'Мікрофон вимкнено'}setSyloraPresence(track.enabled?'ready':'muted')}
-function scheduleSyloraLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;const blink=hero.querySelector('.sylora-avatar-blink');const doBlink=()=>{if(!hero.isConnected||!blink)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),105);if(Math.random()<.14)setTimeout(()=>{if(!hero.isConnected)return;blink.classList.add('blink-now');setTimeout(()=>blink.classList.remove('blink-now'),95)},210)};const nextBlink=()=>setTimeout(()=>{if(!hero.isConnected)return;doBlink();nextBlink()},2500+Math.random()*4100);const nextSaccade=()=>setTimeout(()=>{if(!hero.isConnected)return;hero.style.setProperty('--saccade-x',`${((Math.random()-.5)*.9).toFixed(2)}px`);hero.style.setProperty('--saccade-y',`${((Math.random()-.5)*.5).toFixed(2)}px`);setTimeout(()=>{if(hero.isConnected){hero.style.setProperty('--saccade-x','0px');hero.style.setProperty('--saccade-y','0px')}},110+Math.random()*90);nextSaccade()},1500+Math.random()*2600);nextBlink();nextSaccade()}
-function startSyloraHairPhysics(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let x=0,y=0,vx=0,vy=0,rot=0,vrot=0,last=performance.now();const tick=now=>{if(!hero.isConnected)return;const dt=Math.min(2,(now-last)/16.667||1);last=now;const idle=Math.sin(now/3100)*.14,tx=(hero._syloraHairTargetX||0)+idle,ty=(hero._syloraHairTargetY||0)+(hero._syloraHairVoice||0),tr=-tx*.16,spring=.085*dt,damping=Math.pow(.82,dt);vx=(vx+(tx-x)*spring)*damping;vy=(vy+(ty-y)*spring)*damping;vrot=(vrot+(tr-rot)*spring*.8)*damping;x+=vx*dt;y+=vy*dt;rot+=vrot*dt;hero.style.setProperty('--hair-x',`${x.toFixed(3)}px`);hero.style.setProperty('--hair-y',`${y.toFixed(3)}px`);hero.style.setProperty('--hair-rot',`${rot.toFixed(3)}deg`);hero.style.setProperty('--hair-skew',`${(rot*.42).toFixed(3)}deg`);hero._syloraHairRaf=requestAnimationFrame(tick)};hero._syloraHairRaf=requestAnimationFrame(tick)}
-function startSyloraBodyLife(hero){if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;let cycleStart=performance.now(),duration=6200,amplitude=.0036,lean=0;const nextCycle=now=>{const mode=hero.dataset.presence||'ready',range=mode==='speaking'?[4100,5600]:mode==='listening'?[4500,6200]:mode==='thinking'?[5400,7600]:[5600,7900];duration=range[0]+Math.random()*(range[1]-range[0]);amplitude=(mode==='speaking'?.0026:mode==='listening'?.0032:mode==='thinking'?.0038:.0034)*(0.86+Math.random()*.28);lean=(Math.random()-.5)*.12;cycleStart=now};nextCycle(cycleStart);const tick=now=>{if(!hero.isConnected)return;let phase=(now-cycleStart)/duration;if(phase>=1){nextCycle(now);phase=0}const breath=(1-Math.cos(phase*Math.PI*2))/2,eased=breath*breath*(3-2*breath),scale=1+eased*amplitude,y=-eased*.9,rot=lean*Math.sin(phase*Math.PI);hero.style.setProperty('--body-scale',scale.toFixed(5));hero.style.setProperty('--body-y',`${y.toFixed(3)}px`);hero.style.setProperty('--body-rot',`${rot.toFixed(3)}deg`);hero._syloraBodyRaf=requestAnimationFrame(tick)};hero._syloraBodyRaf=requestAnimationFrame(tick)}
-const SYLORA_GESTURE_SRC={
-  neutral:'/assets/gestures/sylora-gesture-neutral.png',
-  explain:'/assets/gestures/sylora-gesture-explain.png',
-  empathy:'/assets/gestures/sylora-gesture-empathy.png',
-  welcome:'/assets/gestures/sylora-gesture-welcome.png',
-  emphasis:'/assets/gestures/sylora-gesture-emphasis.png',
-  wave:'/assets/gestures/sylora-gesture-wave.png',
-  thinking:'/assets/gestures/sylora-gesture-thinking.png',
-  positive:'/assets/gestures/sylora-gesture-positive.png'
-};
-function syloraGestureSrc(name='neutral'){return SYLORA_GESTURE_SRC[name]||SYLORA_GESTURE_SRC.neutral}
+function scheduleSyloraLife(hero){
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const doBlink=()=>{
+    if(!hero.isConnected||performance.now()<(hero._syloraGestureBusyUntil||0))return;
+    const frames=syloraBlinkSequence(hero.dataset.gesture||'neutral');
+    if(!frames.length||hero.dataset.presence==='speaking')return;
+    playSyloraFrameSequence(hero,frames);
+    if(Math.random()<.14)setTimeout(()=>{if(hero.isConnected)doBlink()},280);
+  };
+  const nextBlink=()=>{
+    hero._syloraBlinkTimer=setTimeout(()=>{
+      if(!hero.isConnected)return;
+      doBlink();
+      nextBlink();
+    },2500+Math.random()*4100);
+  };
+  nextBlink();
+}
+function setSyloraAvatarFrame(hero,frameName='neutral'){
+  const frame=hero?.querySelector('.sylora-avatar-frame');
+  if(!frame)return;
+  const safeName=Object.hasOwn(SYLORA_GESTURE_SEQUENCES,frameName)?syloraRestingFrame(frameName):frameName;
+  const src=syloraFrameSrc(safeName);
+  if(frame.dataset.frame===safeName&&frame.getAttribute('src')===src)return;
+  frame.dataset.frame=safeName;
+  frame.src=src;
+}
+function cancelSyloraFrameSequence(hero){
+  hero._syloraFrameToken=(hero._syloraFrameToken||0)+1;
+  for(const timer of hero._syloraFrameTimers||[])clearTimeout(timer);
+  hero._syloraFrameTimers=[];
+  hero._syloraGestureBusyUntil=0;
+}
+function playSyloraFrameSequence(hero,steps){
+  cancelSyloraFrameSequence(hero);
+  const token=hero._syloraFrameToken;
+  let finalAt=0;
+  for(const step of steps){
+    finalAt=Math.max(finalAt,step.atMs);
+    const show=()=>{if(hero.isConnected&&hero._syloraFrameToken===token)setSyloraAvatarFrame(hero,step.frame)};
+    if(step.atMs===0)show();else hero._syloraFrameTimers.push(setTimeout(show,step.atMs));
+  }
+  hero._syloraGestureBusyUntil=performance.now()+finalAt+70;
+  return finalAt;
+}
 function mountSyloraAvatarLayers(){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero||hero.querySelector('.sylora-avatar-motion'))return;
@@ -653,26 +693,24 @@ function mountSyloraAvatarLayers(){
   const motion=document.createElement('div');
   motion.className='sylora-avatar-motion';
   motion.setAttribute('aria-hidden','true');
-  // Single coherent portrait images — never sprite grids / arm tubes / clipped face layers.
-  const body=document.createElement('img');
-  body.className='sylora-avatar-body';
-  body.src='/assets/sylora-avatar-v2-base.png';
-  body.alt='';
-  body.decoding='async';
-  body.draggable=false;
-  motion.append(body);
-  for(let i=0;i<2;i++){
-    const gesture=document.createElement('img');
-    gesture.className='sylora-avatar-gesture';
-    gesture.src=syloraGestureSrc('neutral');
-    gesture.alt='';
-    gesture.decoding='async';
-    gesture.draggable=false;
-    if(i===0)gesture.classList.add('gesture-shown','gesture-base');
-    motion.append(gesture);
-  }
+  motion.dataset.avatarVersion=SYLORA_AVATAR_VERSION;
+  motion.dataset.renderMode='single-plate-2d';
+  // One coherent full-body plate at a time: no detached logo overlay and no body crossfade.
+  const frame=document.createElement('img');
+  frame.className='sylora-avatar-body sylora-avatar-frame';
+  frame.src=syloraFrameSrc('neutral');
+  frame.dataset.frame='neutral';
+  frame.width=940;
+  frame.height=1254;
+  frame.alt='';
+  frame.decoding='async';
+  frame.fetchPriority='high';
+  frame.draggable=false;
+  frame.addEventListener('load',()=>{delete hero.dataset.avatarError});
+  frame.addEventListener('error',()=>{hero.dataset.avatarError='asset-load'});
+  motion.append(frame);
   hero.append(motion);
-  hero._syloraGestureLayer=0;
+  hero._syloraPreloadedFrames=preloadSyloraAvatarFrames();
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
     const rig=new SyloraMotionRig();
     hero._syloraMotionRig=rig;
@@ -680,34 +718,38 @@ function mountSyloraAvatarLayers(){
     hero._syloraMotionDetach=rig.attach(hero);
   }
   setSyloraGesture(hero.dataset.gesture||'neutral');
+  scheduleSyloraLife(hero);
 }
 function detectSyloraEmotion(text=''){const s=String(text).toLowerCase();if(/[!]{2,}|\b(wow|вау|ого|wow)\b/.test(s))return'surprised';if(/😂|🤣|😄|\b(ха-?ха|haha|żart|жарт)/.test(s))return'playful';if(/\b(дякую|спасибі|thanks|thank you|dziękuję|dziekuje)\b/.test(s))return'grateful';if(/\b(болить|погано|сумно|проблем|важко|sorry|sad|problem|martwi|smutn)/.test(s))return'concerned';if(/❤️|❤|\b(чудово|супер|класно|рада|радий|great|good|love|świetnie|dobrze)\b/.test(s))return'happy';return'neutral'}
 function setSyloraGesture(name='neutral',duration=0){
   const hero=document.querySelector('.sylora-ai-hero');
   if(!hero)return;
-  const gestureName=SYLORA_GESTURE_SRC[name]?name:'neutral';
-  const layers=[...hero.querySelectorAll('.sylora-avatar-gesture')];
+  const gestureName=Object.hasOwn(SYLORA_GESTURE_SEQUENCES,name)?name:'neutral';
   clearTimeout(hero._syloraGestureTimer);
   hero.dataset.gesture=gestureName;
   hero.dataset.handPose=handPoseForGesture(gestureName);
   hero._syloraMotionRig?.setGesture(gestureName);
   hero.classList.toggle('gesture-active',gestureName!=='neutral');
-  if(!layers.length)return;
-  let next=layers.length===1?0:(hero._syloraGestureLayer===0?1:0);
-  if(hero._syloraGestureLayer==null||hero._syloraGestureLayer<0)next=0;
-  const incoming=layers[next];
-  const outgoing=layers[hero._syloraGestureLayer];
-  incoming.src=syloraGestureSrc(gestureName);
-  incoming.classList.add('gesture-shown');
-  if(outgoing&&outgoing!==incoming)outgoing.classList.remove('gesture-shown');
-  hero._syloraGestureLayer=next;
+  hero._syloraVisemeFrame=0;
+  const transitionMs=playSyloraFrameSequence(hero,syloraGestureSequence(gestureName));
   if(duration)hero._syloraGestureTimer=setTimeout(()=>{
-    if(hero.isConnected)setSyloraGesture(hero.dataset.presence==='thinking'?'thinking':hero.dataset.presence==='speaking'?'explain':'neutral');
-  },duration);
+    if(hero.isConnected)setSyloraGesture(hero.dataset.presence==='thinking'?'thinking':hero.dataset.presence==='speaking'?'explain':hero.dataset.presence==='listening'?'empathy':'neutral');
+  },Math.max(duration,transitionMs+80));
 }
 function updateSyloraSpeakingGesture(level=0){const hero=document.querySelector('.sylora-ai-hero');if(!hero||hero.dataset.presence!=='speaking'||matchMedia('(prefers-reduced-motion: reduce)').matches)return;hero._syloraMotionRig?.setVoiceEnergy(level);if(!hero._syloraMotionRig){hero.style.setProperty('--gesture-lift',`${(-Math.min(1,level)*2.2).toFixed(2)}px`);hero._syloraHairVoice=-Math.min(1,level)*.32}const now=performance.now();if(level>.48&&now>(hero._syloraNextEmphasis||0)){hero._syloraNextEmphasis=now+1900+Math.random()*1200;setSyloraGesture('emphasis',620)}}
 function setSyloraEmotion(emotion='neutral',duration=0){const hero=document.querySelector('.sylora-ai-hero');if(!hero)return;hero.dataset.emotion=emotion;clearTimeout(hero._syloraEmotionTimer);const gesture={happy:'positive',grateful:'empathy',concerned:'empathy',playful:'wave',surprised:'welcome'}[emotion];if(gesture)setSyloraGesture(gesture,duration);if(duration)hero._syloraEmotionTimer=setTimeout(()=>{if(hero.isConnected){hero.dataset.emotion='neutral';if(hero.dataset.presence==='ready')setSyloraGesture('neutral')}},duration)}
-function setSyloraViseme(level=0,bands=null){const hero=document.querySelector('.sylora-ai-hero');if(!hero)return;const now=performance.now();let frame=0;if(level>=.075){const low=bands?.low||0,mid=bands?.mid||0,high=bands?.high||0;if(high>mid*1.08&&high>low*.92)frame=6;else if(low>mid*1.22)frame=4;else if(mid>low*1.12&&level>.34)frame=3;else if(high>low*.78)frame=7;else frame=2}if(frame!==0&&now-(hero._syloraVisemeAt||0)<72)return;hero._syloraVisemeAt=now;hero._syloraVisemeFrame=frame;hero.style.setProperty('--viseme-x',`${(frame%4)*33.333}%`);hero.style.setProperty('--viseme-y',frame>3?'100%':'0%');hero.classList.toggle('avatar-speaking',frame!==0)}
+function setSyloraViseme(level=0,bands=null){
+  const hero=document.querySelector('.sylora-ai-hero');
+  if(!hero)return;
+  const now=performance.now(),energy=Math.max(level,bands?.mid||0),frame=energy>=.075?1:0;
+  if(frame===hero._syloraVisemeFrame||frame!==0&&now-(hero._syloraVisemeAt||0)<72)return;
+  hero._syloraVisemeAt=now;
+  hero._syloraVisemeFrame=frame;
+  hero.classList.toggle('avatar-speaking',frame!==0);
+  if(hero.dataset.presence!=='speaking'||!['explain','emphasis'].includes(hero.dataset.gesture))return;
+  cancelSyloraFrameSequence(hero);
+  setSyloraAvatarFrame(hero,frame?'explain-speaking':syloraRestingFrame(hero.dataset.gesture));
+}
 function startSyloraAudioReactive(stream){
   try{cancelAnimationFrame(syloraAudioRaf);syloraAudioContext?.close?.();const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)return;const ctx=new AudioCtx(),analyser=ctx.createAnalyser(),source=ctx.createMediaStreamSource(stream),wave=new Uint8Array(128),freq=new Uint8Array(128);analyser.fftSize=256;analyser.smoothingTimeConstant=.68;source.connect(analyser);syloraAudioContext=ctx;ctx.resume?.().catch(()=>{});const avg=(from,to)=>{let sum=0;for(let i=from;i<to;i++)sum+=freq[i]||0;return sum/Math.max(1,to-from)/255};const tick=()=>{if(!syloraRealtimePeer||ctx.state==='closed')return;analyser.getByteTimeDomainData(wave);analyser.getByteFrequencyData(freq);let energy=0;for(const value of wave)energy+=Math.abs(value-128);const level=Math.min(1,energy/wave.length/24),bands={low:avg(1,12),mid:avg(12,40),high:avg(40,88)},hero=document.querySelector('.sylora-ai-hero');if(hero){hero.style.setProperty('--voice-scale',(1+level*.008).toFixed(4));hero.style.setProperty('--voice-glow',`${Math.round(12+level*30)}px`);setSyloraViseme(level,bands);updateSyloraSpeakingGesture(level)}syloraAudioRaf=requestAnimationFrame(tick)};tick()}catch{}
 }
