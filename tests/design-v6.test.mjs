@@ -113,6 +113,9 @@ test('Studio mobile runtime keeps one current body portal across in-place rerend
   assert.match(studioRuntime,/document\.body\.append\(backdrop\)/);
   assert.match(studioRuntime,/document\.body\.append\(tools\)/);
   assert.doesNotMatch(studioRuntime,/document\.querySelector\('\.studio-(?:mobile-tools|sheet-backdrop)'\)\?\.remove\(\)/);
+  assert.match(studio,/\.studio-sheet-close\{display:none\}/);
+  assert.match(studio,/@media\(max-width:900px\)\{[\s\S]*?\.studio-sheet-close\{[^}]*display:grid;/);
+  assert.match(studio,/input\[type="range"\]\{[\s\S]*?appearance:none;[\s\S]*?border-radius:999px!important;/);
 });
 
 test('shell navigation uses delegation so runtime copy updates cannot orphan nav buttons',()=>{
