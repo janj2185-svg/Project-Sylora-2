@@ -82,6 +82,11 @@ test('Home activation remains stable through the complete touch click',()=>{
   assert.match(consolidation,/\.create-hub\{[\s\S]*?background:rgba\(18,24,26,\.32\);backdrop-filter:blur\(10px\) saturate\(\.9\);/);
 });
 
+test('media creation keeps translucent paint outside rounded gradient controls',()=>{
+  assert.match(system,/body:is\(\[data-view="clips"\],\[data-view="videos"\]\) #app>\.hero\{backdrop-filter:none!important\}/);
+  assert.match(system,/body:is\(\[data-view="clips"\],\[data-view="videos"\]\) :is\([^}]+\)\{\s*border:2px solid rgba\(255,255,255,\.94\)!important;\s*background-clip:padding-box!important;/);
+});
+
 test('canonical and route layers retain responsive and reduced-motion contracts',()=>{
   for(const css of [system,home,live,studio,ai,account]){
     assert.match(css,/@media\(max-width:/);

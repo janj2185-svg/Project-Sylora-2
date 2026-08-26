@@ -261,6 +261,15 @@ input,textarea,select{border-radius:var(--sy-r-md)!important;border:1px solid rg
 .media-file-picker>span{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;border-radius:var(--sy-r-pill);background:linear-gradient(135deg,var(--sy-route-accent),#26302f 82%);color:#fff;font-size:11px;font-weight:760;box-shadow:0 10px 24px rgba(var(--sy-route-accent-rgb),.18),inset 0 1px 0 rgba(255,255,255,.24)}
 .media-file-picker>strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sy-muted);font-size:11px;font-weight:650}
 .media-file-input{position:absolute!important;width:1px!important;height:1px!important;margin:0!important;padding:0!important;opacity:0!important;pointer-events:none;overflow:hidden;clip-path:inset(50%)}
+
+/* Media creation uses an opaque hero plate and a pearl paint boundary on
+   rounded gradient actions. This keeps Chromium's mobile compositor from
+   resampling translucent pixels between otherwise identical captures. */
+body:is([data-view="clips"],[data-view="videos"]) #app>.hero{backdrop-filter:none!important}
+body:is([data-view="clips"],[data-view="videos"]) :is(#openUpload,#videoUploadOpen,#clipUpload>button,#videoUpload>button,.media-file-picker>span){
+  border:2px solid rgba(255,255,255,.94)!important;
+  background-clip:padding-box!important;
+}
 :where(button,a,input,textarea,select,[tabindex]):focus-visible{outline:0!important;box-shadow:var(--sy-focus)!important}
 
 .eyebrow{color:#816b4a!important;font-size:10px!important;letter-spacing:.17em!important;font-weight:760!important}
