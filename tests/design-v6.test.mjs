@@ -63,6 +63,8 @@ test('Home and global navigation do not duplicate the contextual Sylora workspac
 test('flagship routes prioritize outcomes over repetitive card stacks',()=>{
   assert.match(appJs,/class="home-focus-panel"/);
   assert.match(appJs,/class="home-brief-meta"/);
+  assert.equal((appJs.match(/data-horizon-create/g)||[]).length,2,'one Home trigger plus its binding must remain deterministic');
+  assert.match(appJs,/data-focus-create/);
   assert.match(home,/\.ecosystem-feed\{display:grid;grid-template-columns:repeat\(12,minmax\(0,1fr\)\)/);
   assert.match(home,/\.home-focus-panel\{/);
   assert.match(consolidation,/\.create-hub-grid\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
