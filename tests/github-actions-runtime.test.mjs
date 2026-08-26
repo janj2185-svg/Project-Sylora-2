@@ -23,3 +23,13 @@ test('GitHub workflows use Node 24 action runtimes with read-only repository acc
   const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
   assert.equal((ci.match(/actions\/upload-artifact@v7/g) || []).length, 3);
 });
+
+test('CI avoids duplicate feature-branch runs while preserving main push protection', () => {
+  const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+
+  assert.match(
+    ci,
+    /on:\s*\n\s+push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+pull_request:/,
+    'feature branches must run through pull requests, while direct main pushes remain protected'
+  );
+});
