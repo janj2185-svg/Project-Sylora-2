@@ -570,8 +570,12 @@ export async function waitForStableVisualState(page, surface) {
     await expect(page.locator('#goLive')).toBeVisible();
     await expect(page.locator('#createEventBtn')).toBeVisible();
   }
-  if (surface.id === 'clips-create') await expect(page.locator('#clipUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
-  if (surface.id === 'video-create') await expect(page.locator('#videoUpload input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
+  if (surface.id === 'clips-create' || surface.id === 'video-create') {
+    const form=page.locator(surface.id === 'clips-create' ? '#clipUpload' : '#videoUpload');
+    await expect(form.locator('.media-file-picker')).toBeVisible();
+    await expect(form.locator('input[type="file"]')).toHaveAttribute('accept', 'video/mp4,video/webm');
+    await expect(form.locator('[data-file-name]')).toHaveText('Файл не вибрано');
+  }
 
   await waitForStableVisualAssets(page);
   await waitForVisualQuiescence(page);

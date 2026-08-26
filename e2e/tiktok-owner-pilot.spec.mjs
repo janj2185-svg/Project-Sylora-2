@@ -41,4 +41,20 @@ test('owner can connect the local bridge and inspect chat, gift and host events 
   await expect(page.locator('#tiktokEventJournal')).toContainText('Rose ×3');
   await expect(page.locator('#tiktokEventJournal')).toContainText('Co-host · linkMicBattle');
   expect(copilotRequests).toBe(0);
+
+  await page.route('**/api/ai/live-copilot/respond',async route=>{
+    const event=route.request().postDataJSON()?.event||{};
+    const message=event.type==='guest'?'Вітаю співведучого.':'Привіт! Я поруч у цьому LIVE.';
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({message,eventType:event.type,delivery:'local_voice_or_owner_approved',sentToTikTok:false})});
+  });
+
+  const hostEvent=page.locator('.tiktok-event-external').filter({hasText:'Co-host · linkMicBattle'});
+  await hostEvent.getByRole('button',{name:'Відповісти'}).click();
+  await expect.poll(()=>copilotRequests).toBe(1);
+  await expect(page.locator('.tiktok-event-sylora')).toContainText('Вітаю співведучого. · LOCAL VOICE ONLY');
+
+  await page.locator('#tiktokResponseMode').selectOption('mentions');
+  await page.locator('[data-tiktok-sim="chat"]').click();
+  await expect.poll(()=>copilotRequests,{timeout:8_000}).toBe(2);
+  await expect(page.locator('.tiktok-event-sylora').first()).toContainText('Привіт! Я поруч у цьому LIVE. · LOCAL VOICE ONLY');
 });

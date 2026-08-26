@@ -108,6 +108,10 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   await page.setViewportSize({width:390,height:844});
   await expect(page.locator('.studio-mobile-tools')).toBeVisible();
   await expectNoHorizontalOverflow(page);
+  const intelSelect=page.locator('#creatorLiveSelect');
+  const intelButton=page.locator('#creatorInsightsBtn');
+  const [intelSelectBox,intelButtonBox]=await Promise.all([intelSelect.boundingBox(),intelButton.boundingBox()]);
+  expect((intelSelectBox?.y||0)+(intelSelectBox?.height||0)).toBeLessThanOrEqual(intelButtonBox?.y||0);
   const tools=page.locator('.studio-mobile-tools button[data-studio-tool]');
   await expect(tools).toHaveCount(7);
   const sourcesTool=page.locator('.studio-mobile-tools button[data-studio-tool="sources"]');
@@ -134,8 +138,17 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await page.locator('#aiVisualToggle').click();
   await expect(page.locator('.sylora-ai-hero')).toHaveClass(/sylora-visual-hidden/);
   await expect(page.locator('.sylora-avatar-motion')).toBeHidden();
+  expect((await page.locator('.sylora-ai-hero').boundingBox())?.height).toBeLessThanOrEqual(360);
   await page.locator('#aiVisualToggle').click();
   await expect(page.locator('.sylora-ai-hero')).not.toHaveClass(/sylora-visual-hidden/);
+  await expect(page.locator('.sylora-avatar-motion')).toBeVisible();
+  const mobilePresenceLayout=await page.locator('.sylora-ai-hero').evaluate(hero=>{
+    const visible=node=>getComputedStyle(node).display!=='none';
+    const copy=[...hero.querySelectorAll(':scope > .eyebrow,:scope > h1,:scope > p,:scope > .sy-ai-context-status')].filter(visible);
+    const avatar=hero.querySelector('.sylora-avatar-motion')?.getBoundingClientRect();
+    return{avatarTop:avatar?.top??0,copyBottom:Math.max(...copy.map(node=>node.getBoundingClientRect().bottom))};
+  });
+  expect(mobilePresenceLayout.avatarTop).toBeGreaterThanOrEqual(mobilePresenceLayout.copyBottom+8);
   const source=page.locator('#syloraDegraded');
   await expect(source).toBeHidden();
   await expectNoHorizontalOverflow(page);

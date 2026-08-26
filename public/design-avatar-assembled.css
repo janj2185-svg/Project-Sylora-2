@@ -130,21 +130,25 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
 
 @media(max-width:720px){
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
-    min-height:520px!important;
-    padding:22px 20px 280px!important;
+    min-height:clamp(680px,180vw,720px)!important;
+    padding:64px 20px 390px!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion{
-    inset:auto auto 118px 50%!important;
+    inset:auto auto 92px 50%!important;
     left:50%!important;
     right:auto!important;
-    width:min(78vw,300px)!important;
+    width:min(66vw,258px)!important;
     transform:translateX(-50%);
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
     right:20px;
     top:auto!important;
-    bottom:118px!important;
-    width:42%;
+    bottom:104px!important;
+    width:min(48%,184px);
+  }
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.sylora-visual-hidden{
+    min-height:300px!important;
+    padding:64px 20px 24px!important;
   }
   /* LIVE: full coherent portrait above a compact control strip — never cut through the torso. */
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live{
