@@ -270,6 +270,10 @@ body:is([data-view="clips"],[data-view="videos"]) :is(#openUpload,#videoUploadOp
   border:2px solid rgba(255,255,255,.94)!important;
   background-clip:padding-box!important;
 }
+body:is([data-view="clips"],[data-view="videos"]) :is(#clipUpload>button,#videoUpload>button){
+  background:#26383a!important;
+  box-shadow:0 12px 30px rgba(var(--sy-route-accent-rgb),.22),inset 0 1px 0 rgba(255,255,255,.25)!important;
+}
 :where(button,a,input,textarea,select,[tabindex]):focus-visible{outline:0!important;box-shadow:var(--sy-focus)!important}
 
 .eyebrow{color:#816b4a!important;font-size:10px!important;letter-spacing:.17em!important;font-weight:760!important}
