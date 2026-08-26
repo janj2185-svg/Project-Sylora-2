@@ -23,9 +23,10 @@ import {
 } from './visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
-  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-  VISUAL_RASTER_MAX_MISMATCH_RATIO,
-  VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS,
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
+  VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA
 } from './visual-raster-contract.mjs';
 
 export {
@@ -323,8 +324,9 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
   requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
     'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
     'hiddenScreenshotsCompared','fullPageScreenshotsCompared','fullPageByteMatch','rasterPixelsCompared','rasterMismatchPixels',
-    'rasterMismatchRatio','rasterMaxChannelDelta','rasterTotalChannelDelta','rasterMaxMismatchRatio',
-    'rasterMaxMismatchPixelsAllowed','rasterMaxChannelDeltaAllowed','rasterMaxTotalChannelDeltaAllowed'
+    'rasterMismatchRatio','rasterSignificantMismatchPixels','rasterSignificantMismatchRatio','rasterMaxChannelDelta',
+    'rasterTotalChannelDelta','rasterSignificantChannelDelta','rasterMaxSignificantMismatchRatio',
+    'rasterMaxSignificantMismatchPixelsAllowed','rasterMaxChannelDeltaAllowed','rasterMaxTotalChannelDeltaAllowed'
   ]);
   const expectedCanonicalImages=touch?1:2;
   const expectedCanonicalBackgrounds=0;
@@ -348,22 +350,33 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
   }
   requirePositiveInteger(record.paintStability.rasterPixelsCompared,`capture report ${record.file} rasterPixelsCompared`);
   requireNonNegativeInteger(record.paintStability.rasterMismatchPixels,`capture report ${record.file} rasterMismatchPixels`);
+  requireNonNegativeInteger(
+    record.paintStability.rasterSignificantMismatchPixels,
+    `capture report ${record.file} rasterSignificantMismatchPixels`
+  );
   requireNonNegativeInteger(record.paintStability.rasterMaxChannelDelta,`capture report ${record.file} rasterMaxChannelDelta`);
   requireNonNegativeInteger(record.paintStability.rasterTotalChannelDelta,`capture report ${record.file} rasterTotalChannelDelta`);
   const expectedMismatchRatio=record.paintStability.rasterMismatchPixels/record.paintStability.rasterPixelsCompared;
+  const expectedSignificantMismatchRatio=
+    record.paintStability.rasterSignificantMismatchPixels/record.paintStability.rasterPixelsCompared;
   if(
     record.paintStability.rasterMismatchPixels>record.paintStability.rasterPixelsCompared||
     !Number.isFinite(record.paintStability.rasterMismatchRatio)||record.paintStability.rasterMismatchRatio<0||
     Math.abs(record.paintStability.rasterMismatchRatio-expectedMismatchRatio)>Number.EPSILON||
-    record.paintStability.rasterMismatchPixels>VISUAL_RASTER_MAX_MISMATCH_PIXELS||
-    record.paintStability.rasterMismatchRatio>VISUAL_RASTER_MAX_MISMATCH_RATIO||
+    record.paintStability.rasterSignificantMismatchPixels>record.paintStability.rasterMismatchPixels||
+    !Number.isFinite(record.paintStability.rasterSignificantMismatchRatio)||
+    record.paintStability.rasterSignificantMismatchRatio<0||
+    Math.abs(record.paintStability.rasterSignificantMismatchRatio-expectedSignificantMismatchRatio)>Number.EPSILON||
+    record.paintStability.rasterSignificantMismatchPixels>VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS||
+    record.paintStability.rasterSignificantMismatchRatio>VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO||
     record.paintStability.rasterMaxChannelDelta>VISUAL_RASTER_MAX_CHANNEL_DELTA||
     record.paintStability.rasterTotalChannelDelta>VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA||
     record.paintStability.rasterTotalChannelDelta<record.paintStability.rasterMismatchPixels||
     record.paintStability.rasterMaxChannelDelta>record.paintStability.rasterTotalChannelDelta||
     record.paintStability.rasterTotalChannelDelta>record.paintStability.rasterMismatchPixels*4*255||
-    record.paintStability.rasterMaxMismatchRatio!==VISUAL_RASTER_MAX_MISMATCH_RATIO||
-    record.paintStability.rasterMaxMismatchPixelsAllowed!==VISUAL_RASTER_MAX_MISMATCH_PIXELS||
+    record.paintStability.rasterSignificantChannelDelta!==VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA||
+    record.paintStability.rasterMaxSignificantMismatchRatio!==VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO||
+    record.paintStability.rasterMaxSignificantMismatchPixelsAllowed!==VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS||
     record.paintStability.rasterMaxChannelDeltaAllowed!==VISUAL_RASTER_MAX_CHANNEL_DELTA||
     record.paintStability.rasterMaxTotalChannelDeltaAllowed!==VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA||
     (record.paintStability.fullPageByteMatch&&record.paintStability.rasterMismatchPixels!==0)
@@ -413,7 +426,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==11)fail('capture report.schemaVersion must be 11');
+  if(report.schemaVersion!==12)fail('capture report.schemaVersion must be 12');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);

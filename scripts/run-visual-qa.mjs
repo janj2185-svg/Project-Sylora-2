@@ -18,9 +18,10 @@ import {
 import {createVisualFixtureData} from './visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
-  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-  VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS,
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO,
   VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
+  VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA,
   comparePngBuffers
 } from './visual-raster-contract.mjs';
 
@@ -193,8 +194,9 @@ if (mode === 'repeat') {
       exactPathSets,
       contextParity,
       tolerance: {
-        maxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
-        maxMismatchPixels: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
+        significantChannelDelta: VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA,
+        maxSignificantMismatchRatio: VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO,
+        maxSignificantMismatchPixels: VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS,
         maxChannelDelta: VISUAL_RASTER_MAX_CHANNEL_DELTA,
         maxTotalChannelDelta: VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
       },
@@ -203,12 +205,20 @@ if (mode === 'repeat') {
     process.exit(1);
   }
   const maximumObservedRatio = Math.max(...comparisons.map(comparison => comparison.mismatchRatio || 0));
+  const maximumObservedSignificantRatio = Math.max(
+    ...comparisons.map(comparison => comparison.significantMismatchRatio || 0)
+  );
+  const maximumObservedSignificantPixels = Math.max(
+    ...comparisons.map(comparison => comparison.significantMismatchPixels || 0)
+  );
   const maximumObservedChannelDelta = Math.max(...comparisons.map(comparison => comparison.maxChannelDelta || 0));
   const maximumObservedTotalChannelDelta = Math.max(...comparisons.map(comparison => comparison.totalChannelDelta || 0));
   console.log(
     `Repeatability PASS: ${actual.size} candidate PNGs match within strict raster tolerance; ` +
     `byte-identical=${actual.size-toleratedRasterDrift.length}/${actual.size}, ` +
     `tolerated=${toleratedRasterDrift.length}, maxObservedRatio=${maximumObservedRatio}, ` +
+    `maxObservedSignificantRatio=${maximumObservedSignificantRatio}, ` +
+    `maxObservedSignificantPixels=${maximumObservedSignificantPixels}, ` +
     `maxObservedChannelDelta=${maximumObservedChannelDelta}, ` +
     `maxObservedTotalChannelDelta=${maximumObservedTotalChannelDelta}.`
   );

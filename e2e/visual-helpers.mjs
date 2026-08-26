@@ -10,9 +10,10 @@ import {
 } from '../scripts/visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
-  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
-  VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS,
+  VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO,
   VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA,
+  VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA,
   visualRasterDifferenceWithinTolerance
 } from '../scripts/visual-raster-contract.mjs';
 
@@ -770,7 +771,7 @@ async function rawScreenshotCropDigests(page, png, clips) {
 }
 
 async function rawScreenshotRasterDifference(page, first, second) {
-  return page.evaluate(async ({ encodedFirst, encodedSecond }) => {
+  return page.evaluate(async ({ encodedFirst, encodedSecond, significantChannelDelta }) => {
     const decode = async encodedPng => {
       const binary = atob(encodedPng);
       const bytes = new Uint8Array(binary.length);
@@ -805,23 +806,29 @@ async function rawScreenshotRasterDifference(page, first, second) {
         pixelCount: 0,
         mismatchPixels: 0,
         mismatchRatio: 1,
+        significantMismatchPixels: 0,
+        significantMismatchRatio: 1,
         maxChannelDelta: 255,
         totalChannelDelta: 1020
       };
     }
     const pixelCount = before.width * before.height;
     let mismatchPixels = 0;
+    let significantMismatchPixels = 0;
     let maxChannelDelta = 0;
     let totalChannelDelta = 0;
     for (let offset = 0; offset < before.pixels.length; offset += 4) {
       let pixelMismatch = false;
+      let pixelMaxChannelDelta = 0;
       for (let channel = 0; channel < 4; channel += 1) {
         const delta = Math.abs(before.pixels[offset + channel] - after.pixels[offset + channel]);
         if (delta > 0) pixelMismatch = true;
+        if (delta > pixelMaxChannelDelta) pixelMaxChannelDelta = delta;
         if (delta > maxChannelDelta) maxChannelDelta = delta;
         totalChannelDelta += delta;
       }
       if (pixelMismatch) mismatchPixels += 1;
+      if (pixelMaxChannelDelta > significantChannelDelta) significantMismatchPixels += 1;
     }
     return {
       dimensionsMatch: true,
@@ -832,12 +839,15 @@ async function rawScreenshotRasterDifference(page, first, second) {
       pixelCount,
       mismatchPixels,
       mismatchRatio: mismatchPixels / pixelCount,
+      significantMismatchPixels,
+      significantMismatchRatio: significantMismatchPixels / pixelCount,
       maxChannelDelta,
       totalChannelDelta
     };
   }, {
     encodedFirst: first.toString('base64'),
-    encodedSecond: second.toString('base64')
+    encodedSecond: second.toString('base64'),
+    significantChannelDelta: VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA
   });
 }
 
@@ -1041,8 +1051,8 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
     throw new Error(
       `Post-restore full-page paint exceeds strict raster tolerance: first=${firstSha256} second=${secondSha256} ` +
       `pixels=${rasterDifference.mismatchPixels}/${rasterDifference.pixelCount} ` +
-      `maxMismatchPixels=${VISUAL_RASTER_MAX_MISMATCH_PIXELS} ` +
-      `ratio=${rasterDifference.mismatchRatio}/${VISUAL_RASTER_MAX_MISMATCH_RATIO} ` +
+      `significantPixels=${rasterDifference.significantMismatchPixels}/${VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS} ` +
+      `significantRatio=${rasterDifference.significantMismatchRatio}/${VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO} ` +
       `maxChannelDelta=${rasterDifference.maxChannelDelta}/${VISUAL_RASTER_MAX_CHANNEL_DELTA} ` +
       `totalChannelDelta=${rasterDifference.totalChannelDelta}/${VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA}` +
       (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
@@ -1082,10 +1092,13 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
       rasterPixelsCompared: rasterDifference.pixelCount,
       rasterMismatchPixels: rasterDifference.mismatchPixels,
       rasterMismatchRatio: rasterDifference.mismatchRatio,
+      rasterSignificantMismatchPixels: rasterDifference.significantMismatchPixels,
+      rasterSignificantMismatchRatio: rasterDifference.significantMismatchRatio,
       rasterMaxChannelDelta: rasterDifference.maxChannelDelta,
       rasterTotalChannelDelta: rasterDifference.totalChannelDelta,
-      rasterMaxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
-      rasterMaxMismatchPixelsAllowed: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
+      rasterSignificantChannelDelta: VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA,
+      rasterMaxSignificantMismatchRatio: VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO,
+      rasterMaxSignificantMismatchPixelsAllowed: VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS,
       rasterMaxChannelDeltaAllowed: VISUAL_RASTER_MAX_CHANNEL_DELTA,
       rasterMaxTotalChannelDeltaAllowed: VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA
     }
