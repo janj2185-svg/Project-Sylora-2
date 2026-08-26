@@ -53,6 +53,33 @@ body[data-view="ai"] .ai-input-row{display:grid;grid-template-columns:minmax(0,1
 body[data-view="ai"] .ai-input-row textarea{min-height:64px;max-height:180px;resize:vertical;padding:13px 14px}
 body[data-view="ai"] .ai-send{width:46px;height:46px;padding:0!important}
 
+/* Conversation is the product surface; memory and permissions stay in a calm context rail. */
+body[data-view="ai"] .ai-approvals{margin-top:14px!important;padding:18px!important;border-left:3px solid rgba(213,173,112,.72)!important}
+body[data-view="ai"] .ai-workspace-grid{
+  display:grid;grid-template-columns:minmax(0,1.48fr) minmax(292px,.72fr);gap:14px;align-items:start;min-width:0;margin-top:14px
+}
+body[data-view="ai"] :is(.ai-dialogue-column,.ai-context-column){display:grid;gap:12px;min-width:0}
+body[data-view="ai"] .ai-workspace-grid :is(.ai-conversation,.ai-compose,.ai-transparency,.ai-memory){margin-top:0!important}
+body[data-view="ai"] .ai-dialogue-column{position:relative}
+body[data-view="ai"] .ai-dialogue-column .ai-conversation{
+  min-height:360px;max-height:560px;padding:20px!important;border-radius:28px!important;
+  background:linear-gradient(155deg,rgba(255,255,255,.98),rgba(239,246,244,.90))!important;
+  border:1px solid rgba(255,255,255,.96)!important;box-shadow:var(--sy-shadow-2)!important
+}
+body[data-view="ai"] .ai-dialogue-column .ai-compose{
+  bottom:18px;padding:14px!important;border-radius:25px!important;
+  background:rgba(253,254,254,.96)!important;border:1px solid rgba(255,255,255,.96)!important;
+  box-shadow:0 24px 72px rgba(29,42,45,.14)!important;backdrop-filter:none!important
+}
+body[data-view="ai"] .ai-context-column>section{
+  padding:19px!important;border-radius:24px!important;background:linear-gradient(150deg,rgba(255,255,255,.98),rgba(241,246,244,.91))!important;
+  border:1px solid rgba(255,255,255,.96)!important;box-shadow:var(--sy-shadow-1)!important
+}
+body[data-view="ai"] .ai-context-column h3{margin:8px 0 6px;font-size:18px;letter-spacing:-.025em}
+body[data-view="ai"] .ai-context-column .stack{gap:7px}
+body[data-view="ai"] .ai-context-column .item{padding:11px 12px;border-radius:16px;background:rgba(255,255,255,.64)}
+body[data-view="ai"] .ai-context-column .fields{gap:7px}
+
 /* Global AI outage must never look like platform outage. */
 #syloraDegraded{display:none!important}
 body[data-view="ai"] #syloraDegraded.sy-ai-context-status{display:flex!important;position:static!important;width:auto!important;max-width:none!important;margin:0 0 10px!important;padding:9px 12px!important;align-items:center;gap:8px;border-radius:var(--sy-r-pill)!important;background:rgba(248,241,226,.82)!important;border:1px solid rgba(168,139,94,.16)!important;color:#6d5633!important;font-size:11px!important;box-shadow:none!important;backdrop-filter:blur(12px)}
@@ -67,6 +94,8 @@ body[data-view="ai"] .sy-ai-context-status{pointer-events:none}
   body[data-view="ai"] .sylora-ai-hero h1{font-size:42px}
   body[data-view="ai"] .ai-human-presence{right:18px;top:18px;width:170px;padding:11px 12px}
   body[data-view="ai"] .realtime-call-deck{left:16px;right:16px;bottom:14px;flex-wrap:wrap}
+  body[data-view="ai"] .ai-workspace-grid{grid-template-columns:1fr}
+  body[data-view="ai"] .ai-context-column{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 }
 
 @media(max-width:620px){
@@ -80,6 +109,10 @@ body[data-view="ai"] .sy-ai-context-status{pointer-events:none}
   body[data-view="ai"] .voice-wave{display:none}
   body[data-view="ai"] .realtime-call-deck p{width:100%;order:5;flex-basis:100%}
   body[data-view="ai"] .ai-compose{bottom:82px}
+  body[data-view="ai"] .ai-dialogue-column .ai-conversation{min-height:300px;max-height:460px;padding:14px!important;border-radius:22px!important}
+  body[data-view="ai"] .ai-dialogue-column .ai-compose{bottom:82px;padding:10px!important;border-radius:21px!important}
+  body[data-view="ai"] .ai-context-column{grid-template-columns:1fr}
+  body[data-view="ai"] .ai-context-column>section{padding:15px!important;border-radius:21px!important}
   body[data-view="ai"] .voice-toolbar{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
   body[data-view="ai"] .voice-action,.voice-hint{flex:0 0 auto}
 }

@@ -1,1 +1,16 @@
-.video-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.video-card{overflow:hidden;padding:0}.video-card video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#0a0d1a}.video-card-body{padding:18px}.video-card-body h3{margin:4px 0 7px}.video-card-body p{margin:0}.pipeline{font-size:10px;font-weight:800;letter-spacing:.12em;color:var(--violet)}@media(max-width:760px){.video-grid{grid-template-columns:1fr}}
+/* SYLORA Video — cinematic long-form library. */
+body[data-view="videos"] #app>.hero{min-height:240px;padding:34px 36px;border-radius:29px;background:radial-gradient(circle at 86% 13%,rgba(78,117,155,.23),transparent 29%),radial-gradient(circle at 64% 100%,rgba(138,187,178,.14),transparent 33%),linear-gradient(135deg,rgba(255,255,255,.98),rgba(235,242,247,.90));box-shadow:var(--sy-shadow-2)!important}
+body[data-view="videos"] #app>.hero h1{font-size:clamp(42px,5vw,66px);font-weight:620;line-height:.95;letter-spacing:-.06em;margin:10px 0}
+body[data-view="videos"] #app>.hero p{max-width:680px;font-size:13px;line-height:1.6}
+body[data-view="videos"] #videoUploader:not(:empty){margin:14px 0}
+body[data-view="videos"] #videoUpload{padding:22px!important;border-radius:24px!important;grid-template-columns:minmax(0,1fr) minmax(280px,.9fr);gap:12px}
+body[data-view="videos"] #videoUpload h3,body[data-view="videos"] #videoUpload textarea,body[data-view="videos"] #videoUpload>button,body[data-view="videos"] #videoUploadStatus{grid-column:1/-1}
+body[data-view="videos"] .video-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+body[data-view="videos"] .video-card{overflow:hidden;padding:0;border-radius:24px!important;box-shadow:var(--sy-shadow-2)!important}
+body[data-view="videos"] .video-card video{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#090d0f}
+body[data-view="videos"] .video-card-body{padding:20px}
+body[data-view="videos"] .video-card-body h3{margin:6px 0 8px;font-size:19px;letter-spacing:-.025em}
+body[data-view="videos"] .video-card-body p{margin:0}
+body[data-view="videos"] .pipeline{font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--sy-route-accent)}
+@media(max-width:760px){body[data-view="videos"] #app>.hero{min-height:0;padding:25px 21px;border-radius:24px}body[data-view="videos"] #app>.hero h1{font-size:40px}body[data-view="videos"] #videoUpload{grid-template-columns:1fr;padding:18px!important}body[data-view="videos"] .video-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){body[data-view="videos"] .video-card{transition:none}}

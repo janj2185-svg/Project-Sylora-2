@@ -2,14 +2,14 @@
    This file owns tokens, materials, shell, controls and responsive primitives.
    Route files may compose these primitives but must not redefine the token model. */
 :root{
-  --sy-bg:#f6f8f7;
-  --sy-bg-warm:#f8f5ef;
+  --sy-bg:#f1f4f2;
+  --sy-bg-warm:#f6f1e8;
   --sy-ink:#171a1c;
   --sy-graphite:#262b2d;
   --sy-muted:#6d7678;
   --sy-subtle:#92999a;
   --sy-pearl:#fffefd;
-  --sy-pearl-soft:rgba(255,255,255,.78);
+  --sy-pearl-soft:rgba(255,255,255,.90);
   --sy-frost:rgba(247,250,249,.64);
   --sy-crystal:rgba(234,243,241,.78);
   --sy-metal:#a88b5e;
@@ -40,9 +40,9 @@
   --sy-r-2xl:34px;
   --sy-r-pill:999px;
 
-  --sy-shadow-1:0 8px 28px rgba(37,51,55,.045);
-  --sy-shadow-2:0 18px 54px rgba(37,51,55,.065);
-  --sy-shadow-3:0 30px 90px rgba(37,51,55,.10);
+  --sy-shadow-1:0 10px 32px rgba(31,44,47,.055);
+  --sy-shadow-2:0 22px 64px rgba(31,44,47,.085);
+  --sy-shadow-3:0 38px 110px rgba(25,37,40,.13);
   --sy-focus:0 0 0 4px rgba(138,187,178,.18);
 
   --sy-motion-fast:120ms;
@@ -50,10 +50,10 @@
   --sy-motion-scene:600ms;
   --sy-ease:cubic-bezier(.2,.75,.25,1);
 
-  --sy-header-h:76px;
-  --sy-left-w:194px;
-  --sy-right-w:238px;
-  --sy-content-max:1580px;
+  --sy-header-h:78px;
+  --sy-left-w:206px;
+  --sy-right-w:252px;
+  --sy-content-max:1780px;
   --sy-route-accent:#6c8f88;
   --sy-route-accent-rgb:108,143,136;
 }
@@ -73,11 +73,13 @@ body[data-view="more"]{--sy-route-accent:#657476;--sy-route-accent-rgb:101,116,1
 html{background:var(--sy-bg);scroll-behavior:smooth}
 body{
   color:var(--sy-ink);
+  font-feature-settings:"ss01" 1,"cv02" 1,"cv03" 1;
+  text-rendering:optimizeLegibility;
   background:
-    radial-gradient(ellipse at 14% 2%,rgba(214,231,228,.64),transparent 31%),
-    radial-gradient(ellipse at 88% 8%,rgba(231,218,196,.38),transparent 29%),
-    radial-gradient(ellipse at 50% 98%,rgba(218,230,228,.34),transparent 36%),
-    linear-gradient(180deg,#fbfcfc 0%,#f2f5f4 58%,var(--sy-bg-warm) 100%);
+    radial-gradient(ellipse at 12% 0%,rgba(193,222,215,.78),transparent 30%),
+    radial-gradient(ellipse at 90% 5%,rgba(232,211,177,.50),transparent 28%),
+    radial-gradient(ellipse at 50% 100%,rgba(205,225,220,.42),transparent 38%),
+    linear-gradient(180deg,#fbfcfb 0%,#eef3f1 58%,var(--sy-bg-warm) 100%);
   background-attachment:fixed;
 }
 
@@ -98,8 +100,8 @@ body{
 .sy-void,.material-void{background:radial-gradient(circle at 76% 18%,rgba(138,187,178,.14),transparent 26%),linear-gradient(145deg,var(--sy-void),var(--sy-void-2));border:1px solid rgba(255,255,255,.10);color:#f6f8f7;box-shadow:0 30px 90px rgba(13,18,20,.20)}
 
 /* Brand */
-.brand{width:120px!important;min-width:120px!important;flex:0 0 120px!important;color:var(--sy-ink)!important;text-decoration:none;overflow:visible}
-.brand-lockup{display:block;width:120px;height:auto;aspect-ratio:1100/650;object-fit:contain;object-position:center;filter:none!important;transition:transform var(--sy-motion-ui) var(--sy-ease),filter var(--sy-motion-ui) var(--sy-ease)}
+.brand{width:138px!important;min-width:138px!important;flex:0 0 138px!important;color:var(--sy-ink)!important;text-decoration:none;overflow:visible}
+.brand-lockup{display:block;width:138px;height:auto;aspect-ratio:1100/650;object-fit:contain;object-position:center;filter:none!important;transition:transform var(--sy-motion-ui) var(--sy-ease),filter var(--sy-motion-ui) var(--sy-ease)}
 .brand:hover .brand-lockup{transform:translateY(-1px) scale(1.012);filter:none!important}
 .shell-wallet img{width:56px!important;height:auto!important;aspect-ratio:1100/650;object-fit:contain!important;filter:none!important}
 
@@ -109,9 +111,9 @@ body>header{
   height:var(--sy-header-h)!important;
   padding:0 max(18px,2.4vw)!important;
   gap:24px!important;
-  background:rgba(251,252,251,.72)!important;
+  background:rgba(251,252,251,.84)!important;
   border-bottom:1px solid rgba(58,70,73,.07)!important;
-  box-shadow:0 8px 36px rgba(40,55,59,.035)!important;
+  box-shadow:0 12px 44px rgba(40,55,59,.055)!important;
   backdrop-filter:blur(28px) saturate(1.15)!important;
   overflow:hidden;
 }
@@ -135,19 +137,19 @@ body>header:after{content:"";position:absolute;left:-16%;right:-16%;bottom:0;hei
 #account .header-exit{color:var(--sy-muted)}
 
 main{
-  width:min(calc(100% - 32px),var(--sy-content-max));
-  margin:22px auto!important;
+  width:min(calc(100% - 28px),var(--sy-content-max));
+  margin:18px auto 34px!important;
   padding:0!important;
   display:grid;
   grid-template-columns:var(--sy-left-w) minmax(0,1fr) var(--sy-right-w)!important;
-  gap:22px!important;
+  gap:18px!important;
   align-items:start;
 }
 .left-rail,.right{position:sticky;top:calc(var(--sy-header-h) + 22px);align-self:start;max-height:calc(100vh - var(--sy-header-h) - 42px);overflow:auto;scrollbar-width:none;background:transparent!important}
 .left-rail::-webkit-scrollbar,.right::-webkit-scrollbar{display:none}
 .side-nav{display:flex;flex-direction:column;gap:5px!important}
 .side-nav .nav{
-  min-height:43px;
+  min-height:46px;
   border-radius:var(--sy-r-md)!important;
   border:1px solid transparent!important;
   background:transparent!important;
@@ -213,10 +215,10 @@ main{
 .card{border-radius:var(--sy-r-lg)}
 .mini-card{border-radius:var(--sy-r-lg)}
 .card:not(.hero):not(.post):not(.composer):not(.gift):not(.live-stage):not(.studio-stage),.mini-card{
-  background:var(--sy-pearl-soft)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(246,249,248,.88))!important;
   border:1px solid rgba(255,255,255,.92)!important;
   box-shadow:var(--sy-shadow-1)!important;
-  backdrop-filter:blur(18px) saturate(1.05)!important;
+  backdrop-filter:none!important;
 }
 
 /* Controls */

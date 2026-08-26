@@ -12,6 +12,7 @@ const ai=await readFile(new URL('../public/design-ai-2026.css',import.meta.url),
 const account=await readFile(new URL('../public/design-account-2026.css',import.meta.url),'utf8');
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
 const appJs=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+const consolidation=await readFile(new URL('../public/design-consolidation.css',import.meta.url),'utf8');
 
 test('canonical design system owns global tokens before route-specific composition files',()=>{
   const canonical=html.indexOf('/design-system-2026.css');
@@ -57,6 +58,18 @@ test('Home and global navigation do not duplicate the contextual Sylora workspac
   assert.doesNotMatch(appJs,/class="sylora-presence"/);
   assert.match(html,/class="mobile-create" data-create-hub/);
   assert.match(appJs,/id="aiVisualToggle"/);
+});
+
+test('flagship routes prioritize outcomes over repetitive card stacks',()=>{
+  assert.match(appJs,/class="home-focus-panel"/);
+  assert.match(appJs,/class="home-brief-meta"/);
+  assert.match(home,/\.ecosystem-feed\{display:grid;grid-template-columns:repeat\(12,minmax\(0,1fr\)\)/);
+  assert.match(home,/\.home-focus-panel\{/);
+  assert.match(consolidation,/\.create-hub-grid\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(appJs,/className='ai-workspace-grid'/);
+  assert.match(ai,/\.ai-workspace-grid\{[\s\S]*?grid-template-columns:minmax\(0,1\.48fr\) minmax\(292px,\.72fr\)/);
+  assert.match(account,/body\[data-view="more"\] \.settings-scene\{/);
+  assert.equal((appJs.match(/SYLORA · PERSONAL SYSTEM/g)||[]).length,1,'settings must render one canonical hero');
 });
 
 test('canonical and route layers retain responsive and reduced-motion contracts',()=>{
