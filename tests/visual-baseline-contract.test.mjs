@@ -47,6 +47,11 @@ import {
 } from '../scripts/visual-capture-ledger.mjs';
 import {FIXED_VISUAL_ACCOUNT,VISUAL_FIXTURE_ID,createVisualFixtureData} from '../scripts/visual-fixture.mjs';
 import {
+  VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  comparePngBuffers
+} from '../scripts/visual-raster-contract.mjs';
+import {
   BASELINE_LOCALE,
   CANDIDATE_STATUS,
   DEFAULT_CANDIDATE_DIR,
@@ -166,12 +171,16 @@ function chunk(type,data){
   return Buffer.concat([header,typeBuffer,data,checksum]);
 }
 
-function validPng(width,height){
+function validPng(width,height,changedPixels=[]){
   const header=Buffer.alloc(13);
   header.writeUInt32BE(width,0);header.writeUInt32BE(height,4);
   header[8]=8;header[9]=2;
   const stride=width*3+1;
   const pixels=Buffer.alloc(stride*height);
+  for(const {x,y,r=0,g=0,b=0} of changedPixels){
+    const offset=y*stride+1+x*3;
+    pixels[offset]=r;pixels[offset+1]=g;pixels[offset+2]=b;
+  }
   return Buffer.concat([
     Buffer.from([137,80,78,71,13,10,26,10]),
     chunk('IHDR',header),
@@ -246,7 +255,14 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
         canonicalContentContrast:true,
         canonicalRestoreMatch:true,
         hiddenScreenshotsCompared:2,
-        fullPageScreenshotsCompared:2
+        fullPageScreenshotsCompared:2,
+        fullPageByteMatch:true,
+        rasterPixelsCompared:viewport.width*viewport.height,
+        rasterMismatchPixels:0,
+        rasterMismatchRatio:0,
+        rasterMaxChannelDelta:0,
+        rasterMaxMismatchRatio:VISUAL_RASTER_MAX_MISMATCH_RATIO,
+        rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA
       },
       runtime:{
         fontStatus:'loaded',
@@ -269,7 +285,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
     };
   });
   return {
-    schemaVersion:8,
+    schemaVersion:9,
     status:CANDIDATE_STATUS,
     complete:true,
     expectedFiles:EXPECTED_PNG_COUNT,
@@ -711,9 +727,12 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(outputDir, outputReport\)/);
   assert.match(runVisualQaScript,/await verifyRawCaptureBytes\(candidateDir, candidate\)/);
   assert.match(runVisualQaScript,/isDeepStrictEqual\(candidate\.browser,repeat\.browser\)/);
+  assert.match(runVisualQaScript,/comparePngBuffers/);
+  assert.match(runVisualQaScript,/Repeatability PASS/);
+  assert.doesNotMatch(runVisualQaScript,/candidate PNG digests match exactly/);
   assert.match(visualBaselineSpec,/assertNoVisualBrowserConnectionEnvironment\(process\.env\)/);
   assert.match(visualBaselineSpec,/assertVisualScreenshotEnvironment\(process\.env\)/);
-  assert.match(visualBaselineSpec,/schemaVersion:\s*8/);
+  assert.match(visualBaselineSpec,/schemaVersion:\s*9/);
   assert.match(visualBaselineSpec,/compositorScheduling:\s*metadata\.browser\.compositorScheduling/);
   assert.match(
     buildVisualManifestSource,
@@ -1123,6 +1142,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.match(visualCaptureLedgerSource,/ledger\/output mismatch/);
   assert.match(visualCaptureLedgerSource,/renameSync\(temporary,target\)/,'metadata replacement must be atomic');
   assert.match(packageManifest.scripts.lint,/node --check scripts\/visual-capture-ledger\.mjs/);
+  assert.match(packageManifest.scripts.lint,/node --check scripts\/visual-raster-contract\.mjs/);
   const candidateUploadIndex=ciWorkflow.indexOf('- name: Upload deterministic visual candidate');
   const diagnosticsUploadIndex=ciWorkflow.indexOf('- name: Upload Playwright diagnostics');
   assert.ok(candidateUploadIndex!==-1&&candidateUploadIndex<diagnosticsUploadIndex);
@@ -1149,7 +1169,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   const warmupSecondIndex=stableCaptureSource.indexOf("'full-page-post-restore-warmup-second'");
   const fullFirstIndex=stableCaptureSource.indexOf("'full-page-stability-first'");
   const fullSecondIndex=stableCaptureSource.indexOf("'full-page-stability-second'");
-  const byteGateIndex=stableCaptureSource.indexOf('if (!finalFirst.equals(finalSecond))');
+  const byteGateIndex=stableCaptureSource.indexOf('const rasterDifference = await rawScreenshotRasterDifference');
   for(const frameLabel of [
     'canonical-hidden-full-page-first',
     'canonical-hidden-full-page-second',
@@ -1160,7 +1180,7 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   ]){
     assert.equal(stableCaptureSource.split(`'${frameLabel}'`).length-1,1,`${frameLabel} must occur exactly once`);
   }
-  assert.equal(stableStyleIndexes.length,2,'persistent capture style must be proven before and after exact A/B evidence');
+  assert.equal(stableStyleIndexes.length,2,'persistent capture style must be proven before and after strict A/B evidence');
   for(const index of [cropProofIndex,hiddenFirstIndex,hiddenSecondIndex,warmupFirstIndex,warmupSecondIndex,fullFirstIndex,fullSecondIndex,byteGateIndex])assert.notEqual(index,-1);
   assert.ok(stableStyleIndexes[0]<hiddenFirstIndex);
   assert.ok(fullSecondIndex<stableStyleIndexes[1]&&stableStyleIndexes[1]<byteGateIndex);
@@ -1214,14 +1234,17 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.match(stableCaptureSource,/canonical-hidden-full-page-first/);
   assert.match(stableCaptureSource,/canonical-hidden-full-page-second/);
   assert.match(visualHelpersSource,/const binary = atob\(encodedPng\)/);
+  assert.match(visualHelpersSource,/rawScreenshotRasterDifference/);
+  assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_MISMATCH_RATIO/);
+  assert.match(visualHelpersSource,/VISUAL_RASTER_MAX_CHANNEL_DELTA/);
   assert.doesNotMatch(visualHelpersSource,/fetch\(`data:image\/png/,'PNG evidence decoding must not violate the application connect-src CSP');
 });
 
-test('visual screenshots prove canonical pixel contribution, exact restoration and fixed full-page stability',async()=>{
+test('visual screenshots prove canonical pixel contribution, exact restoration and strict full-page stability',async()=>{
   function capturePage(frameNames,{
     rawDigests={},rawContrasts={},scrollPosition={x:0,y:0},targetRoles=['header'],initialStyles=[],targetBoxes=[],
     restoredTargetBoxes=[],restoreFailureIndexes=[],restoredInvisibleIndexes=[],restoredSourceDriftIndexes=[],
-    restoredBackgroundDriftIndexes=[],captureStyleEvidence={
+    restoredBackgroundDriftIndexes=[],rasterDifference=null,captureStyleEvidence={
       count:1,textMatches:true,uncoveredCaretCount:0,
       uncoveredAnimationStyleCount:0,uncoveredTransitionStyleCount:0,
       uncoveredScrollStyleCount:0,uncoveredMotionStyleCount:0
@@ -1295,6 +1318,24 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
             ?postCaptureStyleEvidence
             :captureStyleEvidence;
         }
+        if(arg?.encodedFirst&&arg?.encodedSecond){
+          if(rasterDifference)return {...rasterDifference};
+          const firstName=Buffer.from(arg.encodedFirst,'base64').toString();
+          const secondName=Buffer.from(arg.encodedSecond,'base64').toString();
+          const pixelCount=390*844;
+          const mismatchPixels=firstName===secondName?0:pixelCount;
+          return {
+            dimensionsMatch:true,
+            width:390,
+            height:844,
+            repeatWidth:390,
+            repeatHeight:844,
+            pixelCount,
+            mismatchPixels,
+            mismatchRatio:mismatchPixels/pixelCount,
+            maxChannelDelta:mismatchPixels?255:0
+          };
+        }
         if(!arg?.encodedPng)return scrollPosition;
         cropLists.push(arg.cropList.map(clip=>({...clip})));
         const name=Buffer.from(arg.encodedPng,'base64').toString();
@@ -1336,7 +1377,14 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     canonicalContentContrast:true,
     canonicalRestoreMatch:true,
     hiddenScreenshotsCompared:2,
-    fullPageScreenshotsCompared:2
+    fullPageScreenshotsCompared:2,
+    fullPageByteMatch:true,
+    rasterPixelsCompared:390*844,
+    rasterMismatchPixels:0,
+    rasterMismatchRatio:0,
+    rasterMaxChannelDelta:0,
+    rasterMaxMismatchRatio:VISUAL_RASTER_MAX_MISMATCH_RATIO,
+    rasterMaxChannelDeltaAllowed:VISUAL_RASTER_MAX_CHANNEL_DELTA
   });
   assert.equal(stable.getScreenshotCalls(),6);
   assert.equal(stable.getCaptureStyleChecks(),2);
@@ -1496,6 +1544,36 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
     /Canonical wallet hidden crop is not deterministic/
   );
 
+  const toleratedPixelCount=390*844;
+  const toleratedRasterDrift=capturePage(
+    ['hidden','hidden','warmup-first','warmup-second','final-a','final-b'],
+    {
+      rawDigests:{'final-a':'visible','final-b':'visible'},
+      rasterDifference:{
+        dimensionsMatch:true,
+        width:390,
+        height:844,
+        repeatWidth:390,
+        repeatHeight:844,
+        pixelCount:toleratedPixelCount,
+        mismatchPixels:10,
+        mismatchRatio:10/toleratedPixelCount,
+        maxChannelDelta:4
+      }
+    }
+  );
+  let toleratedMismatchCalls=0;
+  const toleratedCapture=await captureStableVisualScreenshot(toleratedRasterDrift.page,captureOptions(
+    ()=>{},
+    ()=>{toleratedMismatchCalls+=1;}
+  ));
+  assert.equal(toleratedCapture.png.toString(),'final-b');
+  assert.equal(toleratedCapture.paintStability.fullPageByteMatch,false);
+  assert.equal(toleratedCapture.paintStability.rasterMismatchPixels,10);
+  assert.equal(toleratedCapture.paintStability.rasterMismatchRatio,10/toleratedPixelCount);
+  assert.equal(toleratedCapture.paintStability.rasterMaxChannelDelta,4);
+  assert.equal(toleratedMismatchCalls,0,'accepted bounded anti-aliasing drift is recorded in metadata, not failure evidence');
+
   const unstableFullPage=capturePage(
     ['hidden','hidden','warmup-first','warmup-second','final-a','final-b'],
     {rawDigests:{'final-a':'visible','final-b':'visible'}}
@@ -1506,7 +1584,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
       ()=>{},
       evidence=>mismatchEvidence.push(evidence)
     )),
-    /Post-restore full-page paint is not byte-stable/
+    /Post-restore full-page paint exceeds strict raster tolerance/
   );
   assert.equal(unstableFullPage.getScreenshotCalls(),6,'a final mismatch must fail without an extra capture or retry');
   assert.equal(unstableFullPage.getCaptureStyleChecks(),2);
@@ -1515,6 +1593,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
   assert.equal(mismatchEvidence[0].second.toString(),'final-b');
   assert.equal(mismatchEvidence[0].firstSha256,createHash('sha256').update('final-a').digest('hex'));
   assert.equal(mismatchEvidence[0].secondSha256,createHash('sha256').update('final-b').digest('hex'));
+  assert.equal(mismatchEvidence[0].rasterDifference.mismatchRatio,1);
 
   const driftedUnstableFullPage=capturePage(
     ['hidden','hidden','warmup-first','warmup-second','final-a','final-b'],
@@ -1550,7 +1629,7 @@ test('visual screenshots prove canonical pixel contribution, exact restoration a
       ()=>{},
       ()=>{throw new Error('evidence disk full')}
     )),
-    error=>/Post-restore full-page paint is not byte-stable/.test(error.message)&&
+    error=>/Post-restore full-page paint exceeds strict raster tolerance/.test(error.message)&&
       /Mismatch evidence failed: evidence disk full/.test(error.message)&&
       error.cause?.message==='evidence disk full'
   );
@@ -1734,6 +1813,35 @@ test('visual fixture seed is deterministic and directly login-capable',()=>{
   assert.equal(first.wallets[0].balance,10000);
 });
 
+test('strict PNG raster comparison accepts only bounded edge noise',()=>{
+  const baseline=validPng(200,200);
+  const exact=comparePngBuffers(baseline,baseline);
+  assert.equal(exact.withinTolerance,true);
+  assert.equal(exact.mismatchPixels,0);
+  assert.equal(exact.maxChannelDelta,0);
+
+  const bounded=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:8}]));
+  assert.equal(bounded.withinTolerance,true);
+  assert.equal(bounded.mismatchPixels,1);
+  assert.equal(bounded.mismatchRatio,1/40_000);
+  assert.equal(bounded.maxChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA);
+
+  const tooMany=comparePngBuffers(baseline,validPng(200,200,[
+    {x:0,y:0,r:1},{x:1,y:0,r:1},{x:2,y:0,r:1}
+  ]));
+  assert.equal(tooMany.mismatchRatio>VISUAL_RASTER_MAX_MISMATCH_RATIO,true);
+  assert.equal(tooMany.withinTolerance,false);
+
+  const tooStrong=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:9}]));
+  assert.equal(tooStrong.mismatchPixels,1);
+  assert.equal(tooStrong.maxChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA+1);
+  assert.equal(tooStrong.withinTolerance,false);
+
+  const resized=comparePngBuffers(baseline,validPng(201,200));
+  assert.equal(resized.dimensionsMatch,false);
+  assert.equal(resized.withinTolerance,false);
+});
+
 test('repository baseline state cannot silently masquerade as a complete candidate',t=>{
   if(repositoryState.status===NOT_CAPTURED_STATUS){
     assert.equal(repositoryState.pngCount,0);
@@ -1822,7 +1930,7 @@ test('file-set and runner-metadata contracts fail closed',()=>{
   }),/playwright\.version must be/);
   const raw=rawCaptureFixture();
   assert.doesNotThrow(()=>validateRawCaptureMetadata(raw,{expectedCommit:raw.renderedFromCommit,expectedRunMode:'capture'}));
-  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:7}),/schemaVersion must be 8/);
+  assert.throws(()=>validateRawCaptureMetadata({...raw,schemaVersion:8}),/schemaVersion must be 9/);
   for(const [field,value,message] of [
     ['canonicalImagesChecked',0,/canonical image paint evidence drifted/],
     ['canonicalBackgroundsChecked',1,/canonical background paint evidence drifted/],
@@ -1838,6 +1946,22 @@ test('file-set and runner-metadata contracts fail closed',()=>{
         ...record,paintStability:{...record.paintStability,[field]:value}
       }:record)
     }),message);
+  }
+  for(const [field,value] of [
+    ['fullPageByteMatch','yes'],
+    ['rasterPixelsCompared',0],
+    ['rasterMismatchPixels',raw.files[0].paintStability.rasterPixelsCompared+1],
+    ['rasterMismatchRatio',VISUAL_RASTER_MAX_MISMATCH_RATIO+Number.EPSILON],
+    ['rasterMaxChannelDelta',VISUAL_RASTER_MAX_CHANNEL_DELTA+1],
+    ['rasterMaxMismatchRatio',0.1],
+    ['rasterMaxChannelDeltaAllowed',255]
+  ]){
+    assert.throws(()=>validateRawCaptureMetadata({
+      ...raw,
+      files:raw.files.map((record,index)=>index===0?{
+        ...record,paintStability:{...record.paintStability,[field]:value}
+      }:record)
+    }),/raster|byte-match/);
   }
   assert.doesNotThrow(()=>validatePendingCaptureMetadata(pendingMetadataFixture(),{expectedCommit:raw.renderedFromCommit}));
   assert.throws(()=>validatePendingCaptureMetadata({

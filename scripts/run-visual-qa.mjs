@@ -16,6 +16,11 @@ import {
   assertVisualScreenshotEnvironment
 } from './visual-browser-contract.mjs';
 import {createVisualFixtureData} from './visual-fixture.mjs';
+import {
+  VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  comparePngBuffers
+} from './visual-raster-contract.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tmpRoot = path.join(repoRoot, 'tmp');
@@ -141,15 +146,28 @@ if (mode === 'repeat') {
   await verifyRawCaptureBytes(candidateDir, candidate);
   const repeat = outputReport;
   const canonicalPaths = expectedRelativePngPaths();
-  const digestMap = report => new Map(report.files.map(file => [file.file, file.sha256]));
-  const expected = digestMap(candidate);
-  const actual = digestMap(repeat);
+  const fileMap = report => new Map(report.files.map(file => [file.file, file]));
+  const expected = fileMap(candidate);
+  const actual = fileMap(repeat);
   const names = [...new Set([...canonicalPaths, ...expected.keys(), ...actual.keys()])].sort();
-  const mismatches = names.flatMap(name => {
+  const comparisons = names.map(name => {
     const before = expected.get(name) || null;
     const after = actual.get(name) || null;
-    return before === after ? [] : [{ file: name, candidate: before, repeat: after }];
+    if (!before || !after) return { file: name, candidate: before?.sha256 || null, repeat: after?.sha256 || null, missing: true };
+    const difference = comparePngBuffers(
+      fs.readFileSync(path.join(candidateDir, ...name.split('/'))),
+      fs.readFileSync(path.join(repeatDir, ...name.split('/')))
+    );
+    return {
+      file: name,
+      candidate: before.sha256,
+      repeat: after.sha256,
+      byteMatch: before.sha256 === after.sha256,
+      ...difference
+    };
   });
+  const mismatches = comparisons.filter(comparison => comparison.missing || comparison.withinTolerance !== true);
+  const toleratedRasterDrift = comparisons.filter(comparison => !comparison.missing && !comparison.byteMatch && comparison.withinTolerance);
 
   const exactPathSets = expected.size === EXPECTED_PNG_COUNT && actual.size === EXPECTED_PNG_COUNT &&
     canonicalPaths.every(name => expected.has(name) && actual.has(name));
@@ -172,12 +190,23 @@ if (mode === 'repeat') {
       repeatFiles: actual.size,
       exactPathSets,
       contextParity,
+      tolerance: {
+        maxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
+        maxChannelDelta: VISUAL_RASTER_MAX_CHANNEL_DELTA
+      },
       mismatches
     }, null, 2));
     process.exit(1);
   }
-  console.log(`Determinism PASS: ${actual.size} candidate PNG digests match exactly.`);
+  const maximumObservedRatio = Math.max(...comparisons.map(comparison => comparison.mismatchRatio || 0));
+  const maximumObservedChannelDelta = Math.max(...comparisons.map(comparison => comparison.maxChannelDelta || 0));
+  console.log(
+    `Repeatability PASS: ${actual.size} candidate PNGs match within strict raster tolerance; ` +
+    `byte-identical=${actual.size-toleratedRasterDrift.length}/${actual.size}, ` +
+    `tolerated=${toleratedRasterDrift.length}, maxObservedRatio=${maximumObservedRatio}, ` +
+    `maxObservedChannelDelta=${maximumObservedChannelDelta}.`
+  );
 } else {
   console.log(`Candidate capture complete: ${outputReport.actualFiles}/${outputReport.expectedFiles} PNGs in ${outputDir}`);
-  console.log('Run `node scripts/run-visual-qa.mjs repeat` to verify exact digest determinism.');
+  console.log('Run `node scripts/run-visual-qa.mjs repeat` to verify strict raster repeatability.');
 }

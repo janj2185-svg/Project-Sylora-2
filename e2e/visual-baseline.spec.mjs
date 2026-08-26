@@ -49,7 +49,7 @@ let browserFingerprint = null;
 fs.mkdirSync(outputRoot, { recursive: true });
 fs.mkdirSync(resultsRoot, { recursive: true });
 
-function writeStabilityMismatchEvidence({ viewport, surface, first, second, firstSha256, secondSha256 }) {
+function writeStabilityMismatchEvidence({ viewport, surface, first, second, firstSha256, secondSha256, rasterDifference }) {
   const evidenceRoot = path.join(resultsRoot, 'stability-mismatch', viewport.id, surface.id);
   const relativeEvidenceRoot = path.relative(resultsRoot, evidenceRoot);
   if (!relativeEvidenceRoot || relativeEvidenceRoot.startsWith('..') || path.isAbsolute(relativeEvidenceRoot)) {
@@ -59,7 +59,7 @@ function writeStabilityMismatchEvidence({ viewport, surface, first, second, firs
   fs.writeFileSync(path.join(evidenceRoot, 'final-a.png'), first, { flag: 'wx' });
   fs.writeFileSync(path.join(evidenceRoot, 'final-b.png'), second, { flag: 'wx' });
   fs.writeFileSync(path.join(evidenceRoot, 'metadata.json'), `${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     renderedFromCommit,
     viewport: {
       id: viewport.id,
@@ -69,6 +69,7 @@ function writeStabilityMismatchEvidence({ viewport, surface, first, second, firs
       hasTouch: viewport.hasTouch
     },
     surface: surface.id,
+    rasterDifference,
     frames: {
       finalA: { file: 'final-a.png', sha256: firstSha256, bytes: first.length },
       finalB: { file: 'final-b.png', sha256: secondSha256, bytes: second.length }
@@ -96,7 +97,7 @@ function writeAggregatedRawMetadata() {
     playwrightVersion
   };
   const metadata = {
-    schemaVersion: 8,
+    schemaVersion: 9,
     status: aggregate.complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
     complete: aggregate.complete,
     expectedFiles: aggregate.expectedFiles,

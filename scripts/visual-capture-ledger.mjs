@@ -135,7 +135,8 @@ function verifyRecordPng(outputRoot,record){
     bytes.length!==record.bytes||
     createHash('sha256').update(bytes).digest('hex')!==record.sha256||
     inspected.width!==viewport.width*viewport.devicePixelRatio||
-    inspected.height<viewport.height*viewport.devicePixelRatio
+    inspected.height<viewport.height*viewport.devicePixelRatio||
+    inspected.width*inspected.height!==record.paintStability.rasterPixelsCompared
   )fail(`PNG digest/size/dimensions do not match ${record.file}`);
 }
 

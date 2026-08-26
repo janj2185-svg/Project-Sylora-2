@@ -21,6 +21,10 @@ import {
   VISUAL_LOCALE,
   VISUAL_RANDOM_SEED
 } from './visual-fixture.mjs';
+import {
+  VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_RATIO
+} from './visual-raster-contract.mjs';
 
 export {
   VISUAL_BROWSER_DISTRIBUTION,
@@ -100,6 +104,11 @@ function requireCanonicalIso(value,label){
 
 function requirePositiveInteger(value,label){
   if(!Number.isSafeInteger(value)||value<=0)fail(`${label} must be a positive safe integer`);
+  return value;
+}
+
+function requireNonNegativeInteger(value,label){
+  if(!Number.isSafeInteger(value)||value<0)fail(`${label} must be a non-negative safe integer`);
   return value;
 }
 
@@ -311,7 +320,8 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
   requirePositiveInteger(record.bytes,`capture report ${record.file} bytes`);
   requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
     'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
-    'hiddenScreenshotsCompared','fullPageScreenshotsCompared'
+    'hiddenScreenshotsCompared','fullPageScreenshotsCompared','fullPageByteMatch','rasterPixelsCompared','rasterMismatchPixels',
+    'rasterMismatchRatio','rasterMaxChannelDelta','rasterMaxMismatchRatio','rasterMaxChannelDeltaAllowed'
   ]);
   const expectedCanonicalImages=touch?1:2;
   const expectedCanonicalBackgrounds=0;
@@ -330,6 +340,23 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
   ){
     fail(`capture report ${record.file} compositor paint stability evidence drifted`);
   }
+  if(typeof record.paintStability.fullPageByteMatch!=='boolean'){
+    fail(`capture report ${record.file} full-page byte-match evidence must be boolean`);
+  }
+  requirePositiveInteger(record.paintStability.rasterPixelsCompared,`capture report ${record.file} rasterPixelsCompared`);
+  requireNonNegativeInteger(record.paintStability.rasterMismatchPixels,`capture report ${record.file} rasterMismatchPixels`);
+  requireNonNegativeInteger(record.paintStability.rasterMaxChannelDelta,`capture report ${record.file} rasterMaxChannelDelta`);
+  const expectedMismatchRatio=record.paintStability.rasterMismatchPixels/record.paintStability.rasterPixelsCompared;
+  if(
+    record.paintStability.rasterMismatchPixels>record.paintStability.rasterPixelsCompared||
+    !Number.isFinite(record.paintStability.rasterMismatchRatio)||record.paintStability.rasterMismatchRatio<0||
+    Math.abs(record.paintStability.rasterMismatchRatio-expectedMismatchRatio)>Number.EPSILON||
+    record.paintStability.rasterMismatchRatio>VISUAL_RASTER_MAX_MISMATCH_RATIO||
+    record.paintStability.rasterMaxChannelDelta>VISUAL_RASTER_MAX_CHANNEL_DELTA||
+    record.paintStability.rasterMaxMismatchRatio!==VISUAL_RASTER_MAX_MISMATCH_RATIO||
+    record.paintStability.rasterMaxChannelDeltaAllowed!==VISUAL_RASTER_MAX_CHANNEL_DELTA||
+    (record.paintStability.fullPageByteMatch&&record.paintStability.rasterMismatchPixels!==0)
+  )fail(`capture report ${record.file} strict raster tolerance evidence drifted`);
   requireExactObject(record.runtime,`capture report ${record.file} runtime`,[
     'fontStatus','bodyFontFamily','imageCount','viewport','devicePixelRatio','locale','reducedMotion','navigatorMaxTouchPoints',
     'primaryPointer','primaryHover','cdpTouchInput'
@@ -375,7 +402,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==8)fail('capture report.schemaVersion must be 8');
+  if(report.schemaVersion!==9)fail('capture report.schemaVersion must be 9');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
@@ -638,6 +665,9 @@ export async function verifyRawCaptureBytes(source,report){
     if(bytes.length!==record.bytes||inspected.sha256!==record.sha256)fail(`capture report digest/size does not match ${record.file}`);
     const viewport=VIEWPORTS.find(item=>item.id===record.viewport);
     if(inspected.width!==viewport.width*viewport.devicePixelRatio||inspected.height<viewport.height*viewport.devicePixelRatio)fail(`capture report PNG dimensions do not match ${record.file}`);
+    if(inspected.width*inspected.height!==record.paintStability.rasterPixelsCompared){
+      fail(`capture report raster pixel count does not match ${record.file}`);
+    }
   }
 }
 

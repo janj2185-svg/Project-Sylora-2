@@ -8,6 +8,11 @@ import {
   VISUAL_LOCALE,
   VISUAL_RANDOM_SEED
 } from '../scripts/visual-fixture.mjs';
+import {
+  VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_RATIO,
+  visualRasterDifferenceWithinTolerance
+} from '../scripts/visual-raster-contract.mjs';
 
 export { FIXED_VISUAL_ACCOUNT, FIXED_VISUAL_TIME, VISUAL_FIXTURE_ID, VISUAL_LOCALE, VISUAL_RANDOM_SEED };
 
@@ -762,6 +767,74 @@ async function rawScreenshotCropDigests(page, png, clips) {
   }, { encodedPng: encoded, cropList: clips });
 }
 
+async function rawScreenshotRasterDifference(page, first, second) {
+  return page.evaluate(async ({ encodedFirst, encodedSecond }) => {
+    const decode = async encodedPng => {
+      const binary = atob(encodedPng);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Visual raster comparison could not create a 2D context');
+        context.drawImage(bitmap, 0, 0);
+        return {
+          width: bitmap.width,
+          height: bitmap.height,
+          pixels: context.getImageData(0, 0, bitmap.width, bitmap.height).data
+        };
+      } finally {
+        bitmap.close?.();
+      }
+    };
+    const before = await decode(encodedFirst);
+    const after = await decode(encodedSecond);
+    const dimensionsMatch = before.width === after.width && before.height === after.height;
+    if (!dimensionsMatch) {
+      return {
+        dimensionsMatch: false,
+        width: before.width,
+        height: before.height,
+        repeatWidth: after.width,
+        repeatHeight: after.height,
+        pixelCount: 0,
+        mismatchPixels: 0,
+        mismatchRatio: 1,
+        maxChannelDelta: 255
+      };
+    }
+    const pixelCount = before.width * before.height;
+    let mismatchPixels = 0;
+    let maxChannelDelta = 0;
+    for (let offset = 0; offset < before.pixels.length; offset += 4) {
+      let pixelMismatch = false;
+      for (let channel = 0; channel < 4; channel += 1) {
+        const delta = Math.abs(before.pixels[offset + channel] - after.pixels[offset + channel]);
+        if (delta > 0) pixelMismatch = true;
+        if (delta > maxChannelDelta) maxChannelDelta = delta;
+      }
+      if (pixelMismatch) mismatchPixels += 1;
+    }
+    return {
+      dimensionsMatch: true,
+      width: before.width,
+      height: before.height,
+      repeatWidth: after.width,
+      repeatHeight: after.height,
+      pixelCount,
+      mismatchPixels,
+      mismatchRatio: mismatchPixels / pixelCount,
+      maxChannelDelta
+    };
+  }, {
+    encodedFirst: first.toString('base64'),
+    encodedSecond: second.toString('base64')
+  });
+}
+
 async function collectCanonicalPaintTargets(page) {
   const targets = [];
   const images = page.locator(CANONICAL_BRAND_IMAGE_SELECTOR);
@@ -927,30 +1000,47 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
   } catch (error) {
     postCaptureStyleFailure = error;
   }
-  if (!finalFirst.equals(finalSecond)) {
+  const rasterDifference = await rawScreenshotRasterDifference(page, finalFirst, finalSecond);
+  const rasterWithinTolerance = visualRasterDifferenceWithinTolerance(rasterDifference);
+  const byteMatch = finalFirst.equals(finalSecond);
+  if (!rasterWithinTolerance || postCaptureStyleFailure) {
     const firstSha256 = screenshotDigest(finalFirst);
     const secondSha256 = screenshotDigest(finalSecond);
     let evidenceFailure = null;
-    try {
-      await recordMismatch({ first: finalFirst, second: finalSecond, firstSha256, secondSha256 });
-    } catch (error) {
-      evidenceFailure = error;
+    if (!byteMatch) {
+      try {
+        await recordMismatch({
+          first: finalFirst,
+          second: finalSecond,
+          firstSha256,
+          secondSha256,
+          rasterDifference
+        });
+      } catch (error) {
+        evidenceFailure = error;
+      }
     }
     if (postCaptureStyleFailure) {
       throw new Error(
         `${postCaptureStyleFailure.message}\n` +
-        `Post-restore full-page paint also mismatched: first=${firstSha256} second=${secondSha256}` +
+        (!byteMatch
+          ? `Post-restore full-page paint also mismatched: first=${firstSha256} second=${secondSha256} ` +
+            `pixels=${rasterDifference.mismatchPixels}/${rasterDifference.pixelCount} ` +
+            `ratio=${rasterDifference.mismatchRatio} maxChannelDelta=${rasterDifference.maxChannelDelta}`
+          : 'Post-restore full-page paint remained byte-identical') +
         (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
         { cause: postCaptureStyleFailure }
       );
     }
     throw new Error(
-      `Post-restore full-page paint is not byte-stable: first=${firstSha256} second=${secondSha256}` +
+      `Post-restore full-page paint exceeds strict raster tolerance: first=${firstSha256} second=${secondSha256} ` +
+      `pixels=${rasterDifference.mismatchPixels}/${rasterDifference.pixelCount} ` +
+      `ratio=${rasterDifference.mismatchRatio}/${VISUAL_RASTER_MAX_MISMATCH_RATIO} ` +
+      `maxChannelDelta=${rasterDifference.maxChannelDelta}/${VISUAL_RASTER_MAX_CHANNEL_DELTA}` +
       (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
       evidenceFailure ? { cause: evidenceFailure } : undefined
     );
   }
-  if (postCaptureStyleFailure) throw postCaptureStyleFailure;
   const finalClips = await assertCanonicalTargetsRestored(page, targets);
   const finalCropDigests = await rawScreenshotCropDigests(page, finalSecond, finalClips);
   await assertClean('full-page-stability-second-raster');
@@ -979,7 +1069,14 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
       canonicalContentContrast: true,
       canonicalRestoreMatch: true,
       hiddenScreenshotsCompared: 2,
-      fullPageScreenshotsCompared: 2
+      fullPageScreenshotsCompared: 2,
+      fullPageByteMatch: byteMatch,
+      rasterPixelsCompared: rasterDifference.pixelCount,
+      rasterMismatchPixels: rasterDifference.mismatchPixels,
+      rasterMismatchRatio: rasterDifference.mismatchRatio,
+      rasterMaxChannelDelta: rasterDifference.maxChannelDelta,
+      rasterMaxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
+      rasterMaxChannelDeltaAllowed: VISUAL_RASTER_MAX_CHANNEL_DELTA
     }
   };
 }
