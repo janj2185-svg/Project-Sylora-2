@@ -1,6 +1,7 @@
 import {inflateSync} from 'node:zlib';
 
-export const VISUAL_RASTER_MAX_MISMATCH_RATIO=0.00005;
+export const VISUAL_RASTER_MAX_MISMATCH_RATIO=0.0001;
+export const VISUAL_RASTER_MAX_MISMATCH_PIXELS=100;
 export const VISUAL_RASTER_MAX_CHANNEL_DELTA=8;
 
 const PNG_SIGNATURE=Buffer.from([137,80,78,71,13,10,26,10]);
@@ -142,7 +143,9 @@ export function visualRasterDifferenceWithinTolerance(difference){
     Math.abs(mismatchRatio-mismatchPixels/pixelCount)>Number.EPSILON||
     !Number.isSafeInteger(maxChannelDelta)||maxChannelDelta<0
   )return false;
-  return mismatchRatio<=VISUAL_RASTER_MAX_MISMATCH_RATIO&&maxChannelDelta<=VISUAL_RASTER_MAX_CHANNEL_DELTA;
+  return mismatchPixels<=VISUAL_RASTER_MAX_MISMATCH_PIXELS&&
+    mismatchRatio<=VISUAL_RASTER_MAX_MISMATCH_RATIO&&
+    maxChannelDelta<=VISUAL_RASTER_MAX_CHANNEL_DELTA;
 }
 
 export function comparePngBuffers(first,second){

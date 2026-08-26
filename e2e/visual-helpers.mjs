@@ -10,6 +10,7 @@ import {
 } from '../scripts/visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO,
   visualRasterDifferenceWithinTolerance
 } from '../scripts/visual-raster-contract.mjs';
@@ -1035,6 +1036,7 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
     throw new Error(
       `Post-restore full-page paint exceeds strict raster tolerance: first=${firstSha256} second=${secondSha256} ` +
       `pixels=${rasterDifference.mismatchPixels}/${rasterDifference.pixelCount} ` +
+      `maxMismatchPixels=${VISUAL_RASTER_MAX_MISMATCH_PIXELS} ` +
       `ratio=${rasterDifference.mismatchRatio}/${VISUAL_RASTER_MAX_MISMATCH_RATIO} ` +
       `maxChannelDelta=${rasterDifference.maxChannelDelta}/${VISUAL_RASTER_MAX_CHANNEL_DELTA}` +
       (evidenceFailure ? `\nMismatch evidence failed: ${evidenceFailure.message || evidenceFailure}` : ''),
@@ -1076,6 +1078,7 @@ export async function captureStableVisualScreenshot(page, { assertClean, recordM
       rasterMismatchRatio: rasterDifference.mismatchRatio,
       rasterMaxChannelDelta: rasterDifference.maxChannelDelta,
       rasterMaxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
+      rasterMaxMismatchPixelsAllowed: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
       rasterMaxChannelDeltaAllowed: VISUAL_RASTER_MAX_CHANNEL_DELTA
     }
   };

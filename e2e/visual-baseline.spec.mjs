@@ -97,7 +97,7 @@ function writeAggregatedRawMetadata() {
     playwrightVersion
   };
   const metadata = {
-    schemaVersion: 9,
+    schemaVersion: 10,
     status: aggregate.complete ? 'CANDIDATE_RESTORED_BASELINE' : 'INCOMPLETE_VISUAL_CAPTURE',
     complete: aggregate.complete,
     expectedFiles: aggregate.expectedFiles,

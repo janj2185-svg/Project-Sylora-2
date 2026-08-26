@@ -18,6 +18,7 @@ import {
 import {createVisualFixtureData} from './visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO,
   comparePngBuffers
 } from './visual-raster-contract.mjs';
@@ -192,6 +193,7 @@ if (mode === 'repeat') {
       contextParity,
       tolerance: {
         maxMismatchRatio: VISUAL_RASTER_MAX_MISMATCH_RATIO,
+        maxMismatchPixels: VISUAL_RASTER_MAX_MISMATCH_PIXELS,
         maxChannelDelta: VISUAL_RASTER_MAX_CHANNEL_DELTA
       },
       mismatches

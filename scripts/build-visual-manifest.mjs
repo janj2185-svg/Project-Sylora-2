@@ -23,6 +23,7 @@ import {
 } from './visual-fixture.mjs';
 import {
   VISUAL_RASTER_MAX_CHANNEL_DELTA,
+  VISUAL_RASTER_MAX_MISMATCH_PIXELS,
   VISUAL_RASTER_MAX_MISMATCH_RATIO
 } from './visual-raster-contract.mjs';
 
@@ -321,7 +322,8 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
   requireExactObject(record.paintStability,`capture report ${record.file} paintStability`,[
     'canonicalImagesChecked','canonicalBackgroundsChecked','canonicalPixelContribution','canonicalContentContrast','canonicalRestoreMatch',
     'hiddenScreenshotsCompared','fullPageScreenshotsCompared','fullPageByteMatch','rasterPixelsCompared','rasterMismatchPixels',
-    'rasterMismatchRatio','rasterMaxChannelDelta','rasterMaxMismatchRatio','rasterMaxChannelDeltaAllowed'
+    'rasterMismatchRatio','rasterMaxChannelDelta','rasterMaxMismatchRatio','rasterMaxMismatchPixelsAllowed',
+    'rasterMaxChannelDeltaAllowed'
   ]);
   const expectedCanonicalImages=touch?1:2;
   const expectedCanonicalBackgrounds=0;
@@ -351,9 +353,11 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
     record.paintStability.rasterMismatchPixels>record.paintStability.rasterPixelsCompared||
     !Number.isFinite(record.paintStability.rasterMismatchRatio)||record.paintStability.rasterMismatchRatio<0||
     Math.abs(record.paintStability.rasterMismatchRatio-expectedMismatchRatio)>Number.EPSILON||
+    record.paintStability.rasterMismatchPixels>VISUAL_RASTER_MAX_MISMATCH_PIXELS||
     record.paintStability.rasterMismatchRatio>VISUAL_RASTER_MAX_MISMATCH_RATIO||
     record.paintStability.rasterMaxChannelDelta>VISUAL_RASTER_MAX_CHANNEL_DELTA||
     record.paintStability.rasterMaxMismatchRatio!==VISUAL_RASTER_MAX_MISMATCH_RATIO||
+    record.paintStability.rasterMaxMismatchPixelsAllowed!==VISUAL_RASTER_MAX_MISMATCH_PIXELS||
     record.paintStability.rasterMaxChannelDeltaAllowed!==VISUAL_RASTER_MAX_CHANNEL_DELTA||
     (record.paintStability.fullPageByteMatch&&record.paintStability.rasterMismatchPixels!==0)
   )fail(`capture report ${record.file} strict raster tolerance evidence drifted`);
@@ -402,7 +406,7 @@ export function validateRawCaptureMetadata(report,{expectedCommit,expectedRunMod
     'schemaVersion','status','complete','expectedFiles','actualFiles','generatedAt','renderedFromCommit','runMode',
     'fixture','browser','runner','surfaces','viewports','files'
   ]);
-  if(report.schemaVersion!==9)fail('capture report.schemaVersion must be 9');
+  if(report.schemaVersion!==10)fail('capture report.schemaVersion must be 10');
   if(report.status!==CANDIDATE_STATUS)fail(`capture report.status must be ${CANDIDATE_STATUS}`);
   if(report.complete!==true)fail('capture report.complete must be true');
   if(report.expectedFiles!==EXPECTED_PNG_COUNT||report.actualFiles!==EXPECTED_PNG_COUNT)fail(`capture report file counts must both be ${EXPECTED_PNG_COUNT}`);
