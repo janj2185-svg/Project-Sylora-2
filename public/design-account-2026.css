@@ -8,6 +8,97 @@ body[data-view="more"] #app{
   min-width:0;
 }
 
+/* Authentication -------------------------------------------------------- */
+.auth-shell{
+  width:min(100%,620px);
+  margin:clamp(12px,4vh,42px) auto;
+  padding:clamp(24px,4vw,38px)!important;
+}
+
+.auth-shell h2{
+  margin:7px 0 20px;
+  color:var(--sy-ink);
+  font-size:clamp(30px,4vw,42px);
+  letter-spacing:-.045em;
+}
+
+.auth-tabs{
+  margin-bottom:20px;
+}
+
+.auth-tabs button{
+  min-height:42px;
+}
+
+.auth-field-list{
+  display:grid;
+  gap:14px;
+}
+
+.auth-field{
+  display:grid;
+  gap:7px;
+  color:var(--sy-muted);
+  font-size:11px;
+  font-weight:680;
+}
+
+.auth-field>span{
+  padding-left:2px;
+}
+
+.auth-field>small{
+  padding:0 2px;
+  color:var(--sy-subtle);
+  font-size:10px;
+  font-weight:500;
+  line-height:1.45;
+}
+
+.auth-fields input{
+  min-height:48px;
+  padding:12px 14px;
+  border-color:rgba(65,80,82,.13);
+  background:rgba(255,255,255,.88);
+}
+
+.auth-fields input:focus{
+  border-color:rgba(93,132,125,.55);
+  box-shadow:0 0 0 3px rgba(138,187,178,.15);
+}
+
+.auth-fields input[aria-invalid="true"]{
+  border-color:#b45555;
+  box-shadow:0 0 0 3px rgba(180,85,85,.13);
+}
+
+.auth-submit{
+  min-height:48px;
+  margin-top:3px;
+}
+
+.auth-submit:disabled,
+.auth-tabs button:disabled{
+  cursor:wait;
+  opacity:.68;
+}
+
+.auth-error{
+  margin:2px 0 0;
+  padding:11px 13px;
+  border:1px solid rgba(180,85,85,.22);
+  border-radius:13px;
+  background:rgba(255,241,241,.88);
+  color:#7a3030;
+  font-size:12px;
+  font-weight:620;
+  line-height:1.45;
+}
+
+.auth-error[hidden]{
+  display:none;
+}
+
 /* Profile ---------------------------------------------------------------- */
 body[data-view="profile"] .profile-hero{
   min-height:260px!important;
