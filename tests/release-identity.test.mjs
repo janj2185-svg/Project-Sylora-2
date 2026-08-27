@@ -82,8 +82,18 @@ test('production deploy is pinned to a full SHA and verifies both local and publ
   assert.match(deploy, /EXPECTED_SHA/);
   assert.match(deploy, /Deploy requires the explicitly approved full 40-character main commit SHA/);
   assert.match(deploy, /git merge --ff-only origin\/main/);
-  assert.match(deploy, /verify-release\.mjs http:\/\/127\.0\.0\.1:8787/);
-  assert.match(deploy, /verify-release\.mjs "\$PUBLIC_BASE_URL"/);
+  assert.match(
+    deploy,
+    /verify_release\(\) \{\s+docker compose exec -T sylora node scripts\/verify-release\.mjs "\$@"\s+\}/,
+    'release verification must use the app container instead of requiring Node.js on the host'
+  );
+  assert.match(deploy, /verify_release http:\/\/127\.0\.0\.1:8787/);
+  assert.match(deploy, /verify_release "\$PUBLIC_BASE_URL"/);
+  assert.doesNotMatch(
+    deploy,
+    /^\s*node scripts\/verify-release\.mjs/gm,
+    'deploy helper must not require Node.js on the production host'
+  );
   assert.match(deploy, /attempting application rollback/);
   assert.match(deploy, /sylora-production-current/);
   assert.match(workflow, /expected_sha:/);
