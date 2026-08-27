@@ -6,14 +6,14 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 301 |
-| Active | 247 |
+| Total unique endpoints | 303 |
+| Active | 249 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
 | Unverified | 54 |
-| Frontend-used | 188 |
-| Backend-only | 113 |
+| Frontend-used | 187 |
+| Backend-only | 116 |
 
 ## Status contract
 
@@ -66,6 +66,7 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | DELETE | `/api/ai/history` | OWNER | YES | ACTIVE | KEEP |
 | GET | `/api/ai/history` | OWNER | YES | ACTIVE | KEEP |
 | GET | `/api/ai/intelligence` | AUTHENTICATED | YES | ACTIVE | KEEP |
+| POST | `/api/ai/live-copilot/respond` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | DELETE | `/api/ai/memory` | OWNER | YES | ACTIVE | KEEP |
 | POST | `/api/ai/memory` | OWNER | YES | ACTIVE | KEEP |
 | DELETE | `/api/ai/memory/:id` | OWNER | YES | ACTIVE | KEEP |
@@ -156,8 +157,8 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/courses/:id/enroll` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/courses/:id/lessons` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/courses/:id/publish` | AUTHENTICATED | YES | ACTIVE | KEEP |
-| GET | `/api/daily-brief` | AUTHENTICATED | YES | ACTIVE | KEEP |
-| PATCH | `/api/daily-brief` | OWNER_OR_MEMBER | YES | ACTIVE | KEEP |
+| GET | `/api/daily-brief` | AUTHENTICATED | NO | ACTIVE | KEEP |
+| PATCH | `/api/daily-brief` | OWNER_OR_MEMBER | NO | ACTIVE | KEEP |
 | GET | `/api/dashboard` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/decisions` | OWNER_OR_MEMBER | NO | ACTIVE | KEEP |
 | POST | `/api/decisions` | OWNER_OR_MEMBER | NO | ACTIVE | KEEP |
@@ -335,6 +336,7 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/users/:id/block` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/users/:id/follow` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/v1/identity/me` | API_KEY_OR_OWNER | NO | ACTIVE | KEEP |
+| GET | `/api/version` | PUBLIC | NO | ACTIVE | KEEP |
 | GET | `/api/videos` | PUBLIC | YES | ACTIVE | KEEP |
 | POST | `/api/videos` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/whiteboard` | AUTHENTICATED | YES | ACTIVE | KEEP |

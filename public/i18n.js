@@ -1,150 +1,201 @@
-/** Scalable i18n — brand tokens (SYLORA, LIVE, Lumen) stay as-is. */
+/**
+ * SYLORA UI localization core.
+ * Production UI locales: UA / EN / PL / DE / RU.
+ * Brand and international technical tokens (SYLORA, LIVE, LUMEN, OBS, WebRTC, RTMP, API) remain stable.
+ */
+
+export const DEFAULT_UI_LOCALE='uk';
+export const SUPPORTED_UI_LOCALES=Object.freeze(['uk','en','pl','de','ru']);
+export const FUTURE_UI_LOCALES=Object.freeze(['es','fr','it','pt']);
+export const PRIORITY_VOICE_LOCALES=Object.freeze(['uk','en','pl','de','ru']);
+
+const supported=new Set(SUPPORTED_UI_LOCALES);
+
 const base={
   home:'Home',live:'LIVE',clips:'Clips',studio:'Studio',ai:'Sylora',profile:'Profile',
   inbox:'Inbox',chat:'Inbox',gifts:'Gifts',more:'Settings',explore:'Discover',
-  science:'Science',business:'Business',communities:'Communities',videos:'Videos',
-  signin:'Sign in',create:'Create account',register:'Register',login:'Sign in',
+  science:'Learning',business:'Business',communities:'Communities',videos:'Videos',
+  signin:'Sign in',signout:'Sign out',create:'Create account',register:'Register',login:'Sign in',
   password:'Password — 10+ characters with a letter and number',identity:'Email or username',
   composer:"What's new?",publish:'Publish',join:'Create account',
-  joinTitle:'Join SYLORA',joinText:'Create an account to publish and interact.',
-  authTitle:'Enter your space',
-  searchPlaceholder:'Search SYLORA…',
-  createHub:'Create',createPost:'Create Post',createClip:'Upload Clip',
-  createLive:'Start LIVE',createRoom:'Create Room',createProject:'Create Project',
-  createCommunity:'Create Community',createCourse:'Create Course',createEvent:'Create Event',
-  talkWithSylora:'Talk with Sylora',syloraNearby:"I'm here",syloraListening:"I'm listening.",
+  joinTitle:'Join SYLORA',joinText:'Create an account to publish and interact.',authTitle:'Enter your space',
+  searchPlaceholder:'Search SYLORA…',createHub:'Create',createPost:'Create post',createClip:'Upload clip',
+  createLive:'Start LIVE',createRoom:'Create room',createProject:'Create project',
+  createCommunity:'Create community',createCourse:'Create course',createEvent:'Create event',
+  talkWithSylora:'Ask Sylora',syloraNearby:"I'm here",syloraListening:"I'm listening.",
   syloraBusy:'Sylora is taking a short pause. Try again in a moment.',
-  syloraUnavailable:'Sylora is temporarily unavailable. Your message is safe — please try again soon.',
-  loading:'Starting SYLORA…',emptyFeed:'Your SYLORA feed will grow as you follow people and join spaces.',
+  syloraUnavailable:'Sylora is temporarily unavailable. Try again soon.',
+  voiceUnavailable:'Voice is unavailable. Text still works.',loading:'Starting SYLORA…',
+  emptyFeed:'Your SYLORA feed will grow as you follow people and join spaces.',
   recommendedLive:'Recommended LIVE',people:'People',forYou:'For you',
-  inboxMessages:'Messages',inboxNotifications:'Notifications',inboxInvites:'Invites',
-  inboxCalls:'Calls',follow:'Follow',workspace:'Workspace',teams:'Teams',
-  documents:'Documents',tasks:'Tasks',discoverLive:'Discover',following:'Following',
-  guests:'Guests',battles:'Battles',streamSettings:'Stream settings',
-  giftGallery:'Gift gallery',settings:'Settings',wallet:'Wallet',
-  language:'Language',voiceLanguage:'Voice language',
-  memoryTitle:'What Sylora remembers',proactiveOff:'Proactive: off',
-  comingSoon:'Coming soon',disabledNeedAuth:'Sign in to use this',
-  paidCoursesBlocked:'Paid courses unlock after payment provider configuration.',
-  coreOnline:'Core online'
+  goodMorning:'Good morning',goodAfternoon:'Good afternoon',goodEvening:'Good evening',personalCenter:'Your personal center.',
+  peopleMayKnow:'People you may know',showAll:'Show all',newPeopleHere:'New people will appear here.',
+  popularNow:'Popular now',watch:'Watch',waitingLive:'Waiting for the next LIVE.',myLumen:'MY LUMEN',
+  dailyBrief:'Daily Brief',enable:'Enable',disable:'Disable',continue:'Continue',dailyBriefUpdated:'Daily Brief updated',
+  notifications:'notifications',conversations:'conversations',message:'Message',vertical:'Vertical',longForm:'Long-form',
+  homeEmptyTitle:'Your world starts here.',homeEmptyText:'Follow people or explore a space once. SYLORA will build this Home around real activity — never fake counters.',
+  liveCapabilities:'Available LIVE modes',liveEmptyTitle:'The next LIVE starts with you.',liveEmptyText:'No one is live right now. Start a real room or return when a creator goes live.',
+  liveFollowingEmptyTitle:'Your following LIVE feed is quiet.',liveFollowingEmptyText:'Follow creators first. This view stays honest until a followed creator is live.',
+  inboxMessages:'Messages',inboxNotifications:'Notifications',inboxInvites:'Invites',inboxCalls:'Calls',
+  follow:'Follow',following:'Following',workspace:'Workspace',teams:'Teams',documents:'Documents',tasks:'Tasks',
+  discoverLive:'Discover',guests:'Guests',battles:'Battles',streamSettings:'Stream settings',
+  giftGallery:'Gift gallery',settings:'Settings',wallet:'Wallet',language:'Language',voiceLanguage:'Voice language',
+  memoryTitle:'What Sylora remembers',proactiveOff:'Proactive: off',comingSoon:'Coming soon',
+  disabledNeedAuth:'Sign in to use this',paidCoursesBlocked:'Paid courses unlock after payment provider configuration.',
+  coreOnline:'Core online',translate:'Translate',showOriginal:'Show original',
+  retry:'Retry',cancel:'Cancel',confirm:'Confirm',save:'Save',delete:'Delete',close:'Close',
+  offline:'Offline',connecting:'Connecting',connected:'Connected',degraded:'Degraded',error:'Error'
 };
 
-function dict(overrides){return {...base,...overrides}}
+function dict(overrides={}){return Object.freeze({...base,...overrides})}
 
-const dictionaries={
+const dictionaries=Object.freeze({
+  en:dict(),
   uk:dict({
-    home:'Головна',profile:'Профіль',inbox:'Inbox',chat:'Inbox',gifts:'Подарунки',more:'Налаштування',
-    explore:'Відкриття',science:'Наука',business:'Бізнес',communities:'Спільноти',videos:'Відео',
-    signin:'Увійти',create:'Створити акаунт',register:'Реєстрація',login:'Вхід',
-    password:'Пароль — від 10 символів, з літерою і цифрою',identity:'Email або username',
+    home:'Головна',profile:'Профіль',inbox:'Вхідні',chat:'Вхідні',gifts:'Подарунки',more:'Налаштування',
+    explore:'Відкриття',science:'Навчання',business:'Бізнес',communities:'Спільноти',videos:'Відео',
+    signin:'Увійти',signout:'Вийти',create:'Створити акаунт',register:'Реєстрація',login:'Вхід',
+    password:'Пароль — від 10 символів, з літерою і цифрою',identity:'Email або ім’я користувача',
     composer:'Що нового?',publish:'Опублікувати',join:'Створити акаунт',
-    joinTitle:'Приєднуйся до SYLORA',joinText:'Створи акаунт, щоб публікувати та взаємодіяти.',
-    authTitle:'Увійди у свій простір',
-    searchPlaceholder:'Пошук у Sylora…',
-    createHub:'Створити',createPost:'Створити пост',createClip:'Завантажити Clip',
+    joinTitle:'Приєднуйся до SYLORA',joinText:'Створи акаунт, щоб публікувати та взаємодіяти.',authTitle:'Увійди у свій простір',
+    searchPlaceholder:'Пошук у SYLORA…',createHub:'Створити',createPost:'Створити пост',createClip:'Завантажити кліп',
     createLive:'Почати LIVE',createRoom:'Створити кімнату',createProject:'Створити проєкт',
     createCommunity:'Створити спільноту',createCourse:'Створити курс',createEvent:'Створити подію',
-    talkWithSylora:'Поговорити',syloraNearby:'Я поруч.',syloraListening:'Я слухаю.',
-    syloraBusy:'Sylora зараз трохи зайнятий. Спробуй ще раз за мить.',
-    syloraUnavailable:'Sylora тимчасово недоступна. Спробуй трохи пізніше.',
-    loading:'Запускаємо SYLORA…',emptyFeed:'Стрічка оживе, коли ти підпишешся на людей і приєднаєшся до просторів.',
+    talkWithSylora:'Запитати Sylora',syloraNearby:'Я поруч.',syloraListening:'Я слухаю.',
+    syloraBusy:'Sylora зараз зайнята. Спробуй ще раз за мить.',syloraUnavailable:'Sylora тимчасово недоступна. Спробуй трохи пізніше.',
+    voiceUnavailable:'Голос недоступний. Текстовий режим працює.',loading:'Запускаємо SYLORA…',
+    emptyFeed:'Стрічка оживе, коли ти підпишешся на людей і приєднаєшся до просторів.',
     recommendedLive:'Рекомендовані LIVE',people:'Люди',forYou:'Для тебе',
-    inboxMessages:'Повідомлення',inboxNotifications:'Сповіщення',inboxInvites:'Запрошення',
-    inboxCalls:'Дзвінки',follow:'Підписатися',workspace:'Workspace',teams:'Команди',
-    documents:'Документи',tasks:'Задачі',discoverLive:'Discover',following:'Following',
-    guests:'Гості',battles:'Battles',streamSettings:'Налаштування ефіру',
-    giftGallery:'Галерея подарунків',settings:'Налаштування',wallet:'Гаманець',
-    language:'Мова',voiceLanguage:'Мова голосу',
-    memoryTitle:'Що Sylora пам’ятає про тебе',proactiveOff:'Проактивність: вимкнено',
-    comingSoon:'Незабаром',disabledNeedAuth:'Увійди, щоб користуватися',
-    paidCoursesBlocked:'Платні курси відкриються після налаштування платежів.',
-    coreOnline:'Core online'
+    goodMorning:'Добрий ранок',goodAfternoon:'Добрий день',goodEvening:'Добрий вечір',personalCenter:'Твій персональний центр.',
+    peopleMayKnow:'Люди, яких ти можеш знати',showAll:'Показати всі',newPeopleHere:'Нові люди з’являться тут.',
+    popularNow:'Популярні зараз',watch:'Дивитися',waitingLive:'Очікуємо наступний LIVE.',myLumen:'МІЙ LUMEN',
+    dailyBrief:'Щоденний огляд',enable:'Увімкнути',disable:'Вимкнути',continue:'Продовжити',dailyBriefUpdated:'Щоденний огляд оновлено',
+    notifications:'сповіщень',conversations:'розмов',message:'Повідомлення',vertical:'Вертикальний формат',longForm:'Довгий формат',
+    homeEmptyTitle:'Твій світ починається тут.',homeEmptyText:'Підпишись на людей або відкрий простір. SYLORA побудує цю Головну на реальній активності — без вигаданих лічильників.',
+    liveCapabilities:'Доступні режими LIVE',liveEmptyTitle:'Наступний LIVE починається з тебе.',liveEmptyText:'Зараз ніхто не в ефірі. Створи реальну кімнату або повернись, коли автор вийде у LIVE.',
+    liveFollowingEmptyTitle:'У підписках зараз тихо.',liveFollowingEmptyText:'Спочатку підпишись на авторів. Тут з’являться лише їхні справжні LIVE.',
+    inboxMessages:'Повідомлення',inboxNotifications:'Сповіщення',inboxInvites:'Запрошення',inboxCalls:'Дзвінки',
+    follow:'Підписатися',following:'Підписки',workspace:'Робочий простір',teams:'Команди',documents:'Документи',tasks:'Завдання',
+    discoverLive:'Відкриття',guests:'Гості',battles:'Батли',streamSettings:'Налаштування ефіру',
+    giftGallery:'Галерея подарунків',settings:'Налаштування',wallet:'Гаманець',language:'Мова',voiceLanguage:'Мова голосу',
+    memoryTitle:'Що Sylora пам’ятає про тебе',proactiveOff:'Проактивність: вимкнено',comingSoon:'Незабаром',
+    disabledNeedAuth:'Увійди, щоб користуватися',paidCoursesBlocked:'Платні курси відкриються після налаштування платежів.',
+    coreOnline:'Ядро онлайн',translate:'Перекласти',showOriginal:'Показати оригінал',retry:'Спробувати ще раз',cancel:'Скасувати',
+    confirm:'Підтвердити',save:'Зберегти',delete:'Видалити',close:'Закрити',offline:'Офлайн',connecting:'Підключення',
+    connected:'Підключено',degraded:'Обмежений режим',error:'Помилка'
   }),
   pl:dict({
-    home:'Główna',profile:'Profil',inbox:'Inbox',chat:'Inbox',gifts:'Prezenty',more:'Ustawienia',
+    home:'Główna',profile:'Profil',inbox:'Skrzynka',chat:'Skrzynka',gifts:'Prezenty',more:'Ustawienia',
     explore:'Odkrywaj',science:'Nauka',business:'Biznes',communities:'Społeczności',videos:'Wideo',
-    signin:'Zaloguj',create:'Utwórz konto',register:'Rejestracja',login:'Logowanie',
-    password:'Hasło — minimum 10 znaków, litera i cyfra',identity:'Email albo username',
-    composer:'Co nowego?',publish:'Opublikuj',join:'Utwórz konto',
-    joinTitle:'Dołącz do SYLORA',joinText:'Utwórz konto, aby publikować i wchodzić w interakcje.',
-    authTitle:'Wejdź do swojej przestrzeni',
-    searchPlaceholder:'Szukaj w Sylora…',
-    createHub:'Utwórz',createPost:'Utwórz post',createClip:'Prześlij Clip',
-    createLive:'Start LIVE',createRoom:'Utwórz pokój',createProject:'Utwórz projekt',
-    createCommunity:'Utwórz społeczność',createCourse:'Utwórz kurs',createEvent:'Utwórz wydarzenie',
-    talkWithSylora:'Porozmawiaj',syloraNearby:'Jestem tu.',syloraListening:'Słucham.',
-    syloraBusy:'Sylora jest chwilowo zajęta. Spróbuj za moment.',
+    signin:'Zaloguj',signout:'Wyloguj',create:'Utwórz konto',register:'Rejestracja',login:'Logowanie',
+    password:'Hasło — minimum 10 znaków, litera i cyfra',identity:'Email lub nazwa użytkownika',
+    composer:'Co nowego?',publish:'Opublikuj',join:'Utwórz konto',joinTitle:'Dołącz do SYLORA',
+    joinText:'Utwórz konto, aby publikować i wchodzić w interakcje.',authTitle:'Wejdź do swojej przestrzeni',
+    searchPlaceholder:'Szukaj w SYLORA…',createHub:'Utwórz',createPost:'Utwórz post',createClip:'Prześlij klip',
+    createLive:'Start LIVE',createRoom:'Utwórz pokój',createProject:'Utwórz projekt',createCommunity:'Utwórz społeczność',
+    createCourse:'Utwórz kurs',createEvent:'Utwórz wydarzenie',talkWithSylora:'Zapytaj Sylorę',syloraNearby:'Jestem tu.',
+    syloraListening:'Słucham.',syloraBusy:'Sylora jest chwilowo zajęta. Spróbuj za moment.',
     syloraUnavailable:'Sylora jest tymczasowo niedostępna. Spróbuj ponownie wkrótce.',
-    loading:'Uruchamiamy SYLORA…',emptyFeed:'Twój feed ożyje, gdy zaczniesz obserwować ludzi i dołączysz do przestrzeni.',
-    recommendedLive:'Polecane LIVE',people:'Ludzie',forYou:'Dla Ciebie',
-    inboxMessages:'Wiadomości',inboxNotifications:'Powiadomienia',inboxInvites:'Zaproszenia',
-    inboxCalls:'Połączenia',follow:'Obserwuj',workspace:'Workspace',teams:'Zespoły',
-    documents:'Dokumenty',tasks:'Zadania',memoryTitle:'Co Sylora o Tobie pamięta',
-    paidCoursesBlocked:'Płatne kursy pojawią się po konfiguracji płatności.'
+    voiceUnavailable:'Głos jest niedostępny. Tekst nadal działa.',loading:'Uruchamiamy SYLORA…',
+    emptyFeed:'Twój feed ożyje, gdy zaczniesz obserwować ludzi i dołączysz do przestrzeni.',recommendedLive:'Polecane LIVE',
+    people:'Ludzie',forYou:'Dla Ciebie',inboxMessages:'Wiadomości',inboxNotifications:'Powiadomienia',
+    goodMorning:'Dzień dobry',goodAfternoon:'Dzień dobry',goodEvening:'Dobry wieczór',personalCenter:'Twoje osobiste centrum.',
+    peopleMayKnow:'Osoby, które możesz znać',showAll:'Pokaż wszystkie',newPeopleHere:'Nowe osoby pojawią się tutaj.',
+    popularNow:'Popularne teraz',watch:'Oglądaj',waitingLive:'Czekamy na następny LIVE.',myLumen:'MÓJ LUMEN',
+    dailyBrief:'Codzienny przegląd',enable:'Włącz',disable:'Wyłącz',continue:'Kontynuuj',dailyBriefUpdated:'Codzienny przegląd zaktualizowany',
+    notifications:'powiadomień',conversations:'rozmów',message:'Wiadomość',vertical:'Pionowe',longForm:'Długi format',
+    homeEmptyTitle:'Twój świat zaczyna się tutaj.',homeEmptyText:'Zaobserwuj osoby lub odkryj przestrzeń. SYLORA zbuduje tę stronę z prawdziwej aktywności — bez fikcyjnych liczników.',
+    liveCapabilities:'Dostępne tryby LIVE',liveEmptyTitle:'Następny LIVE zaczyna się od Ciebie.',liveEmptyText:'Nikt teraz nie nadaje. Uruchom prawdziwy pokój albo wróć, gdy twórca rozpocznie LIVE.',
+    liveFollowingEmptyTitle:'W obserwowanych jest teraz cicho.',liveFollowingEmptyText:'Najpierw obserwuj twórców. Tutaj pojawią się tylko ich prawdziwe transmisje LIVE.',
+    inboxInvites:'Zaproszenia',inboxCalls:'Połączenia',follow:'Obserwuj',following:'Obserwowani',workspace:'Obszar roboczy',
+    teams:'Zespoły',documents:'Dokumenty',tasks:'Zadania',discoverLive:'Odkrywaj',guests:'Goście',battles:'Bitwy',
+    streamSettings:'Ustawienia transmisji',giftGallery:'Galeria prezentów',settings:'Ustawienia',wallet:'Portfel',
+    language:'Język',voiceLanguage:'Język głosu',memoryTitle:'Co Sylora o Tobie pamięta',proactiveOff:'Proaktywność: wyłączona',
+    comingSoon:'Wkrótce',disabledNeedAuth:'Zaloguj się, aby użyć tej funkcji',paidCoursesBlocked:'Płatne kursy pojawią się po konfiguracji płatności.',
+    coreOnline:'Rdzeń online',translate:'Przetłumacz',showOriginal:'Pokaż oryginał',retry:'Spróbuj ponownie',cancel:'Anuluj',confirm:'Potwierdź',
+    save:'Zapisz',delete:'Usuń',close:'Zamknij',offline:'Offline',connecting:'Łączenie',connected:'Połączono',degraded:'Tryb ograniczony',error:'Błąd'
   }),
-  en:dict({}),
   de:dict({
-    home:'Start',profile:'Profil',inbox:'Inbox',chat:'Inbox',gifts:'Geschenke',more:'Einstellungen',
-    explore:'Entdecken',science:'Wissenschaft',business:'Business',communities:'Communities',videos:'Videos',
-    signin:'Anmelden',create:'Konto erstellen',register:'Registrieren',login:'Anmelden',
-    password:'Passwort — mindestens 10 Zeichen, Buchstabe und Zahl',identity:'E-Mail oder Benutzername',
-    composer:'Was gibt’s Neues?',publish:'Veröffentlichen',join:'Konto erstellen',
-    joinTitle:'SYLORA beitreten',joinText:'Erstelle ein Konto, um zu veröffentlichen und mitzumachen.',
-    authTitle:'Tritt in deinen Raum ein',
-    searchPlaceholder:'In Sylora suchen…',
-    createHub:'Erstellen',createPost:'Beitrag erstellen',createClip:'Clip hochladen',
-    createLive:'LIVE starten',createRoom:'Raum erstellen',createProject:'Projekt erstellen',
-    createCommunity:'Community erstellen',createCourse:'Kurs erstellen',createEvent:'Event erstellen',
-    talkWithSylora:'Mit Sylora sprechen',syloraNearby:'Ich bin hier.',syloraListening:'Ich höre zu.',
-    syloraBusy:'Sylora ist kurz beschäftigt. Bitte gleich noch einmal versuchen.',
-    syloraUnavailable:'Sylora ist vorübergehend nicht erreichbar. Bitte später erneut versuchen.',
-    loading:'SYLORA startet…',emptyFeed:'Dein Feed wird lebendig, sobald du Menschen folgst und Räumen beitrittst.',
-    recommendedLive:'Empfohlene LIVE',people:'Menschen',forYou:'Für dich',
-    inboxMessages:'Nachrichten',inboxNotifications:'Benachrichtigungen',inboxInvites:'Einladungen',
-    inboxCalls:'Anrufe',follow:'Folgen',memoryTitle:'Was Sylora über dich weiß',
-    paidCoursesBlocked:'Kostenpflichtige Kurse nach Zahlungsanbindung.'
+    home:'Start',profile:'Profil',inbox:'Posteingang',chat:'Posteingang',gifts:'Geschenke',more:'Einstellungen',
+    explore:'Entdecken',science:'Lernen',business:'Business',communities:'Communities',videos:'Videos',signin:'Anmelden',signout:'Abmelden',
+    create:'Konto erstellen',register:'Registrieren',login:'Anmelden',password:'Passwort — mindestens 10 Zeichen, Buchstabe und Zahl',
+    identity:'E-Mail oder Benutzername',composer:'Was gibt’s Neues?',publish:'Veröffentlichen',join:'Konto erstellen',joinTitle:'SYLORA beitreten',
+    joinText:'Erstelle ein Konto, um zu veröffentlichen und mitzumachen.',authTitle:'Tritt in deinen Raum ein',searchPlaceholder:'In SYLORA suchen…',
+    createHub:'Erstellen',createPost:'Beitrag erstellen',createClip:'Clip hochladen',createLive:'LIVE starten',createRoom:'Raum erstellen',
+    createProject:'Projekt erstellen',createCommunity:'Community erstellen',createCourse:'Kurs erstellen',createEvent:'Event erstellen',
+    talkWithSylora:'Sylora fragen',syloraNearby:'Ich bin hier.',syloraListening:'Ich höre zu.',
+    syloraBusy:'Sylora ist kurz beschäftigt. Bitte gleich noch einmal versuchen.',syloraUnavailable:'Sylora ist vorübergehend nicht erreichbar. Bitte später erneut versuchen.',
+    voiceUnavailable:'Sprache ist nicht verfügbar. Text funktioniert weiterhin.',loading:'SYLORA startet…',
+    emptyFeed:'Dein Feed wird lebendig, sobald du Menschen folgst und Räumen beitrittst.',recommendedLive:'Empfohlene LIVE',people:'Menschen',forYou:'Für dich',
+    goodMorning:'Guten Morgen',goodAfternoon:'Guten Tag',goodEvening:'Guten Abend',personalCenter:'Dein persönliches Zentrum.',
+    peopleMayKnow:'Personen, die du kennen könntest',showAll:'Alle anzeigen',newPeopleHere:'Neue Personen erscheinen hier.',
+    popularNow:'Jetzt beliebt',watch:'Ansehen',waitingLive:'Warten auf das nächste LIVE.',myLumen:'MEIN LUMEN',
+    dailyBrief:'Täglicher Überblick',enable:'Aktivieren',disable:'Deaktivieren',continue:'Fortsetzen',dailyBriefUpdated:'Täglicher Überblick aktualisiert',
+    notifications:'Benachrichtigungen',conversations:'Unterhaltungen',message:'Nachricht',vertical:'Vertikal',longForm:'Langformat',
+    homeEmptyTitle:'Deine Welt beginnt hier.',homeEmptyText:'Folge Menschen oder entdecke einen Raum. SYLORA baut diese Startseite aus echter Aktivität auf — ohne erfundene Zähler.',
+    liveCapabilities:'Verfügbare LIVE-Modi',liveEmptyTitle:'Das nächste LIVE beginnt mit dir.',liveEmptyText:'Gerade ist niemand live. Starte einen echten Raum oder komm zurück, wenn ein Creator live geht.',
+    liveFollowingEmptyTitle:'Bei deinen Abos ist es gerade ruhig.',liveFollowingEmptyText:'Folge zuerst Creators. Hier erscheinen nur ihre echten LIVE-Sendungen.',
+    inboxMessages:'Nachrichten',inboxNotifications:'Benachrichtigungen',inboxInvites:'Einladungen',inboxCalls:'Anrufe',follow:'Folgen',following:'Gefolgt',
+    workspace:'Arbeitsbereich',teams:'Teams',documents:'Dokumente',tasks:'Aufgaben',discoverLive:'Entdecken',guests:'Gäste',battles:'Battles',
+    streamSettings:'Stream-Einstellungen',giftGallery:'Geschenkgalerie',settings:'Einstellungen',wallet:'Wallet',language:'Sprache',voiceLanguage:'Sprachausgabe',
+    memoryTitle:'Was Sylora über dich weiß',proactiveOff:'Proaktiv: aus',comingSoon:'Demnächst',disabledNeedAuth:'Zum Verwenden anmelden',
+    paidCoursesBlocked:'Kostenpflichtige Kurse nach Zahlungsanbindung.',coreOnline:'Kern online',translate:'Übersetzen',showOriginal:'Original anzeigen',
+    retry:'Erneut versuchen',cancel:'Abbrechen',confirm:'Bestätigen',save:'Speichern',delete:'Löschen',close:'Schließen',offline:'Offline',
+    connecting:'Verbindung wird hergestellt',connected:'Verbunden',degraded:'Eingeschränkter Modus',error:'Fehler'
   }),
-  // Scaffold locales (fallback to EN base until full copy lands)
-  es:dict({home:'Inicio',profile:'Perfil',inbox:'Inbox',more:'Ajustes',science:'Ciencia',business:'Negocios',signin:'Entrar',composer:'¿Qué hay de nuevo?',publish:'Publicar',searchPlaceholder:'Buscar en Sylora…',createHub:'Crear',talkWithSylora:'Hablar con Sylora',syloraNearby:'Estoy aquí.',syloraListening:'Te escucho.'}),
-  fr:dict({home:'Accueil',profile:'Profil',inbox:'Inbox',more:'Réglages',science:'Science',business:'Business',signin:'Connexion',composer:'Quoi de neuf ?',publish:'Publier',searchPlaceholder:'Rechercher dans Sylora…',createHub:'Créer',talkWithSylora:'Parler à Sylora',syloraNearby:'Je suis là.',syloraListening:"J'écoute."}),
-  it:dict({home:'Home',profile:'Profilo',inbox:'Inbox',more:'Impostazioni',science:'Scienza',business:'Business',signin:'Accedi',composer:'Novità?',publish:'Pubblica',searchPlaceholder:'Cerca in Sylora…',createHub:'Crea',talkWithSylora:'Parla con Sylora',syloraNearby:'Sono qui.',syloraListening:'Ti ascolto.'}),
-  pt:dict({home:'Início',profile:'Perfil',inbox:'Inbox',more:'Definições',science:'Ciência',business:'Negócios',signin:'Entrar',composer:'Novidades?',publish:'Publicar',searchPlaceholder:'Pesquisar no Sylora…',createHub:'Criar',talkWithSylora:'Falar com a Sylora',syloraNearby:'Estou aqui.',syloraListening:'Estou a ouvir.'}),
-  cs:dict({home:'Domů',profile:'Profil',inbox:'Inbox',more:'Nastavení',science:'Věda',business:'Byznys',signin:'Přihlásit',composer:'Co je nového?',publish:'Publikovat',createHub:'Vytvořit',talkWithSylora:'Mluvit se Sylorou',syloraNearby:'Jsem tu.',syloraListening:'Poslouchám.'}),
-  sk:dict({home:'Domov',profile:'Profil',inbox:'Inbox',more:'Nastavenia',science:'Veda',business:'Biznis',signin:'Prihlásiť',composer:'Čo je nové?',publish:'Publikovať',createHub:'Vytvoriť',talkWithSylora:'Hovoriť so Sylorou',syloraNearby:'Som tu.',syloraListening:'Počúvam.'}),
-  ro:dict({home:'Acasă',profile:'Profil',inbox:'Inbox',more:'Setări',science:'Știință',business:'Business',signin:'Autentificare',composer:'Ce e nou?',publish:'Publică',createHub:'Creează',talkWithSylora:'Vorbește cu Sylora',syloraNearby:'Sunt aici.',syloraListening:'Te ascult.'}),
-  nl:dict({home:'Home',profile:'Profiel',inbox:'Inbox',more:'Instellingen',science:'Wetenschap',business:'Business',signin:'Inloggen',composer:'Wat is er nieuw?',publish:'Publiceren',createHub:'Maken',talkWithSylora:'Praat met Sylora',syloraNearby:'Ik ben er.',syloraListening:'Ik luister.'}),
-  tr:dict({home:'Ana sayfa',profile:'Profil',inbox:'Inbox',more:'Ayarlar',science:'Bilim',business:'İş',signin:'Giriş',composer:'Yenilikler?',publish:'Yayınla',createHub:'Oluştur',talkWithSylora:'Sylora ile konuş',syloraNearby:'Buradayım.',syloraListening:'Dinliyorum.'})
-};
+  ru:dict({
+    home:'Главная',profile:'Профиль',inbox:'Входящие',chat:'Входящие',gifts:'Подарки',more:'Настройки',explore:'Открытия',science:'Обучение',
+    business:'Бизнес',communities:'Сообщества',videos:'Видео',signin:'Войти',signout:'Выйти',create:'Создать аккаунт',register:'Регистрация',login:'Вход',
+    password:'Пароль — минимум 10 символов, буква и цифра',identity:'Email или имя пользователя',composer:'Что нового?',publish:'Опубликовать',
+    join:'Создать аккаунт',joinTitle:'Присоединяйтесь к SYLORA',joinText:'Создайте аккаунт, чтобы публиковать и взаимодействовать.',
+    authTitle:'Войдите в своё пространство',searchPlaceholder:'Поиск в SYLORA…',createHub:'Создать',createPost:'Создать публикацию',createClip:'Загрузить клип',
+    createLive:'Начать LIVE',createRoom:'Создать комнату',createProject:'Создать проект',createCommunity:'Создать сообщество',createCourse:'Создать курс',
+    createEvent:'Создать событие',talkWithSylora:'Спросить Sylora',syloraNearby:'Я рядом.',syloraListening:'Я слушаю.',
+    syloraBusy:'Sylora сейчас занята. Попробуйте ещё раз через мгновение.',syloraUnavailable:'Sylora временно недоступна. Попробуйте немного позже.',
+    voiceUnavailable:'Голос недоступен. Текстовый режим работает.',loading:'Запускаем SYLORA…',
+    emptyFeed:'Лента оживёт, когда вы подпишетесь на людей и присоединитесь к пространствам.',recommendedLive:'Рекомендованные LIVE',people:'Люди',forYou:'Для вас',
+    goodMorning:'Доброе утро',goodAfternoon:'Добрый день',goodEvening:'Добрый вечер',personalCenter:'Ваш персональный центр.',
+    peopleMayKnow:'Люди, которых вы можете знать',showAll:'Показать всех',newPeopleHere:'Новые люди появятся здесь.',
+    popularNow:'Популярно сейчас',watch:'Смотреть',waitingLive:'Ожидаем следующий LIVE.',myLumen:'МОЙ LUMEN',
+    dailyBrief:'Ежедневный обзор',enable:'Включить',disable:'Выключить',continue:'Продолжить',dailyBriefUpdated:'Ежедневный обзор обновлён',
+    notifications:'уведомлений',conversations:'диалогов',message:'Сообщение',vertical:'Вертикальный формат',longForm:'Длинный формат',
+    homeEmptyTitle:'Ваш мир начинается здесь.',homeEmptyText:'Подпишитесь на людей или откройте пространство. SYLORA построит эту Главную на реальной активности — без выдуманных счётчиков.',
+    liveCapabilities:'Доступные режимы LIVE',liveEmptyTitle:'Следующий LIVE начинается с вас.',liveEmptyText:'Сейчас никто не в эфире. Создайте настоящую комнату или вернитесь, когда автор начнёт LIVE.',
+    liveFollowingEmptyTitle:'В подписках сейчас тихо.',liveFollowingEmptyText:'Сначала подпишитесь на авторов. Здесь появятся только их настоящие LIVE.',
+    inboxMessages:'Сообщения',inboxNotifications:'Уведомления',inboxInvites:'Приглашения',inboxCalls:'Звонки',follow:'Подписаться',following:'Подписки',
+    workspace:'Рабочее пространство',teams:'Команды',documents:'Документы',tasks:'Задачи',discoverLive:'Открытия',guests:'Гости',battles:'Батлы',
+    streamSettings:'Настройки трансляции',giftGallery:'Галерея подарков',settings:'Настройки',wallet:'Кошелёк',language:'Язык',voiceLanguage:'Язык голоса',
+    memoryTitle:'Что Sylora помнит о вас',proactiveOff:'Проактивность: выключена',comingSoon:'Скоро',disabledNeedAuth:'Войдите, чтобы использовать',
+    paidCoursesBlocked:'Платные курсы станут доступны после настройки платежей.',coreOnline:'Ядро онлайн',translate:'Перевести',showOriginal:'Показать оригинал',
+    retry:'Повторить',cancel:'Отмена',confirm:'Подтвердить',save:'Сохранить',delete:'Удалить',close:'Закрыть',offline:'Офлайн',connecting:'Подключение',
+    connected:'Подключено',degraded:'Ограниченный режим',error:'Ошибка'
+  })
+});
 
-export const SUPPORTED_UI_LOCALES=Object.freeze(Object.keys(dictionaries));
-export const PRIORITY_VOICE_LOCALES=Object.freeze(['uk','pl','en','de','es','fr','it','pt','cs','sk','ro','nl','tr']);
+const ERROR_MAP=Object.freeze({
+  AI_PROVIDER_NOT_CONFIGURED:'syloraUnavailable',AI_PROVIDER_ERROR:'syloraBusy',AI_RATE_LIMITED:'syloraBusy',
+  REALTIME_SESSION_FAILED:'syloraBusy',REALTIME_PROVIDER_ERROR:'syloraBusy',REQUEST_FAILED:'syloraBusy'
+});
 
-const ERROR_MAP={
-  AI_PROVIDER_NOT_CONFIGURED:'syloraUnavailable',
-  AI_PROVIDER_ERROR:'syloraBusy',
-  AI_RATE_LIMITED:'syloraBusy',
-  REALTIME_SESSION_FAILED:'syloraBusy',
-  REALTIME_PROVIDER_ERROR:'syloraBusy',
-  REQUEST_FAILED:'syloraBusy'
-};
-
-function readStoredLocale(){
-  try{return globalThis.localStorage?.getItem?.('sylora_locale')||''}catch{return ''}
+function readStoredLocale(){try{return globalThis.localStorage?.getItem?.('sylora_locale')||''}catch{return ''}}
+function writeStoredLocale(value){try{globalThis.localStorage?.setItem?.('sylora_locale',value)}catch{/* storage unavailable */}}
+function browserLocale(){
+  const raw=String(globalThis.navigator?.language||'').slice(0,2).toLowerCase();
+  return supported.has(raw)?raw:DEFAULT_UI_LOCALE;
 }
-function writeStoredLocale(value){
-  try{globalThis.localStorage?.setItem?.('sylora_locale',value)}catch{/* node / private mode */}
-}
-let locale=readStoredLocale()||'uk';
-if(!dictionaries[locale])locale='uk';
+
+let locale=readStoredLocale();
+if(!supported.has(locale))locale=browserLocale();
+if(!supported.has(locale))locale=DEFAULT_UI_LOCALE;
 
 export function getLocale(){return locale}
-export function setLocale(next){
-  locale=dictionaries[next]?next:(dictionaries.en? 'en':'uk');
-  if(!dictionaries[locale])locale='uk';
-  writeStoredLocale(locale);
+export function getDictionary(target=locale){return dictionaries[supported.has(target)?target:DEFAULT_UI_LOCALE]}
+export function setLocale(next,{persist=true}={}){
+  locale=supported.has(next)?next:DEFAULT_UI_LOCALE;
+  if(persist)writeStoredLocale(locale);
   if(typeof document!=='undefined'){
     document.documentElement.lang=locale;
-    document.documentElement.dir=['ar','he','fa','ur'].includes(locale)?'rtl':'ltr';
+    document.documentElement.dir='ltr';
   }
   return locale;
 }
@@ -157,7 +208,5 @@ export function humanError(codeOrMessage){
   if(/AI_PROVIDER|REALTIME_|OPENAI|PROVIDER/i.test(code))return t('syloraUnavailable');
   return code.length<120?code:t('syloraBusy');
 }
-export function detectBrowserLocale(){
-  const raw=(globalThis.navigator?.language||'uk').slice(0,2).toLowerCase();
-  return dictionaries[raw]?raw:'en';
-}
+export function detectBrowserLocale(){return browserLocale()}
+export function localeLabel(value){return ({uk:'UA',en:'EN',pl:'PL',de:'DE',ru:'RU'})[value]||String(value||'').toUpperCase()}

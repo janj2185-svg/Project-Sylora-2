@@ -16,7 +16,7 @@
 ## 2. What was merged
 
 - **Inbox** = DMs + notifications + invites + calls tabs (`messages` view)
-- **One Sylora AI** with shared personality instructions + mode context (`sylora-intelligence.mjs`)
+- **One contextual Sylora AI** with shared personality instructions + mode context (`sylora-intelligence.mjs`); Home/global duplicate entry points are removed
 - **Home ecosystem feed** reuses LIVE / users / communities / courses / businesses APIs (no fake counters)
 - **Global Create Hub** for post/clip/LIVE/room/project/community/course/studio
 - **Command Palette** (`⌘/Ctrl+K`) over `/api/search` + `/api/search/ai` + slash commands
@@ -29,6 +29,7 @@
 - Gifts removed from primary left rail (gallery via Settings / LIVE / Studio paths)
 - User-facing *"AI provider ще не налаштований на сервері"* → `humanError` / `syloraUnavailable`
 - Home “Створити” composer-only shortcut → Create Hub
+- Home hero/left mini/right AI/mobile AI duplication → no Sylora on Home; mobile center action is Create
 
 ## 4. What was added
 
@@ -38,6 +39,7 @@
 - APIs: `GET /api/ai/intelligence`, `PATCH /api/ai/proactive`
 - Home living feed strips; LIVE hub tabs; Inbox tabs; Business workspace UI; Science research grid
 - Tests: `tests/consolidation.test.mjs` (+ nav expectations updated)
+- LIVE-only TikTok owner pilot through local TikFinity + Companion, with honest delivery labels and manual-first behavior
 
 ## 5. Bugs fixed
 

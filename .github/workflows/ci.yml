@@ -2,13 +2,18 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   checks:
     name: lint-build-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
 
     services:
       postgres:
@@ -27,10 +32,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -66,11 +73,11 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sylora_phase1_test
 
-      - name: Browser smoke, LIVE signaling, and coturn allocation
+      - name: Browser smoke, LIVE signaling, responsive UI, and coturn allocation
         run: |
           turn_smoke_secret='ci-only-not-a-secret-0000000000000000'
           printf '%s\n' "SYLORA_TURN_SHARED_SECRET=$turn_smoke_secret" > .env.local
-          trap 'docker compose --env-file .env.local --profile turn logs turn; docker compose --env-file .env.local --profile turn down --remove-orphans' EXIT
+          trap 'docker compose --env-file .env.local --profile turn logs turn; docker compose --env-file .env.local --profile turn down --remove-orphans; rm -f .env.local' EXIT
           docker compose --env-file .env.local --profile turn up -d turn
           status=starting
           for attempt in $(seq 1 30); do
@@ -88,13 +95,40 @@ jobs:
           SYLORA_E2E_DATA_FILE=./tmp/ci-playwright.json \
           npm run test:e2e
 
+      - name: Deterministic visual candidate and repeatability gate
+        run: npm run test:e2e:visual
+        env:
+          SYLORA_VISUAL_GIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Upload rendered UI QA
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sylora-ui-qa
+          path: tmp/ui-qa
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload deterministic visual candidate
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sylora-visual-candidate-${{ github.event.pull_request.head.sha || github.sha }}-attempt-${{ github.run_attempt }}
+          path: |
+            tmp/visual-candidate
+            tmp/visual-repeat
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload Playwright diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-diagnostics
           path: |
             tmp/playwright-results
             tmp/playwright-report
+            tmp/playwright-visual-results-capture
+            tmp/playwright-visual-results-repeat
           if-no-files-found: ignore
           retention-days: 7

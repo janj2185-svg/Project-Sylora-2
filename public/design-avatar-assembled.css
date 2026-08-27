@@ -1,12 +1,12 @@
-/* Digital Human — single-image portrait (must load last).
-   No sprite sheets, no arm tubes, no clipped face layers.
-   Wins over design-scenes-v5/v6 hero:* and child position resets. */
+/* Digital Human — one canonical full-body frame at a time (must load last).
+   No sprite sheets, no arm tubes, no clipped face or detached logo layers.
+   Loading last gives this layer canonical ownership of AI presence geometry. */
 
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
   position:relative;
   isolation:isolate;
   overflow:hidden;
-  min-height:320px;
+  min-height:410px;
   padding-right:46%;
 }
 
@@ -28,7 +28,7 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
   display:block!important;
   position:absolute!important;
   z-index:1!important;
-  inset:12px 12px 12px auto!important;
+  inset:12px 12px auto auto!important;
   width:min(42%,280px)!important;
   height:auto!important;
   aspect-ratio:3/4!important;
@@ -39,11 +39,17 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
   border-radius:22px!important;
   background:transparent!important;
   box-shadow:none!important;
+  contain:layout paint;
   pointer-events:none!important;
 }
 
-/* Whole-character <img> plates only. */
-body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion>img{
+body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-visual-hidden .sylora-avatar-motion,
+body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-visual-hidden .ai-human-presence{
+  display:none!important;
+}
+
+/* One complete body plate owns the character and garment artwork. */
+body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-frame{
   position:absolute!important;
   inset:0!important;
   display:block!important;
@@ -58,26 +64,24 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
   pointer-events:none!important;
   user-select:none;
   -webkit-user-drag:none;
+  image-rendering:auto;
+  backface-visibility:hidden;
 }
 
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-body{
   z-index:1!important;
   opacity:1!important;
-  transform:translateY(var(--body-y,0px)) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
+  transform:translate3d(0,var(--body-y,0px),0) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
   transform-origin:50% 74%;
   will-change:transform;
 }
 
+/* A legacy second body layer would recreate logo/silhouette ghosting. */
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture{
-  z-index:2!important;
-  opacity:0;
-  transition:opacity .28s cubic-bezier(.22,.75,.24,1);
-  transform:translateY(calc(var(--body-y,0px) + var(--gesture-lift,0px))) rotate(var(--body-rot,0deg)) scale(var(--body-scale,1));
-  transform-origin:50% 74%;
-  will-change:opacity,transform;
-}
-body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture.gesture-shown{
-  opacity:1!important;
+  display:none!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  transition:none!important;
 }
 
 /* Legacy collage layers must never paint, even if old JS mounts them. */
@@ -95,7 +99,8 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-m
 body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
   z-index:3;
   right:18px;
-  bottom:18px;
+  top:auto!important;
+  bottom:18px!important;
   width:min(34%,210px);
   background:rgba(255,252,249,.78);
 }
@@ -110,12 +115,12 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
 /* Tablet: keep portrait readable without crowding the copy column. */
 @media(max-width:980px) and (min-width:721px){
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
-    min-height:360px;
+    min-height:372px;
     padding-right:42%;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion{
     width:min(38%,250px)!important;
-    inset:14px 14px 14px auto!important;
+    inset:14px 14px auto auto!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
     width:min(36%,200px);
@@ -124,22 +129,27 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
 
 @media(max-width:720px){
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled{
-    min-height:520px!important;
-    padding:22px 20px 280px!important;
+    min-height:clamp(680px,180vw,720px)!important;
+    padding:64px 20px 390px!important;
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-motion{
-    inset:auto auto 118px 50%!important;
+    inset:auto auto 92px 50%!important;
     left:50%!important;
     right:auto!important;
-    width:min(78vw,300px)!important;
+    width:min(66vw,258px)!important;
     transform:translateX(-50%);
   }
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .ai-human-presence{
     right:20px;
-    bottom:118px;
-    width:42%;
+    top:auto!important;
+    bottom:104px!important;
+    width:min(48%,184px);
   }
-  /* LIVE: full coherent portrait above a compact control strip — never cut through the torso. */
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.sylora-visual-hidden{
+    min-height:300px!important;
+    padding:64px 20px 24px!important;
+  }
+  /* LIVE: full coherent body above a compact control strip — never cut through the torso. */
   body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live{
     min-height:74vh!important;
     padding:16px 12px 156px!important;
@@ -177,11 +187,7 @@ body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled.realtime-live .r
 }
 
 @media(prefers-reduced-motion:reduce){
-  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture{
-    transition:none;
-  }
-  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-body,
-  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-gesture{
+  body[data-view="ai"] #app>.hero.sylora-ai-hero.sylora-assembled .sylora-avatar-body{
     transform:none!important;
   }
 }

@@ -7,19 +7,22 @@ import path from 'node:path';
 import { buildPersonalityInstructions, sanitizeMemoryValue, languageSupportMatrix, PROACTIVE_LEVELS } from '../src/ecosystem/sylora-intelligence.mjs';
 import { createHubActions } from '../public/create-hub.js';
 
-test('i18n covers priority UI locales and humanError hides provider codes', async () => {
+test('i18n exposes exactly the production UI locales and humanError hides provider codes', async () => {
   const mod = await import('../public/i18n.js');
-  for (const loc of ['uk', 'pl', 'en', 'de']) {
-    mod.setLocale(loc);
-    assert.equal(mod.t('inbox'), 'Inbox');
+  assert.deepEqual(mod.SUPPORTED_UI_LOCALES, ['uk', 'en', 'pl', 'de', 'ru']);
+  const expectedInbox = { uk: 'Вхідні', en: 'Inbox', pl: 'Skrzynka', de: 'Posteingang', ru: 'Входящие' };
+  for (const loc of mod.SUPPORTED_UI_LOCALES) {
+    mod.setLocale(loc, { persist: false });
+    assert.equal(mod.t('inbox'), expectedInbox[loc]);
     assert.ok(mod.t('home').length > 1);
     assert.ok(mod.t('syloraUnavailable').length > 8);
     assert.doesNotMatch(mod.t('syloraUnavailable'), /AI provider/i);
   }
   assert.equal(mod.humanError('AI_PROVIDER_NOT_CONFIGURED'), mod.t('syloraUnavailable'));
   assert.equal(mod.humanError('AI_RATE_LIMITED'), mod.t('syloraBusy'));
-  assert.ok(mod.SUPPORTED_UI_LOCALES.includes('tr'));
+  assert.ok(!mod.SUPPORTED_UI_LOCALES.includes('tr'));
   assert.ok(mod.PRIORITY_VOICE_LOCALES.includes('uk'));
+  mod.setLocale('uk', { persist: false });
 });
 
 test('create hub is permission-aware; events are wired when authenticated', () => {
@@ -34,6 +37,7 @@ test('create hub is permission-aware; events are wired when authenticated', () =
 test('shell IA: Inbox+Profile dock, gifts off primary, create hub CSS linked', () => {
   const html = fs.readFileSync('public/index.html', 'utf8');
   assert.match(html, /design-consolidation\.css/);
+  assert.match(html, /design-system-2026\.css/);
   assert.doesNotMatch(html.split('side-nav')[1].split('secondary-nav')[0], /data-view="gifts"/);
   assert.match(html, /data-create-hub/);
   const app = fs.readFileSync('public/app.js', 'utf8');
@@ -43,7 +47,7 @@ test('shell IA: Inbox+Profile dock, gifts off primary, create hub CSS linked', (
   assert.doesNotMatch(app, /AI provider ще не налаштований/);
   assert.match(app, /ecosystem-feed/);
   assert.match(app, /inbox-tabs/);
-  assert.match(app, /live-hub-tabs/);
+  assert.match(app, /class="live-tabs"/);
   assert.match(app, /orgWorkspacePanel/);
 });
 

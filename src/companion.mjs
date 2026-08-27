@@ -2,6 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { ObsWebSocketClient } from '../public/obs-client.js';
+import { TikFinityBridge } from './tiktok-live.mjs';
 
 const LOOPBACK_HOST='127.0.0.1';
 const DEFAULT_PORT=43179;
@@ -14,16 +15,17 @@ function json(res,status,data,headers={}){const body=JSON.stringify(data);res.wr
 function corsHeaders(origin,allowed){return origin&&allowed.has(origin)?{'access-control-allow-origin':origin,'access-control-allow-methods':'GET, POST, OPTIONS','access-control-allow-headers':'authorization, content-type','access-control-max-age':'600','vary':'Origin'}:{}}
 async function readJson(req){let size=0,text='';for await(const chunk of req){size+=chunk.length;if(size>MAX_BODY_BYTES){req.destroy();throw new Error('BODY_TOO_LARGE')}text+=chunk}if(!text)return{};try{return JSON.parse(text)}catch{throw new Error('INVALID_JSON')}}
 
-export function createCompanionServer({token=crypto.randomBytes(24).toString('base64url'),allowedOrigins=[...DEFAULT_ORIGINS],ObsClient=ObsWebSocketClient}={}){
+export function createCompanionServer({token=crypto.randomBytes(24).toString('base64url'),allowedOrigins=[...DEFAULT_ORIGINS],ObsClient=ObsWebSocketClient,TikTokBridge=TikFinityBridge,allowSimulation=process.env.NODE_ENV!=='production'}={}){
   if(String(token).length<24)throw new Error('PAIRING_TOKEN_TOO_SHORT');
   const origins=new Set(allowedOrigins.map(String));
   let obs=null;
+  const tiktok=new TikTokBridge();
   const server=http.createServer(async(req,res)=>{
     const origin=req.headers.origin||'',cors=corsHeaders(origin,origins);
     if(origin&&!origins.has(origin))return json(res,403,{error:'ORIGIN_NOT_ALLOWED'});
     if(req.method==='OPTIONS'){res.writeHead(204,cors);return res.end()}
     const url=new URL(req.url||'/',`http://${LOOPBACK_HOST}`);
-    if(req.method==='GET'&&url.pathname==='/v1/health')return json(res,200,{service:'sylora-companion',version:1,obsConnected:!!obs?.connected},cors);
+    if(req.method==='GET'&&url.pathname==='/v1/health')return json(res,200,{service:'sylora-companion',version:2,obsConnected:!!obs?.connected,tiktok:tiktok.snapshot(),simulationEnabled:!!allowSimulation},cors);
     const auth=String(req.headers.authorization||''),supplied=auth.startsWith('Bearer ')?auth.slice(7):'';
     if(!safeEqual(supplied,token))return json(res,401,{error:'PAIRING_REQUIRED'},cors);
     try{
@@ -36,10 +38,17 @@ export function createCompanionServer({token=crypto.randomBytes(24).toString('ba
         const input=await readJson(req),action=String(input.action||'');if(!ACTIONS.has(action))return json(res,400,{error:'ACTION_NOT_ALLOWED'},cors);
         let result;if(action==='capabilities')result=await obs.capabilities();else if(action==='setScene'){const sceneName=String(input.sceneName||'').trim().slice(0,120);if(!sceneName)return json(res,400,{error:'SCENE_NAME_REQUIRED'},cors);result=await obs.setProgramScene(sceneName)}else if(action==='startVirtualCamera')result=await obs.startVirtualCamera();else if(action==='stopVirtualCamera')result=await obs.stopVirtualCamera();else if(action==='startStream')result=await obs.startStream();else if(action==='stopStream')result=await obs.stopStream();return json(res,200,{ok:true,result:result||{}},cors);
       }
+      if(req.method==='POST'&&url.pathname==='/v1/tiktok/connect'){const input=await readJson(req);return json(res,200,{tiktok:await tiktok.connect(input.url)},cors)}
+      if(req.method==='POST'&&url.pathname==='/v1/tiktok/disconnect')return json(res,200,{tiktok:tiktok.disconnect()},cors);
+      if(req.method==='GET'&&url.pathname==='/v1/tiktok/events'){const page=tiktok.eventsAfter(url.searchParams.get('after'),url.searchParams.get('limit'));return json(res,200,{events:page.events,cursor:page.cursor,tiktok:page.status},cors)}
+      if(req.method==='POST'&&url.pathname==='/v1/tiktok/simulate'){
+        if(!allowSimulation)return json(res,403,{error:'SIMULATION_DISABLED'},cors);
+        const event=tiktok.simulate(await readJson(req));return json(res,201,{event,tiktok:tiktok.snapshot()},cors);
+      }
       return json(res,404,{error:'NOT_FOUND'},cors);
     }catch(error){const code=error?.message||'COMPANION_ERROR',status=code==='BODY_TOO_LARGE'?413:code==='INVALID_JSON'?400:502;return json(res,status,{error:code},cors)}
   });
-  server.on('close',()=>{obs?.disconnect();obs=null});
+  server.on('close',()=>{obs?.disconnect();obs=null;tiktok.close()});
   return{server,token,listen:(port=DEFAULT_PORT)=>new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,LOOPBACK_HOST,()=>{server.off('error',reject);resolve(server.address())})}),close:()=>new Promise(resolve=>server.close(()=>resolve()))};
 }
 
