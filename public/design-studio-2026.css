@@ -42,6 +42,39 @@ body[data-view="studio"] .studio-note{font-size:10px;line-height:1.5;color:var(-
 body[data-view="studio"] .studio-meter{height:8px;overflow:hidden;border-radius:var(--sy-r-pill);background:rgba(91,107,108,.12)}
 body[data-view="studio"] .studio-meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--sy-mint),var(--sy-champagne));border-radius:inherit}
 
+body[data-view="studio"] .distribution-card{position:relative;overflow:hidden}
+body[data-view="studio"] .distribution-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,#6f65a5,#8abbb2,#d5ad70)}
+body[data-view="studio"] .distribution-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+body[data-view="studio"] .distribution-heading .eyebrow{margin:0!important}
+body[data-view="studio"] .distribution-heading .badge{font-size:8px;letter-spacing:.1em}
+body[data-view="studio"] .distribution-heading .is-ready{color:#24685d;background:rgba(138,187,178,.18);border-color:rgba(77,145,132,.2)}
+body[data-view="studio"] .distribution-heading .is-blocked{color:#855d23;background:rgba(213,173,112,.18);border-color:rgba(181,132,65,.2)}
+body[data-view="studio"] .distribution-card h3{margin:2px 0 0;font-size:18px;letter-spacing:-.025em}
+body[data-view="studio"] .distribution-destinations{display:grid;gap:6px}
+body[data-view="studio"] .distribution-destination{display:grid;grid-template-columns:minmax(0,1fr) auto 36px;align-items:center;gap:6px;padding:8px;border:1px solid rgba(84,99,101,.10);border-radius:14px;background:rgba(247,250,249,.72)}
+body[data-view="studio"] .distribution-destination label{min-width:0;display:flex;align-items:center;gap:9px;cursor:pointer}
+body[data-view="studio"] .distribution-destination input[type="checkbox"],body[data-view="studio"] .distribution-record input{width:16px;height:16px;min-height:0;accent-color:#6f65a5}
+body[data-view="studio"] .distribution-destination span{min-width:0;display:grid;gap:2px}
+body[data-view="studio"] .distribution-destination b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+body[data-view="studio"] .distribution-destination small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;color:var(--sy-muted)}
+body[data-view="studio"] .distribution-destination button{min-height:32px!important;height:32px;padding:0 8px;font-size:9px}
+body[data-view="studio"] .distribution-destination button.danger{width:32px;padding:0;color:#9a4a4a}
+body[data-view="studio"] .distribution-add{border:1px dashed rgba(100,92,145,.22);border-radius:14px;padding:10px}
+body[data-view="studio"] .distribution-add summary{cursor:pointer;font-size:10px;font-weight:760;color:#5c548e;list-style:none}
+body[data-view="studio"] .distribution-add summary::-webkit-details-marker{display:none}
+body[data-view="studio"] .distribution-add[open] summary{margin-bottom:10px}
+body[data-view="studio"] .distribution-add label,body[data-view="studio"] .distribution-ingest label{display:grid;gap:4px;font-size:9px;font-weight:700;color:var(--sy-muted)}
+body[data-view="studio"] .distribution-record{min-height:0!important;display:flex;align-items:center;gap:8px;font-size:9px;color:var(--sy-muted)}
+body[data-view="studio"] .distribution-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+body[data-view="studio"] .distribution-actions button{min-width:0;height:auto;white-space:normal;line-height:1.25;padding:8px 7px;font-size:9px}
+body[data-view="studio"] .distribution-actions .danger{color:#934b4b;border-color:rgba(147,75,75,.18)}
+body[data-view="studio"] .distribution-ingest{display:grid;gap:8px;padding:12px;border-radius:15px;background:linear-gradient(145deg,#202829,#303a39);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+body[data-view="studio"] .distribution-ingest[hidden]{display:none}
+body[data-view="studio"] .distribution-ingest>strong{font-size:10px;letter-spacing:.02em}
+body[data-view="studio"] .distribution-ingest label{color:rgba(255,255,255,.64)}
+body[data-view="studio"] .distribution-ingest input{color:#fff!important;background:rgba(255,255,255,.08)!important;border-color:rgba(255,255,255,.12)!important;font:500 10px ui-monospace,SFMono-Regular,Consolas,monospace}
+body[data-view="studio"] .distribution-ingest .ghost{color:#fff;border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.06)}
+
 /* AI creator intelligence is subordinate to the live production surface. */
 body[data-view="studio"] #app>section.card:not(.hero){margin-top:14px;padding:18px;border-radius:22px!important;background:rgba(255,255,255,.58)!important;box-shadow:var(--sy-shadow-1)!important}
 body[data-view="studio"] .studio-intelligence-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px}
@@ -98,6 +131,9 @@ body[data-view="studio"] .studio-intelligence-actions :is(.primary,.ghost){white
   body[data-view="studio"] .studio-stage{border-radius:20px;margin-left:-2px;margin-right:-2px}
   body[data-view="studio"] .studio-mobile-tools{left:12px;right:12px}
   body[data-view="studio"] .studio-controls>.card{left:8px;right:8px}
+  body[data-view="studio"] .distribution-destination{grid-template-columns:minmax(0,1fr) 34px}
+  body[data-view="studio"] .distribution-destination>[data-distribution-toggle]{grid-column:1/-1;width:100%}
+  body[data-view="studio"] .distribution-actions{grid-template-columns:1fr}
 }
 
 @keyframes sySheetIn{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:none}}

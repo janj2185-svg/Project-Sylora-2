@@ -103,7 +103,7 @@ function authorizationFor(endpoint) {
     || /^\/api\/developer\/apps/.test(routePath)
   ) return 'OWNER';
   if (/^\/api\/conversations(?:\/|$)/.test(routePath)) return 'MEMBER';
-  if (/^\/api\/live\/:id\/(?:end|resonance|creator-insights|copilot|stage|room-kind|cohost)/.test(routePath)) return 'OWNER_OR_HOST';
+  if (/^\/api\/live\/:id\/(?:end|resonance|creator-insights|copilot|stage|room-kind|cohost|distribution)/.test(routePath)) return 'OWNER_OR_HOST';
   if (/^\/api\/(?:orgs|business|projects|tasks|goals|decisions|calendar|canvas|continuity)/.test(routePath)) return 'OWNER_OR_MEMBER';
   if (/role\s*!==\s*['"]admin|role\s*===\s*['"]admin/.test(source)) return 'OWNER_OR_ADMIN';
   if (method === 'PATCH' || method === 'DELETE') return 'OWNER_OR_MEMBER';

@@ -18,12 +18,13 @@ const EXPECTED_CHECKSUMS = Object.freeze({
   '012_social_comment_reactions': 'e36fb2bd3543ab1cf5e7820c635f595d7fb43524fd9d2110bfbe18c4ecd6c1a4',
   '013_dm_attachments_gift_refund': 'eebbc74b83f9ff53489f868711a4cdeff1f627609cd97a97662589ece95be3c0',
   '013_phase1_identity_auth': 'e735b7e71e50d889a3b040f3ac18b4e7de44dffe64b2709a2b5840c2e4173960',
-  '014_session_status_invalidation': '85b51cdf8872c12f0a90a41fb240d528d200703f2fd7ff4f67d7cfa7493a6740'
+  '014_session_status_invalidation': '85b51cdf8872c12f0a90a41fb240d528d200703f2fd7ff4f67d7cfa7493a6740',
+  '015_live_distribution': '3a9de8c0f26b3329099fc66b0c64cd6867f53b86f9cba5128eccbf8d68f91c22'
 });
 
 test('migration manifest is ordered, immutable, and complete through Phase 1', () => {
   const migrations = loadMigrations();
-  assert.equal(migrations.length, 16);
+  assert.equal(migrations.length, 17);
   assert.deepEqual(migrations.map(item => item.name), MIGRATION_FILES.map(([name]) => name));
   assert.deepEqual(Object.fromEntries(migrations.map(item => [item.name, item.checksum])), EXPECTED_CHECKSUMS);
   assert.deepEqual(migrations.map(item => item.name), Object.keys(EXPECTED_CHECKSUMS));
@@ -47,6 +48,9 @@ test('fresh schema defines critical keys, ownership cascades, identity uniquenes
   assert.match(sql, /CREATE TABLE IF NOT EXISTS comment_reactions/i);
   assert.match(sql, /messages ADD COLUMN IF NOT EXISTS attachment jsonb/i);
   assert.match(sql, /gift_transfers ADD COLUMN IF NOT EXISTS refunded_at timestamptz/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS live_stream_destinations/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS live_distribution_sessions/i);
+  assert.match(sql, /live_distribution_sessions_one_active_idx/i);
 });
 
 test('migration runner applies every migration transactionally and is idempotent', async () => {
@@ -64,11 +68,11 @@ test('migration runner applies every migration transactionally and is idempotent
     }
   };
   await applyMigrations(client);
-  assert.equal(applied.size, 16);
+  assert.equal(applied.size, 17);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_lock($1)').length, 1);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 1);
-  assert.equal(commands.filter(command => command === 'BEGIN').length, 16);
-  assert.equal(commands.filter(command => command === 'COMMIT').length, 16);
+  assert.equal(commands.filter(command => command === 'BEGIN').length, 17);
+  assert.equal(commands.filter(command => command === 'COMMIT').length, 17);
   const before = commands.length;
   await applyMigrations(client);
   assert.equal(commands.slice(before).some(command => command === 'BEGIN'), false);

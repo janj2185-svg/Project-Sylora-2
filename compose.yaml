@@ -120,7 +120,31 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+  mediamtx:
+    restart: unless-stopped
+    profiles: ["streaming"]
+    image: bluenviron/mediamtx:1.20.1
+    environment:
+      MTX_RTMPENCRYPTION: ${SYLORA_RTMP_ENCRYPTION:-no}
+      MTX_RTMPSERVERKEY: /certs/server.key
+      MTX_RTMPSERVERCERT: /certs/server.crt
+      MTX_AUTHINTERNALUSERS_1_USER: "${SYLORA_MEDIA_ROUTER_CONTROL_USER:-sha256:kGQUYzJ4a/CKVC41DJisYR5X+oe1xJhu4l3tGnV7DTU=}"
+      MTX_AUTHINTERNALUSERS_1_PASS: "${SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD:-sha256:Cj9IXdbYwAUBYmqIp73ni4sEUE5Kwq1/uxo2wFOVW78=}"
+    ports:
+      - "${SYLORA_RTMP_BIND_ADDRESS:-127.0.0.1}:${SYLORA_RTMP_PORT:-1935}:1935"
+      - "${SYLORA_RTMP_BIND_ADDRESS:-127.0.0.1}:${SYLORA_RTMPS_PORT:-1936}:1936"
+    volumes:
+      - ./infra/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+      - ${SYLORA_RTMP_TLS_CERT_DIR:-./infra/mediamtx/dev-certs}:/certs:ro
+      - sylora-live-recordings:/recordings
+    healthcheck:
+      test: ["CMD", "/mediamtx", "--version"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 volumes:
   sylora-data:
   sylora-postgres:
   sylora-redis:
+  sylora-live-recordings:

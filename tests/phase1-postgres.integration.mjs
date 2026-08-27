@@ -13,6 +13,7 @@ import { applyMigrations } from '../src/migrations.mjs';
 import { PostgresAuthSocialRepository } from '../src/repositories/postgres-auth-social.mjs';
 import { PostgresEcosystemRepository } from '../src/repositories/postgres-ecosystem.mjs';
 import { PostgresWalletRepository } from '../src/repositories/postgres-wallet.mjs';
+import { PostgresLiveDistributionRepository } from '../src/repositories/postgres-live-distribution.mjs';
 
 const { Pool } = pg;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -213,7 +214,7 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
       migrationClient.release();
       concurrentMigrationClient.release();
     }
-    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 16);
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 17);
 
     provider = await startProviderStub();
     firstServer = await startProductionServer({ databaseUrl, dataFile, openaiBaseUrl: provider.baseUrl, openaiApiKey: 'phase1-provider-test-key' });
@@ -259,6 +260,61 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
     assert.equal(login.status, 200, JSON.stringify(login.body));
     const token = login.body.token;
     assert.equal((await request(firstServer.base, '/api/me', { token })).status, 200);
+
+    const distributionLive = await request(firstServer.base, '/api/live', {
+      method: 'POST', token, payload: { title: 'PostgreSQL distribution contract' }
+    });
+    assert.equal(distributionLive.status, 201, JSON.stringify(distributionLive.body));
+    const distributionRepository = new PostgresLiveDistributionRepository(pool);
+    const destinationId = randomUUID();
+    const distributionCreatedAt = new Date().toISOString();
+    const destination = await distributionRepository.createDestination({
+      id: destinationId,
+      userId: alice.body.user.id,
+      provider: 'youtube',
+      label: 'PostgreSQL YouTube',
+      serverUrl: 'rtmps://a.rtmp.youtube.com/live2',
+      encryptedStreamKey: 'v1.integration.iv.tag.ciphertext',
+      keyFingerprint: '0123456789ab',
+      enabled: true,
+      createdAt: distributionCreatedAt,
+      updatedAt: distributionCreatedAt
+    });
+    assert.equal((await distributionRepository.getDestinations(alice.body.user.id, [destination.id])).length, 1);
+    const distributionSession = await distributionRepository.createSession({
+      id: randomUUID(),
+      liveId: distributionLive.body.live.id,
+      userId: alice.body.user.id,
+      status: 'waiting_for_source',
+      encryptedIngestPath: 'v1.integration.iv.tag.encrypted-ingest',
+      ingestKeyFingerprint: 'abcdef012345',
+      destinationIds: [destination.id],
+      destinationStates: [{ id: destination.id, status: 'configured' }],
+      record: true,
+      createdAt: distributionCreatedAt,
+      startedAt: null,
+      stoppedAt: null,
+      lastObservedAt: null
+    });
+    assert.equal(await distributionRepository.destinationInActiveSession(alice.body.user.id, destination.id), true);
+    await assert.rejects(
+      () => distributionRepository.createSession({ ...distributionSession, id: randomUUID() }),
+      error => error?.code === '23505'
+    );
+    assert.equal(await distributionRepository.updateSession({
+      ...distributionSession,
+      userId: randomUUID(),
+      status: 'failed'
+    }), null);
+    const stoppedDistribution = await distributionRepository.updateSession({
+      ...distributionSession,
+      status: 'stopped',
+      stoppedAt: new Date().toISOString(),
+      lastObservedAt: new Date().toISOString()
+    });
+    assert.equal(stoppedDistribution.status, 'stopped');
+    assert.equal(await distributionRepository.destinationInActiveSession(alice.body.user.id, destination.id), false);
+    assert.equal(await distributionRepository.deleteDestination(alice.body.user.id, destination.id), true);
 
     peerServer = await startProductionServer({ databaseUrl, dataFile, openaiBaseUrl: provider.baseUrl, openaiApiKey: 'phase1-provider-test-key' });
     const [accountFirst, accountPeer] = await Promise.all([
