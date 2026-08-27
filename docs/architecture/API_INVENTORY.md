@@ -6,14 +6,14 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 302 |
-| Active | 248 |
+| Total unique endpoints | 303 |
+| Active | 249 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
 | Unverified | 54 |
 | Frontend-used | 187 |
-| Backend-only | 115 |
+| Backend-only | 116 |
 
 ## Status contract
 
@@ -336,6 +336,7 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/users/:id/block` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/users/:id/follow` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/v1/identity/me` | API_KEY_OR_OWNER | NO | ACTIVE | KEEP |
+| GET | `/api/version` | PUBLIC | NO | ACTIVE | KEEP |
 | GET | `/api/videos` | PUBLIC | YES | ACTIVE | KEEP |
 | POST | `/api/videos` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/whiteboard` | AUTHENTICATED | YES | ACTIVE | KEEP |

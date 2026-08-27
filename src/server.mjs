@@ -32,10 +32,12 @@ import { createPlatformEvent } from './platform-event-spine.mjs';
 import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
 import { httpErrorResponse } from './http-errors.mjs';
 import { requestRatePolicy } from './rate-limit-policy.mjs';
+import { buildReleaseInfo } from './release-info.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
 if (process.env.NODE_ENV !== 'test' && fs.existsSync(localEnvFile)) process.loadEnvFile(localEnvFile);
+const releaseInfo = buildReleaseInfo();
 const runtimeConfig = loadRuntimeConfig();
 enforceProductionBootGuard(runtimeConfig);
 const publicDir = path.resolve(__dirname, '../public');
@@ -160,6 +162,7 @@ function securityHeaders(res) {
   res.setHeader('x-frame-options', 'DENY');
   res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
   res.setHeader('permissions-policy', 'camera=(self), microphone=(self), geolocation=()');
+  res.setHeader('x-sylora-release', releaseInfo.shortCommit);
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'sha256-ww+TdwEdJLBiuFnYBT0Pn+YQ2th1b32RFhR3+8OpiJE='",
@@ -366,10 +369,12 @@ async function api(req, res, url) {
     const report = buildLivenessReport(runtimeConfig, dependencies);
     return json(res, 200, {
       ...report,
+      release: releaseInfo,
       ecosystem: 'personal-ai-identity-kg-agents-developers',
       ecosystemPersistence: ecosystemRepo.enabled ? 'postgres-primary+memory-cache' : 'json-development'
     });
   }
+  if (req.method === 'GET' && p === '/api/version') return json(res, 200, releaseInfo);
   if(req.method==='GET'&&p==='/api/integrations/status'){const {integrationStatus}=await import('./integrations.mjs');return json(res,200,{integrations:integrationStatus()})}
   if(req.method==='GET'&&p==='/api/platform/capabilities'){const {capabilityRegistry}=await import('./platform-events.mjs');return json(res,200,{capabilities:capabilityRegistry(),graph:ecosystem.platformCapabilityGraph()})}
   if(req.method==='POST'&&p==='/api/sylora/living/react'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const event=createPlatformEvent({eventType:input.eventType||'assistant.reaction.requested',liveRoomId:input.liveId||null,actor:{type:'user',id:user.id},payload:input.payload||input});ingestLivePlatformEvent(event);const reaction=await ecosystem.livingSyloraReact(event);return json(res,200,{reaction,ai:publicAiDiagnostics(runtimeConfig)})}
@@ -713,10 +718,17 @@ function staticFile(req, res, url) {
     '.webp':'image/webp'
   };
   const stats=fs.statSync(finalResolved),versionedAvatarFrame=url.pathname.startsWith('/assets/avatar/sylora-v2/frames/');
+  const canonicalBrandAsset=url.pathname.startsWith('/assets/brand/canonical/');
+  const versionedStaticAsset=url.searchParams.has('v')&&['.css','.js'].includes(ext);
+  const cacheControl=ext==='.html'
+    ? 'no-store, max-age=0'
+    : (versionedAvatarFrame||canonicalBrandAsset||versionedStaticAsset)
+      ? 'public, max-age=31536000, immutable'
+      : 'no-cache';
   res.writeHead(200,{
     'content-type':types[ext]||'application/octet-stream',
     'content-length':stats.size,
-    ...(versionedAvatarFrame?{'cache-control':'public, max-age=31536000, immutable'}:{})
+    'cache-control':cacheControl
   });
   if(req.method==='HEAD')return res.end();
   fs.createReadStream(finalResolved).pipe(res);

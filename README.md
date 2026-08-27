@@ -42,6 +42,7 @@ The canonical visual direction is defined in [SYLORA Canonical Product Design](d
 - authenticated transcode/status API plus validated `.m3u8`/segment delivery
 - responsive, light futuristic SYLORA web shell
 - health endpoint and official OpenAI JavaScript SDK integration
+- public, secret-free release identity at `/api/version`, exact-SHA production verification and safe cache headers so the live domain cannot silently be mistaken for the latest branch
 - same-origin security headers and basic per-IP API/auth rate limiting
 - privacy-safe public user serializer (email/role/password data never leaks through public profile payloads)
 - SHA-256 server-side session-token storage (new bearer tokens are never persisted in plaintext)
@@ -87,6 +88,12 @@ npm start
 ```
 
 Open http://localhost:8787
+
+To identify the exact running build:
+
+```bash
+curl -fsS http://localhost:8787/api/version
+```
 
 Or:
 
