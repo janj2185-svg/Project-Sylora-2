@@ -119,6 +119,7 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   await distributionTool.click();
   await expect(page.locator('.studio-controls>.card[data-studio-panel="distribution"]')).toHaveAttribute('data-studio-open','true');
   const sourcesTool=page.locator('.studio-mobile-tools button[data-studio-tool="sources"]');
+  await sourcesTool.scrollIntoViewIfNeeded();
   const sourcesBox=await sourcesTool.boundingBox();
   expect(sourcesBox?.x).toBeGreaterThanOrEqual(0);
   expect((sourcesBox?.x||0)+(sourcesBox?.width||0)).toBeLessThanOrEqual(390);
