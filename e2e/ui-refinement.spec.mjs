@@ -106,6 +106,7 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   expect(desktopStage?.width).toBeGreaterThan(desktopControls?.width||0);
 
   await page.setViewportSize({width:390,height:844});
+  await page.emulateMedia({reducedMotion:'reduce'});
   await expect(page.locator('.studio-mobile-tools')).toBeVisible();
   await expectNoHorizontalOverflow(page);
   const intelSelect=page.locator('#creatorLiveSelect');
