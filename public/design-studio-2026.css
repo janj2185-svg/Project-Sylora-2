@@ -107,12 +107,12 @@ body[data-view="studio"] .studio-intelligence-actions :is(.primary,.ghost){white
   body[data-view="studio"] .studio-stage:before{left:16px;top:14px}
   body[data-view="studio"] .studio-stage canvas,body[data-view="studio"] .studio-stage video{width:100%;height:auto;max-height:calc(100svh - 236px);object-fit:contain;border-radius:18px}
   body[data-view="studio"] .studio-controls{display:block;max-height:none;overflow:visible;padding:0}
-  body[data-view="studio"] .studio-controls>.card{display:none;position:fixed;z-index:92;left:10px;right:10px;bottom:calc(92px + env(safe-area-inset-bottom));max-height:min(72svh,620px);overflow:auto;border-radius:26px!important;padding:20px 16px 18px!important;background:rgba(249,251,250,.96)!important;box-shadow:0 28px 90px rgba(21,30,32,.24),inset 0 1px 0 #fff!important;transform-origin:bottom center}
+  body[data-view="studio"] .studio-controls>.card{display:none;position:fixed;z-index:92;left:10px;right:10px;bottom:calc(154px + env(safe-area-inset-bottom));max-height:min(72svh,620px);overflow:auto;border-radius:26px!important;padding:20px 16px 18px!important;background:rgba(249,251,250,.96)!important;box-shadow:0 28px 90px rgba(21,30,32,.24),inset 0 1px 0 #fff!important;transform-origin:bottom center}
   body[data-view="studio"] .studio-controls>.card[data-studio-open="true"]{display:block;animation:sySheetIn var(--sy-motion-ui) var(--sy-ease)}
   body[data-view="studio"] .studio-sheet-backdrop{position:fixed;z-index:89;inset:0;display:none;background:rgba(17,23,25,.22);backdrop-filter:blur(2px)}
   body[data-view="studio"].sy-studio-sheet-open .studio-sheet-backdrop{display:block}
   body[data-view="studio"] .studio-mobile-tools{
-    position:fixed;z-index:88;left:12px;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));height:58px;padding:5px;
+    position:fixed;z-index:94;left:12px;right:12px;bottom:calc(88px + env(safe-area-inset-bottom));height:58px;padding:5px;
     display:flex;justify-content:flex-start!important;gap:4px;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scroll-padding-inline:9px;scrollbar-width:none;border-radius:22px;background:rgba(249,251,250,.90);border:1px solid rgba(255,255,255,.96);box-shadow:0 18px 54px rgba(35,49,53,.14);backdrop-filter:blur(24px)
   }
   body[data-view="studio"] .studio-mobile-tools::-webkit-scrollbar{display:none}
