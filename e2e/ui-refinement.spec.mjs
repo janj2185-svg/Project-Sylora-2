@@ -106,6 +106,7 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   expect(desktopStage?.width).toBeGreaterThan(desktopControls?.width||0);
 
   await page.setViewportSize({width:390,height:844});
+  await page.emulateMedia({reducedMotion:'reduce'});
   await expect(page.locator('.studio-mobile-tools')).toBeVisible();
   await expectNoHorizontalOverflow(page);
   const intelSelect=page.locator('#creatorLiveSelect');
@@ -113,8 +114,13 @@ test('Studio is preview-first on desktop and sheet-driven on mobile',async({page
   const [intelSelectBox,intelButtonBox]=await Promise.all([intelSelect.boundingBox(),intelButton.boundingBox()]);
   expect((intelSelectBox?.y||0)+(intelSelectBox?.height||0)).toBeLessThanOrEqual(intelButtonBox?.y||0);
   const tools=page.locator('.studio-mobile-tools button[data-studio-tool]');
-  await expect(tools).toHaveCount(7);
+  await expect(tools).toHaveCount(8);
+  const distributionTool=page.locator('.studio-mobile-tools button[data-studio-tool="distribution"]');
+  await expect(distributionTool).toBeVisible();
+  await distributionTool.click();
+  await expect(page.locator('.studio-controls>.card[data-studio-panel="distribution"]')).toHaveAttribute('data-studio-open','true');
   const sourcesTool=page.locator('.studio-mobile-tools button[data-studio-tool="sources"]');
+  await sourcesTool.scrollIntoViewIfNeeded();
   const sourcesBox=await sourcesTool.boundingBox();
   expect(sourcesBox?.x).toBeGreaterThanOrEqual(0);
   expect((sourcesBox?.x||0)+(sourcesBox?.width||0)).toBeLessThanOrEqual(390);

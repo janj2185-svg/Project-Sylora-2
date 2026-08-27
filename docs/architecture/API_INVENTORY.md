@@ -6,13 +6,13 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 303 |
-| Active | 249 |
+| Total unique endpoints | 311 |
+| Active | 257 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
 | Unverified | 54 |
-| Frontend-used | 187 |
+| Frontend-used | 195 |
 | Backend-only | 116 |
 
 ## Status contract
@@ -215,6 +215,10 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/live/:id/cohost` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
 | GET | `/api/live/:id/copilot` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
 | GET | `/api/live/:id/creator-insights` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
+| GET | `/api/live/:id/distribution` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
+| POST | `/api/live/:id/distribution/preflight` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
+| POST | `/api/live/:id/distribution/start` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
+| POST | `/api/live/:id/distribution/stop` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
 | POST | `/api/live/:id/end` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
 | GET | `/api/live/:id/engagement` | PUBLIC | YES | ACTIVE | KEEP |
 | GET | `/api/live/:id/events` | PUBLIC | YES | ACTIVE | KEEP |
@@ -317,6 +321,10 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/studio/ai/plan/:id/confirm` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/studio/browser-source` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/studio/browser-source/events` | SIGNED_EPHEMERAL_TOKEN | YES | ACTIVE | KEEP |
+| GET | `/api/studio/distribution` | AUTHENTICATED | YES | ACTIVE | KEEP |
+| POST | `/api/studio/distribution/destinations` | AUTHENTICATED | YES | ACTIVE | KEEP |
+| DELETE | `/api/studio/distribution/destinations/:id` | OWNER_OR_MEMBER | YES | ACTIVE | KEEP |
+| PATCH | `/api/studio/distribution/destinations/:id` | OWNER_OR_MEMBER | YES | ACTIVE | KEEP |
 | GET | `/api/studio/scenes` | OWNER | YES | ACTIVE | KEEP |
 | POST | `/api/studio/scenes` | OWNER | YES | ACTIVE | KEEP |
 | DELETE | `/api/studio/scenes/:id` | OWNER | YES | ACTIVE | KEEP |

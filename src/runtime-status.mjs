@@ -68,6 +68,18 @@ export function publicConfigDiagnostics(config) {
     payments: {
       configured: config.payments.configured,
       provider: config.payments.provider || null
+    },
+    distribution: {
+      configured: config.distribution.configured,
+      status: config.distribution.status,
+      routerConfigured: config.distribution.routerConfigured,
+      controlCredentialsConfigured: config.distribution.controlCredentialsConfigured,
+      controlCredentialsInvalid: config.distribution.controlCredentialsInvalid,
+      publicIngestConfigured: config.distribution.publicIngestConfigured,
+      secretStorageConfigured: config.distribution.secretStorageConfigured,
+      secretStorageInvalid: config.distribution.secretStorageInvalid,
+      secureIngest: config.distribution.secureIngest,
+      requiredForCoreReadiness: false
     }
   };
 }
@@ -119,6 +131,13 @@ export function buildReadinessReport(config, dependencyPing = {}) {
       status: realtime.status,
       reason: realtime.reason,
       turnConfigured: realtime.turnConfigured
+    },
+    distribution: {
+      ok: true,
+      required: false,
+      status: config.distribution.status,
+      configured: config.distribution.configured,
+      secureIngest: config.distribution.secureIngest
     }
   };
 

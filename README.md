@@ -32,6 +32,8 @@ The canonical visual direction is defined in [SYLORA Canonical Product Design](d
 - TikTok LIVE owner pilot through the same loopback Companion: local TikFinity WebSocket ingestion, normalized/deduplicated chat, gift and host/guest events, manual-first Sylora responses, bounded automation cooldown and a development simulator; it is explicitly not presented as an official TikTok API or as direct TikTok message delivery
 - recoverable Creator Studio working state plus server scene presets for output profile, overlay style/title and microphone gain/mute; selected presets can be updated in place instead of duplicating a scene on every save
 - host-only, expiring (2 hour) OBS Browser Source URLs for a selected SYLORA LIVE; the transparent overlay receives that room's chat and gift events over a dedicated SSE channel without counting itself as a viewer
+- opt-in MediaMTX 1.20.1 distribution plane: one high-entropy OBS RTMP(S) ingest can fan out to up to eight YouTube/Twitch/Facebook/Instagram/TikTok/LinkedIn/X/Kick/Vimeo/Restream or allowlisted enterprise RTMP(S) destinations, with authenticated Control API access, per-destination forwarding state and optional seven-day fMP4 safety recording
+- Creator Studio multistream controls for encrypted destination management, router preflight, one-time ingest handoff, live byte/status polling and stop; external stream keys use AES-256-GCM at rest and are never returned by list/status APIs
 - Gift Engine V2 procedural renderer: tiered particles/shockwaves, Legendary fullscreen phoenix scene and generated Web Audio sound
 - gift combos up to ×99 with server-side gross/creator/platform calculations and tracked creator earnings
 - real local MP4/WebM upload with size/type/signature validation
@@ -61,7 +63,7 @@ The canonical visual direction is defined in [SYLORA Canonical Product Design](d
 
 ## Intentionally not faked
 
-AI uses a real OpenAI provider when `OPENAI_API_KEY` is configured and fails explicitly when it is not. Payments, object storage/CDN, production SFU/RTMP streaming, a managed ephemeral TURN credential service, creator payouts, native apps and large-scale infrastructure are not implemented in this slice. The current WebRTC transport is deliberately P2P; external STUN/TURN can be configured, and the current media/HLS pipeline is local-server based.
+AI uses a real OpenAI provider when `OPENAI_API_KEY` is configured and fails explicitly when it is not. Payments, object storage/CDN, production SFU/browser-scale media, per-platform transcoding and OAuth/chat connectors, creator payouts, native apps and large-scale infrastructure are not implemented in this slice. The optional RTMP(S) distribution control plane is code-ready but still needs public DNS/TLS, platform stream keys and an operator-run end-to-end test. The current SYLORA viewer transport remains deliberately P2P; external STUN/TURN can be configured, and the current media/HLS pipeline is local-server based.
 
 OBS control is real and deliberately restricted to `localhost` / `127.0.0.1`. Creator Studio now includes a local Companion route in addition to direct development-time OBS WebSocket access. The Companion binds only to `127.0.0.1`, requires its generated pairing token, checks an origin allowlist and holds the OBS password only in process memory. Browser Source itself works as a normal OBS browser page and does not require exposing the OBS WebSocket password. Native installer/signing and automatic Companion updates are still future release-engineering work and are not claimed complete.
 
@@ -103,6 +105,8 @@ docker compose up --build
 
 The Compose stack starts SYLORA + PostgreSQL + Redis, waits for dependency health, runs the database migration before the app starts, and uses persistent volumes. Override the development-only `POSTGRES_PASSWORD` before any non-local deployment.
 
+The optional multistream router is documented in [LIVE distribution architecture and operations](docs/architecture/LIVE_DISTRIBUTION.md). It is started with the `streaming` Compose profile after Control API credentials, RTMPS DNS/certificate and a stable encryption key are configured.
+
 ## Test
 
 ```bash
@@ -138,6 +142,7 @@ The V2 foundation lives in `public/gift-v2/` and starts from story beats and sem
 - `GET/POST /api/courses`, lessons, publish, enroll and lesson progress
 - `GET/POST /api/businesses`
 - `GET/POST /api/live`, LIVE chat and end
+- `GET /api/studio/distribution`, destination create/update/delete routes, and `/api/live/:id/distribution` preflight/start/status/stop
 - `GET /api/live/:id/engagement`, `POST /api/live/:id/like`, `POST /api/live/:id/resonance`
 - `GET /api/progress` (Orbit giver progression; per-creator Bond grows from gifts)
 - `GET/POST /api/conferences`, private invitations/membership, participant list and owner-controlled Sylora presence
@@ -162,7 +167,7 @@ The V2 foundation lives in `public/gift-v2/` and starts from story beats and sem
 2. Add durable object storage/CDN and a persistent media-job queue instead of local media/HLS artifacts.
 3. Keep hardening distributed LIVE coordination. Redis now covers application fanout, peer ownership and expiring viewer presence, but P2P media itself still has a six-peer safety cap and is not an SFU.
 4. Add adversarial AI/tool evals and expand the permissioned tool catalog only after each write action has an approval policy.
-5. Replace the P2P LIVE transport with production SFU/TURN/RTMP infrastructure.
+5. Replace the P2P viewer transport with an SFU/CDN path; add per-platform OAuth, scheduling, unified external chat and per-destination transcoding on top of the new RTMP(S) distribution plane.
 
 ## Long-term capability architecture
 

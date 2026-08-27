@@ -14,6 +14,7 @@ import { PostgresAuthSocialRepository } from './repositories/postgres-auth-socia
 import { PostgresWalletRepository } from './repositories/postgres-wallet.mjs';
 import { PostgresAiRepository } from './repositories/postgres-ai.mjs';
 import { PostgresLiveRepository } from './repositories/postgres-live.mjs';
+import { PostgresLiveDistributionRepository } from './repositories/postgres-live-distribution.mjs';
 import { issueIceServersForUser } from './rtc-config.mjs';
 import { loadRuntimeConfig, enforceProductionBootGuard } from './config.mjs';
 import { buildLivenessReport, buildReadinessReport, publicAiDiagnostics } from './runtime-status.mjs';
@@ -33,6 +34,13 @@ import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
 import { httpErrorResponse } from './http-errors.mjs';
 import { requestRatePolicy } from './rate-limit-policy.mjs';
 import { buildReleaseInfo } from './release-info.mjs';
+import {
+  LIVE_DISTRIBUTION_PROVIDERS,
+  LiveDistributionService,
+  MediaMtxControlClient,
+  StreamSecretVault,
+  distributionErrorBody
+} from './live-distribution.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localEnvFile = path.resolve(__dirname, '../.env.local');
@@ -94,6 +102,25 @@ const authService=new AuthService({
 });
 const aiRepo=new PostgresAiRepository(postgres.pool);
 const liveRepo=new PostgresLiveRepository(postgres.pool);
+const liveDistributionRepo=new PostgresLiveDistributionRepository(postgres.pool);
+const streamSecretVault=new StreamSecretVault(process.env.SYLORA_STREAM_SECRET_KEY);
+const mediaRouter=new MediaMtxControlClient({
+  baseUrl:runtimeConfig.distribution.controlUrl,
+  username:process.env.SYLORA_MEDIA_ROUTER_CONTROL_USER,
+  password:process.env.SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD
+});
+const liveDistribution=new LiveDistributionService({
+  store,
+  repository:liveDistributionRepo,
+  router:mediaRouter,
+  vault:streamSecretVault,
+  publicRtmpUrl:runtimeConfig.distribution.publicRtmpUrl,
+  allowedHosts:runtimeConfig.distribution.allowedHosts,
+  allowInsecureRtmp:runtimeConfig.distribution.allowInsecureRtmp,
+  nodeEnv:runtimeConfig.nodeEnv,
+  now:()=>store.now(),
+  id:()=>store.id()
+});
 const outboxRepo=new PostgresOutboxRepository(postgres.pool);
 const conferenceRepo=new PostgresConferenceRepository(postgres.pool);
 const realtimeOutbox=new RealtimeOutbox({repository:outboxRepo,dispatch:dispatchOutboxEvent});
@@ -151,6 +178,12 @@ function json(res, status, body) {
   const value = JSON.stringify(body);
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(value);
+}
+function liveDistributionFailure(res,error){
+  const known=distributionErrorBody(error);
+  if(known)return json(res,known.status,known.body);
+  console.error('[live-distribution]',error?.name||'error');
+  return json(res,500,{error:'LIVE_DISTRIBUTION_INTERNAL_ERROR'});
 }
 function companionConnectSrc() {
   const defaults = ['http://127.0.0.1:43179', 'http://localhost:43179', 'ws://127.0.0.1:4455', 'ws://localhost:4455', 'wss://localhost:4455'];
@@ -543,6 +576,27 @@ async function api(req, res, url) {
   if(req.method==='GET'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;return json(res,200,{scenes:store.data.studioScenes.filter(x=>x.userId===user.id).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))})}
   if(req.method==='POST'&&p==='/api/studio/scenes'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet',profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720',rawGain=Number(input.micGain),micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100))),micMuted=input.micMuted===true;if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});const scene={id:store.id(),userId:user.id,name,overlayTitle:overlayTitle||'SYLORA LIVE',overlayStyle,profileId,micGain,micMuted,createdAt:store.now(),updatedAt:store.now()};store.data.studioScenes.push(scene);store.save();return json(res,201,{scene})}
   let studioRoute=route('/api/studio/scenes/:id',p);if(req.method==='PATCH'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const scene=store.data.studioScenes.find(x=>x.id===studioRoute.id&&x.userId===user.id);if(!scene)return json(res,404,{error:'SCENE_NOT_FOUND'});const input=await body(req),name=safeText(input.name,60),overlayTitle=safeText(input.overlayTitle,60),rawGain=Number(input.micGain);if(name.length<2)return json(res,400,{error:'SCENE_NAME_REQUIRED'});scene.name=name;scene.overlayTitle=overlayTitle||'SYLORA LIVE';scene.overlayStyle=['violet','cyan','clean'].includes(input.overlayStyle)?input.overlayStyle:'violet';scene.profileId=['vertical720','vertical1080','vertical1080p60','horizontal1080'].includes(input.profileId)?input.profileId:'vertical720';scene.micGain=Math.max(0,Math.min(150,Math.round(Number.isFinite(rawGain)?rawGain:100)));scene.micMuted=input.micMuted===true;scene.updatedAt=store.now();store.save();return json(res,200,{scene})}if(req.method==='DELETE'&&studioRoute){const user=await requireUser(req,res);if(!user)return;const index=store.data.studioScenes.findIndex(x=>x.id===studioRoute.id&&x.userId===user.id);if(index<0)return json(res,404,{error:'SCENE_NOT_FOUND'});store.data.studioScenes.splice(index,1);store.save();return json(res,200,{deleted:true})}
+  if(req.method==='GET'&&p==='/api/studio/distribution'){
+    const user=await requireUser(req,res);if(!user)return;
+    try{return json(res,200,{destinations:await liveDistribution.listDestinations(user.id),providers:Object.values(LIVE_DISTRIBUTION_PROVIDERS),configuration:liveDistribution.configuration()})}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
+  if(req.method==='POST'&&p==='/api/studio/distribution/destinations'){
+    const user=await requireUser(req,res);if(!user)return;
+    try{const destination=await liveDistribution.createDestination(user.id,await body(req));return json(res,201,{destination})}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
+  let distributionDestinationRoute=route('/api/studio/distribution/destinations/:id',p);
+  if(req.method==='PATCH'&&distributionDestinationRoute){
+    const user=await requireUser(req,res);if(!user)return;
+    try{const destination=await liveDistribution.updateDestination(user.id,distributionDestinationRoute.id,await body(req));return json(res,200,{destination})}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
+  if(req.method==='DELETE'&&distributionDestinationRoute){
+    const user=await requireUser(req,res);if(!user)return;
+    try{return json(res,200,await liveDistribution.deleteDestination(user.id,distributionDestinationRoute.id))}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
   if(req.method==='POST'&&p==='/api/studio/browser-source'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),live=await findLiveRoom(input.liveId);if(!live||live.hostId!==user.id)return json(res,404,{error:'HOST_LIVE_NOT_FOUND'});const now=Date.now();for(const [key,value] of browserSourceTokens)if(value.expiresAt<=now)browserSourceTokens.delete(key);const raw=makeToken(),expiresAt=now+2*60*60*1000;browserSourceTokens.set(hashToken(raw),{userId:user.id,liveId:live.id,expiresAt});return json(res,201,{path:`/obs-overlay.html?token=${encodeURIComponent(raw)}`,expiresAt:new Date(expiresAt).toISOString()})}
   if(req.method==='GET'&&p==='/api/studio/browser-source/events'){const raw=safeText(url.searchParams.get('token'),512),entry=browserSourceTokens.get(hashToken(raw)),live=entry?await findLiveRoom(entry.liveId):null;if(!raw||!entry||entry.expiresAt<=Date.now()||!live||live.hostId!==entry.userId){if(entry&&entry.expiresAt<=Date.now())browserSourceTokens.delete(hashToken(raw));return json(res,401,{error:'BROWSER_SOURCE_EXPIRED'})}res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-store',connection:'keep-alive'});res.write(`retry: 2500\nevent: presence\ndata: ${JSON.stringify({status:'connected',liveId:live.id})}\n\n`);if(!liveOverlayStreams.has(live.id))liveOverlayStreams.set(live.id,new Set());const targets=liveOverlayStreams.get(live.id);targets.add(res);req.on('close',()=>{targets.delete(res);if(!targets.size)liveOverlayStreams.delete(live.id)});return}
   if (req.method === 'POST' && p === '/api/conversations') {
@@ -602,13 +656,35 @@ async function api(req, res, url) {
     });
   }
   if(req.method==='GET'&&p==='/api/live'){const source=await listLiveRooms(),counts=await Promise.all(source.map(room=>liveViewerCount(room.id))),rooms=[];for(let i=0;i<source.length;i++){const room=source[i],host=authSocial.enabled?await authSocial.findUserById(room.hostId):store.data.users.find(u=>u.id===room.hostId);cacheUser(host);rooms.push({...room,viewerCount:counts[i],host:store.publicUser(host)})}return json(res,200,{rooms})}
+  m=route('/api/live/:id/distribution',p);if(req.method==='GET'&&m){
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);
+    if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});if(live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    try{return json(res,200,await liveDistribution.status(user.id,live.id))}catch(error){return liveDistributionFailure(res,error)}
+  }
+  m=route('/api/live/:id/distribution/preflight',p);if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);
+    if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});if(live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    try{const input=await body(req);return json(res,200,await liveDistribution.preflight(user.id,live.id,Array.isArray(input.destinationIds)?input.destinationIds:[]))}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
+  m=route('/api/live/:id/distribution/start',p);if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);
+    if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});if(live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    try{const input=await body(req),out=await liveDistribution.start(user.id,live.id,Array.isArray(input.destinationIds)?input.destinationIds:[],{record:input.record!==false});return json(res,201,out)}
+    catch(error){return liveDistributionFailure(res,error)}
+  }
+  m=route('/api/live/:id/distribution/stop',p);if(req.method==='POST'&&m){
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);
+    if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});if(live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    try{return json(res,200,await liveDistribution.stop(user.id,live.id))}catch(error){return liveDistributionFailure(res,error)}
+  }
   m=route('/api/live/:id/events',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const countsAsViewer=url.searchParams.get('control')!=='host';res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache',connection:'keep-alive'});res.write(`event: presence\ndata: ${JSON.stringify({status:'connected'})}\n\n`);if(!liveStreams.has(live.id))liveStreams.set(live.id,new Set());const targets=liveStreams.get(live.id);targets.add(res);let viewerId=null,viewerHeartbeat=null,lastViewerCount=null;if(countsAsViewer){viewerId=store.id();if(!liveViewerLeases.has(live.id))liveViewerLeases.set(live.id,new Set());liveViewerLeases.get(live.id).add(viewerId);lastViewerCount=await touchLiveViewer(live.id,viewerId);emitLive(live.id,'viewers',{count:lastViewerCount});viewerHeartbeat=setInterval(async()=>{if(!targets.has(res))return;const count=await touchLiveViewer(live.id,viewerId);if(count!==lastViewerCount){lastViewerCount=count;emitLive(live.id,'viewers',{count})}},15_000)}const heartbeat=setInterval(()=>res.write(': heartbeat\n\n'),25_000);req.on('close',()=>{clearInterval(heartbeat);if(viewerHeartbeat)clearInterval(viewerHeartbeat);targets.delete(res);if(!targets.size)liveStreams.delete(live.id);if(viewerId){const local=liveViewerLeases.get(live.id);local?.delete(viewerId);if(local&&!local.size)liveViewerLeases.delete(live.id);removeLiveViewer(live.id,viewerId).then(count=>emitLive(live.id,'viewers',{count})).catch(()=>{})}});return;}
   m=route('/api/live/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['host-ready','viewer-ready','viewer-rejected','offer','answer','ice','viewer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='viewer-ready'){if(user.id===live.hostId)return json(res,400,{error:'VIEWER_SIGNAL_REQUIRED'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else if(kind==='host-ready'||kind==='offer'||kind==='viewer-rejected'){if(user.id!==live.hostId)return json(res,403,{error:'HOST_ONLY_SIGNAL'});if(!await livePeerRegistry.claim(live.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}else{if(await livePeerRegistry.owner(live.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId&&!await livePeerRegistry.owner(live.id,toPeerId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitLive(live.id,'signal',signal);if(kind==='viewer-left')await livePeerRegistry.release(live.id,fromPeerId,user.id);return json(res,202,{accepted:true});}
   m=route('/api/live/:id/chat',p);if(req.method==='GET'&&m)return json(res,200,{messages:await listLiveMessages(m.id)});if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});const input=await body(req),text=safeText(input.text,500);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});const msg=await createLiveMessage({id:store.id(),liveId:live.id,userId:user.id,username:user.username,text,createdAt:store.now()});emitLive(live.id,'chat',msg);return json(res,201,{message:msg});}
   m=route('/api/live/:id/engagement',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});return json(res,200,{engagement:await liveEngagement(live.id),battle:await activeBattle(live.id)})}
   m=route('/api/live/:id/like',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId===user.id)return json(res,400,{error:'INVALID_LIKE'});const input=await body(req),engagement=await addLiveLike(live.id,input.amount);const event={liveId:live.id,user:store.publicUser(user),...engagement};emitLive(live.id,'like',event);return json(res,200,{engagement})}
   m=route('/api/live/:id/resonance',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const host=await findLiveRoom(m.id);if(!host||host.hostId!==user.id)return json(res,403,{error:'HOST_ONLY'});if(await activeBattle(host.id))return json(res,409,{error:'RESONANCE_ALREADY_ACTIVE'});const input=await body(req),opponent=await findLiveRoom(safeText(input.opponentLiveId,80));if(!opponent||opponent.id===host.id||opponent.hostId===user.id||await activeBattle(opponent.id))return json(res,400,{error:'INVALID_OPPONENT'});const startedAt=store.now(),endsAt=new Date(Date.now()+3*60_000).toISOString(),battle=liveRepo.enabled?await liveRepo.createBattle({id:store.id(),hostLiveId:host.id,opponentLiveId:opponent.id,startedAt,endsAt}):(()=>{const b={id:store.id(),hostLiveId:host.id,opponentLiveId:opponent.id,status:'live',hostScore:0,opponentScore:0,startedAt,endsAt};store.data.liveBattles.push(b);store.save();return b})();emitLive(host.id,'resonance',battle);emitLive(opponent.id,'resonance',battle);return json(res,201,{battle})}
-  m=route('/api/live/:id/end',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await endLiveRoom(m.id,user.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});livePeerRegistry.clearLocalRoom(live.id);return json(res,200,{live});}
+  m=route('/api/live/:id/end',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const current=await findLiveRoom(m.id);if(!current||current.hostId!==user.id)return json(res,404,{error:'LIVE_NOT_FOUND'});try{if(await liveDistribution.activeSession(user.id,m.id))await liveDistribution.stop(user.id,m.id)}catch(error){return liveDistributionFailure(res,error)}const live=await endLiveRoom(m.id,user.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});livePeerRegistry.clearLocalRoom(live.id);return json(res,200,{live});}
   if(req.method==='GET'&&p==='/api/videos'){const format=url.searchParams.get('format');const videos=store.data.videos.filter(v=>!format||v.format===format).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(v=>{const m=store.data.media.find(x=>x.id===v.mediaId),job=[...store.data.mediaJobs].reverse().find(j=>j.mediaId===v.mediaId&&j.type==='hls');return{...v,author:store.publicUser(store.data.users.find(u=>u.id===v.userId)),media:m?{...m,url:`/media/${m.id}`}:null,stream:job?publicJob(job):null}});return json(res,200,{videos});}
   if(req.method==='POST'&&p==='/api/videos'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const media=store.data.media.find(x=>x.id===input.mediaId&&x.userId===user.id);if(!media)return json(res,400,{error:'OWNED_MEDIA_REQUIRED'});const format=input.format==='clip'?'clip':'video';const video={id:store.id(),userId:user.id,mediaId:media.id,title:safeText(input.title,120)||'Untitled',description:safeText(input.description,2000),format,visibility:'public',createdAt:store.now()};store.data.videos.push(video);store.save();const job=startHlsJob(media,user);return json(res,201,{video:{...video,media:{...media,url:`/media/${media.id}`},author:store.publicUser(user),stream:publicJob(job)}});}
   if(req.method==='GET'&&p==='/api/stats'){const user=await requireUser(req,res);if(!user)return;const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),creatorEarnings:wallet?.earnings||0};return json(res,200,{...social,...giftStats});}

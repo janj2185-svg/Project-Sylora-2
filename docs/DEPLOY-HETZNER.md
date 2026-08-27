@@ -11,6 +11,7 @@
 - TLS terminated at nginx (sample: `infra/nginx/sylora.conf.example`)
 - Optional: set `SYLORA_ENABLE_HSTS=1` only after HTTPS works
 - Optional companion: set `SYLORA_COMPANION_TOKEN` + `SYLORA_COMPANION_ORIGINS`
+- Optional multistream: complete the DNS/TLS/credential preflight in [`LIVE_DISTRIBUTION.md`](architecture/LIVE_DISTRIBUTION.md); the normal deploy does not expose or enable the `streaming` profile automatically
 
 ## Verified deploy (on VPS)
 
@@ -47,6 +48,7 @@ Database migrations are intentionally not reversed automatically. The script rec
 2. Confirm the HTML response uses `Cache-Control: no-store`; versioned CSS/JS use immutable caching.
 3. Open a private browser window and verify Home, LIVE, Studio, Clips, Inbox, Profile and Settings on phone and desktop.
 4. Run the manual **Production relay probe** workflow with the same full SHA and a revocable owner test token.
+5. If multistream was approved for this release, start `docker compose --env-file .env.local --profile streaming up -d mediamtx`, run Studio preflight, publish a short OBS test, and verify every real destination reports `forwarding` before announcing availability.
 
 ## Cursor secrets (when ready)
 

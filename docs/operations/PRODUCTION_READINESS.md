@@ -53,6 +53,7 @@ Checks (machine-readable `checks` object):
 | `config` | Production config validation passed |
 | `ai` | Reported (`AI_*`); missing key does **not** block overall readiness |
 | `realtime` | TURN required — `NOT_READY` without TURN in production |
+| `distribution` | Optional for core traffic; `READY` only with authenticated router, key encryption and public RTMPS ingest |
 
 HTTP 503 when `ready: false`.
 
@@ -99,6 +100,31 @@ If the TURN host directly owns the public IPv4 address, leave `SYLORA_TURN_EXTER
 
 Do not mark the rollout complete merely because the container process is running: verify a real authenticated TURN allocation and confirm `GET /api/ready` returns HTTP 200.
 
+### Bundled MediaMTX distribution baseline
+
+The opt-in `streaming` Compose profile pins `bluenviron/mediamtx:1.20.1`. Its committed config enables only RTMP(S), an internal authenticated Control API, internal metrics and dynamic recording; RTSP, HLS, WebRTC, SRT, MoQ and playback listeners are disabled for this role.
+
+The Control API is not published as a host port. Its bundled user record contains disabled SHA-256 credentials with no retained plaintext; `SYLORA_MEDIA_ROUTER_CONTROL_USER` and a 32–512 character `SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD` replace them at container start. Anonymous clients receive publish-only permission and can use only the high-entropy paths created by the SYLORA API. They cannot read streams or control the router.
+
+Production requires:
+
+1. a stable 32-byte `SYLORA_STREAM_SECRET_KEY` stored outside Git;
+2. `SYLORA_MEDIA_ROUTER_CONTROL_URL=http://mediamtx:9997` and matching server-only Control API credentials;
+3. public ingest DNS plus a valid certificate mounted as `server.crt` / `server.key`;
+4. `SYLORA_RTMP_ENCRYPTION=strict` and a public `rtmps://` ingest URL;
+5. only the chosen RTMPS TCP port open at the firewall;
+6. real platform stream keys entered through Studio, followed by preflight and an OBS end-to-end test.
+
+Start the service with:
+
+```bash
+docker compose --env-file .env.local --profile streaming up -d mediamtx
+```
+
+Distribution is deliberately non-blocking for the core app's `/api/ready`; otherwise an optional creator feature could take the whole social application out of load balancing. Its own state is reported at `checks.distribution` and enforced by `/api/live/:id/distribution/preflight`. A production release must not be called “multistream ready” until a real source reports online and every selected destination reports `forwarding`.
+
+See [`LIVE_DISTRIBUTION.md`](../architecture/LIVE_DISTRIBUTION.md) for the threat model, encoder compatibility and explicit missing platform connectors.
+
 Browser-level acceptance, including the two-context Studio host → viewer scenario and the read-only/relay-only production probes, is documented in [`PHASE1_3_BROWSER_E2E.md`](./PHASE1_3_BROWSER_E2E.md).
 
 ### Redis policy
@@ -126,6 +152,7 @@ Diagnostics: `checks.redis.expectation` and `redis.capabilities` in config modul
 | Redis scaling | **CODE READY / EXTERNAL INFRA REQUIRED** | Readiness reports when absent |
 | OpenAI AI | **CODE READY / EXTERNAL INFRA REQUIRED** | Honest unavailable state without key |
 | TURN / WebRTC NAT | **CODE + COMPOSE READY / HOST NETWORK CHANGE REQUIRED** | Pinned opt-in coturn profile; production still needs a shared secret, firewall rules, deployment, and an authenticated allocation check |
+| RTMP(S) multistream distribution | **CODE + COMPOSE READY / DNS, TLS AND PLATFORM KEYS REQUIRED** | Pinned MediaMTX profile, encrypted destinations and Studio control are implemented; production needs external credentials and an end-to-end OBS test |
 | Payments | **BLOCKED_EXTERNAL** | Sandbox LUMEN; real provider keys needed |
 | Google OAuth | **BLOCKED_EXTERNAL** | See `/api/integrations/status` |
 
