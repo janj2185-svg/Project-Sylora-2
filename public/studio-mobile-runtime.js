@@ -6,11 +6,12 @@ const TOOL_KEYS={
   audio:'audioMixer',
   scenes:'scenes',
   broadcast:'broadcast',
+  distribution:'multistream',
   obs:'connectObs',
   browser:'browserSource',
   record:'record'
 };
-const PANEL_ORDER=['sources','audio','scenes','broadcast','obs','browser','record'];
+const PANEL_ORDER=['sources','audio','scenes','broadcast','distribution','obs','browser','record'];
 const STUDIO_PORTAL_SELECTOR='.studio-mobile-tools,.studio-sheet-backdrop';
 let mountedControls=null;
 
@@ -130,6 +131,11 @@ function boot(){
   cleanupIfNeeded();
   window.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheets()});
   document.addEventListener('sylora:localechange',updateToolLabels);
+  document.addEventListener('sylora:studio-panels-changed',()=>{
+    if(document.body.dataset.view!=='studio')return;
+    mountedControls=null;
+    mount();
+  });
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});

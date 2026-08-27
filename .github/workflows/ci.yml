@@ -60,7 +60,55 @@ jobs:
         run: npm run build
 
       - name: Validate Compose
-        run: docker compose --profile turn config -q
+        run: docker compose --profile turn --profile streaming config -q
+
+      - name: MediaMTX authenticated control and RTMP ingest smoke
+        run: |
+          mkdir -p tmp
+          router_user='sylora-control'
+          router_password='ci-control-password-00000000000000000000'
+          printf '%s\n' \
+            "SYLORA_MEDIA_ROUTER_CONTROL_USER=$router_user" \
+            "SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD=$router_password" \
+            > tmp/ci-streaming.env
+          trap 'docker compose --env-file tmp/ci-streaming.env --profile streaming logs mediamtx; docker compose --env-file tmp/ci-streaming.env --profile streaming down --remove-orphans; rm -f tmp/ci-streaming.env' EXIT
+          docker compose --env-file tmp/ci-streaming.env --profile streaming up -d mediamtx
+          status=starting
+          for attempt in $(seq 1 30); do
+            container_id="$(docker compose --env-file tmp/ci-streaming.env --profile streaming ps -q mediamtx)"
+            status="$(docker inspect --format='{{.State.Health.Status}}' "$container_id")"
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          [ "$status" = healthy ]
+          router_ip="$(docker inspect --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$container_id")"
+          [ "$(curl -sS -o /dev/null -w '%{http_code}' "http://$router_ip:9997/v3/info")" = 401 ]
+          curl -fsS -u "$router_user:$router_password" "http://$router_ip:9997/v3/info"
+          path_name='sylora_ci_ingest_path_0001'
+          curl -fsS -u "$router_user:$router_password" \
+            -H 'content-type: application/json' \
+            --data '{"source":"publisher","forward":[],"record":false}' \
+            "http://$router_ip:9997/v3/config/paths/add/$path_name"
+          ffmpeg -hide_banner -loglevel error -re \
+            -f lavfi -i testsrc2=size=320x180:rate=30 \
+            -f lavfi -i sine=frequency=880:sample_rate=48000 \
+            -t 3 -c:v libx264 -preset ultrafast -tune zerolatency \
+            -pix_fmt yuv420p -g 60 -c:a aac -f flv \
+            "rtmp://127.0.0.1:1935/$path_name" &
+          ffmpeg_pid=$!
+          online=false
+          for attempt in $(seq 1 20); do
+            if curl -fsS -u "$router_user:$router_password" \
+              "http://$router_ip:9997/v3/paths/get/$path_name" | grep -q '"online":true'; then
+              online=true
+              break
+            fi
+            sleep 0.2
+          done
+          wait "$ffmpeg_pid"
+          [ "$online" = true ]
+          curl -fsS -u "$router_user:$router_password" -X DELETE \
+            "http://$router_ip:9997/v3/config/paths/delete/$path_name"
 
       - name: Test
         run: npm test

@@ -22,7 +22,8 @@ export const MIGRATION_FILES = Object.freeze([
   ['012_social_comment_reactions', 'infra/postgres/migrations/012_social_comment_reactions.sql'],
   ['013_dm_attachments_gift_refund', 'infra/postgres/migrations/013_dm_attachments_gift_refund.sql'],
   ['013_phase1_identity_auth', 'infra/postgres/migrations/013_phase1_identity_auth.sql'],
-  ['014_session_status_invalidation', 'infra/postgres/migrations/014_session_status_invalidation.sql']
+  ['014_session_status_invalidation', 'infra/postgres/migrations/014_session_status_invalidation.sql'],
+  ['015_live_distribution', 'infra/postgres/migrations/015_live_distribution.sql']
 ]);
 
 export function loadMigrations() {

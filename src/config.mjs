@@ -50,6 +50,30 @@ function isValidDatabaseUrl(url) {
   return /^postgres(ql)?:\/\//i.test(url);
 }
 
+function safeServiceUrl(raw, protocols) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    if (!protocols.includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) return '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch { return ''; }
+}
+
+function validStreamSecretKey(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return false;
+  if (/^[a-f0-9]{64}$/i.test(value)) return true;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return false;
+  try { return Buffer.from(value, 'base64url').length === 32; } catch { return false; }
+}
+
+function validMediaRouterCredentials(user, password) {
+  return /^[a-zA-Z0-9._~-]{1,64}$/.test(String(user || ''))
+    && String(password || '').length >= 32
+    && String(password || '').length <= 512;
+}
+
 /**
  * Load runtime config from env without enforcing production boot guard.
  * @param {Record<string, string|undefined>} [env]
@@ -61,6 +85,14 @@ export function loadRuntimeConfig(env = process.env) {
   const paymentProvider = get('PAYMENT_PROVIDER') || get('SYLORA_PAYMENT_PROVIDER');
   const iceServers = buildIceServersFromEnv(env);
   const turn = resolveTurnConfiguration(iceServers, env);
+  const mediaRouterControlUrl = safeServiceUrl(get('SYLORA_MEDIA_ROUTER_CONTROL_URL'), ['http:', 'https:']);
+  const mediaRouterControlUser = get('SYLORA_MEDIA_ROUTER_CONTROL_USER');
+  const mediaRouterControlPassword = get('SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD');
+  const mediaRouterCredentialsConfigured = validMediaRouterCredentials(mediaRouterControlUser, mediaRouterControlPassword);
+  const publicRtmpUrl = safeServiceUrl(get('SYLORA_MEDIA_ROUTER_PUBLIC_RTMP_URL'), ['rtmp:', 'rtmps:']);
+  const streamSecretRaw = get('SYLORA_STREAM_SECRET_KEY');
+  const streamSecretValid = validStreamSecretKey(streamSecretRaw);
+  const secureStreamIngest = publicRtmpUrl.startsWith('rtmps:');
 
   // Secret values are intentionally NOT stored on the config object.
   // Callers that need them must read process.env / provided env directly.
@@ -95,6 +127,22 @@ export function loadRuntimeConfig(env = process.env) {
       tokenConfigured: !!get('SYLORA_COMPANION_TOKEN'),
       enableHsts: env.SYLORA_ENABLE_HSTS === '1'
     },
+    distribution: {
+      controlUrl: mediaRouterControlUrl,
+      publicRtmpUrl,
+      routerConfigured: !!mediaRouterControlUrl && mediaRouterCredentialsConfigured,
+      controlCredentialsConfigured: mediaRouterCredentialsConfigured,
+      controlCredentialsInvalid: !!(mediaRouterControlUser || mediaRouterControlPassword) && !mediaRouterCredentialsConfigured,
+      publicIngestConfigured: !!publicRtmpUrl,
+      secretStorageConfigured: streamSecretValid,
+      secretStorageInvalid: !!streamSecretRaw && !streamSecretValid,
+      secureIngest: secureStreamIngest,
+      allowInsecureRtmp: env.SYLORA_STREAM_ALLOW_INSECURE_RTMP === '1',
+      allowedHosts: String(env.SYLORA_STREAM_ALLOWED_HOSTS || '')
+        .split(',')
+        .map(x => x.trim().toLowerCase())
+        .filter(Boolean)
+    },
     iceServers,
     turnUrlConfigured: turn.urlConfigured,
     turnConfigured: turn.configured,
@@ -104,6 +152,11 @@ export function loadRuntimeConfig(env = process.env) {
 
   config.ai.status = resolveAiStatus(config, env);
   config.realtime = resolveRealtimeStatus(config);
+  config.distribution.configured = config.distribution.routerConfigured
+    && config.distribution.publicIngestConfigured
+    && config.distribution.secretStorageConfigured
+    && (nodeEnv !== RuntimeMode.PRODUCTION || config.distribution.secureIngest);
+  config.distribution.status = config.distribution.configured ? 'READY' : 'NOT_CONFIGURED';
 
   return config;
 }

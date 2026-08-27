@@ -1,0 +1,63 @@
+logLevel: warn
+logDestinations: [stdout]
+logStructured: true
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 1024
+
+authMethod: internal
+authInternalUsers:
+  # The RTMP listener and Control API are isolated by Docker/network/firewall.
+  # Publishing paths are high-entropy, one-session credentials created by SYLORA.
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+  # These hashes have no retained plaintext and intentionally disable direct use.
+  # Compose replaces both values when server-only credentials are configured.
+  - user: sha256:kGQUYzJ4a/CKVC41DJisYR5X+oe1xJhu4l3tGnV7DTU=
+    pass: sha256:Cj9IXdbYwAUBYmqIp73ni4sEUE5Kwq1/uxo2wFOVW78=
+    ips: []
+    permissions:
+      - action: api
+      - action: metrics
+
+api: true
+apiAddress: :9997
+apiEncryption: false
+apiAllowOrigins: []
+
+metrics: true
+metricsAddress: :9998
+metricsEncryption: false
+metricsAllowOrigins: []
+
+rtsp: false
+rtmp: true
+rtmpAddress: :1935
+rtmpEncryption: "no"
+rtmpServerKey: /certs/server.key
+rtmpServerCert: /certs/server.crt
+hls: false
+webrtc: false
+srt: false
+moq: false
+playback: false
+
+pathDefaults:
+  source: publisher
+  overridePublisher: false
+  maxReaders: 0
+  record: false
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordMaxPartSize: 50M
+  recordSegmentDuration: 1h
+  recordDeleteAfter: 7d
+
+# Paths are added and removed through the internal Control API. Unknown paths are
+# rejected, so the one-time ingest key is also the unguessable publish path.
+paths: {}

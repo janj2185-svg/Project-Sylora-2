@@ -115,6 +115,8 @@ test('Studio mobile runtime keeps one current body portal across in-place rerend
   assert.doesNotMatch(studioRuntime,/document\.querySelector\('\.studio-(?:mobile-tools|sheet-backdrop)'\)\?\.remove\(\)/);
   assert.match(studio,/\.studio-sheet-close\{display:none\}/);
   assert.match(studio,/@media\(max-width:900px\)\{[\s\S]*?\.studio-sheet-close\{[^}]*display:grid;/);
+  assert.match(studio,/\.studio-controls>\.card\{[^}]*z-index:92;[^}]*bottom:calc\(154px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(studio,/\.studio-mobile-tools\{\s*position:fixed;z-index:94;/);
   assert.match(studio,/input\[type="range"\]\{[\s\S]*?appearance:none;[\s\S]*?border-radius:999px!important;/);
 });
 

@@ -70,6 +70,33 @@ When the host interface directly owns its public IPv4 address, leave `SYLORA_TUR
 
 The TURN service receives only the shared secret and the two optional TURN address values; the rest of the application's `.env.local` is not exposed to the coturn container.
 
+## LIVE distribution (MediaMTX / RTMP(S))
+
+| Variable | Required | Dev | Production | Notes |
+|----------|----------|-----|------------|-------|
+| `SYLORA_MEDIA_ROUTER_CONTROL_URL` | For multistream | `http://127.0.0.1:9997` | `http://mediamtx:9997` in Compose | Internal MediaMTX Control API; no embedded credentials, query or fragment |
+| `SYLORA_MEDIA_ROUTER_CONTROL_USER` | For multistream | `sylora-control` | **Required** | Safe `A-Z a-z 0-9 . _ ~ -`, 1–64 characters |
+| `SYLORA_MEDIA_ROUTER_CONTROL_PASSWORD` | For multistream | generated | **Required** | Server-only, 32–512 characters; the Compose profile replaces its disabled default auth record |
+| `SYLORA_MEDIA_ROUTER_PUBLIC_RTMP_URL` | For multistream | `rtmp://127.0.0.1:1935` | **Public `rtmps://` URL** | Returned once with the generated ingest key; production refuses plain RTMP ingest |
+| `SYLORA_STREAM_SECRET_KEY` | For multistream | generated | **Required and stable** | AES-256-GCM master: exactly 64 hex or 43 unpadded base64url characters |
+| `SYLORA_STREAM_ALLOWED_HOSTS` | Custom targets only | empty | operator allowlist | Comma-separated public host suffixes for `enterprise` / `custom` destinations |
+| `SYLORA_STREAM_ALLOW_INSECURE_RTMP` | Emergency only | `0` | keep `0` | Allows plain RTMP destinations in production when explicitly set to `1` |
+| `SYLORA_RTMP_BIND_ADDRESS` | Compose router | `127.0.0.1` | `0.0.0.0` or public interface | Host interface for published ingest ports |
+| `SYLORA_RTMP_PORT` | Compose router | `1935` | normally closed with strict TLS | Host port mapped to MediaMTX plain RTMP `1935` |
+| `SYLORA_RTMPS_PORT` | Compose router | `1936` | commonly `443` | Host port mapped to MediaMTX RTMPS `1936` |
+| `SYLORA_RTMP_ENCRYPTION` | Compose router | `no` | `strict` | MediaMTX accepts `no`, `optional` or `strict`; production SYLORA requires a public RTMPS URL |
+| `SYLORA_RTMP_TLS_CERT_DIR` | RTMPS | dev placeholder | **Required** | Host directory containing `server.crt` and `server.key` |
+
+Generate the control password and encryption master independently with `openssl rand -hex 32`. Do not rotate the encryption master without re-encrypting or re-entering every stored destination key.
+
+Start the optional pinned router only after configuration:
+
+```bash
+docker compose --env-file .env.local --profile streaming up -d mediamtx
+```
+
+The Control API and metrics listeners are not mapped to host ports. Production should expose only the selected RTMPS TCP port. Detailed setup, API behavior and limitations are in [`LIVE_DISTRIBUTION.md`](../architecture/LIVE_DISTRIBUTION.md).
+
 ## Payments
 
 | Variable | Required | Dev | Test | Production | Notes |
@@ -104,6 +131,6 @@ Scoped developer API keys use PostgreSQL in production and require no signing se
 
 - **Development:** JSON persistence allowed; missing AI/TURN/Redis degrades capabilities honestly.
 - **Test:** In-memory / JSON test runtime; boot guards relaxed.
-- **Production:** Valid `DATABASE_URL` required at boot. Readiness checks PostgreSQL, Redis (scaling), TURN (LIVE WebRTC), and production config. AI missing is `AI_UNAVAILABLE`, not a crash.
+- **Production:** Valid `DATABASE_URL` required at boot. Readiness checks PostgreSQL, Redis (scaling), TURN (LIVE WebRTC), and production config. Distribution remains optional for core traffic but reports `NOT_CONFIGURED` until Control API credentials, a stable encryption key and public RTMPS ingest are complete. AI missing is `AI_UNAVAILABLE`, not a crash.
 
 Configuration is loaded from `src/config.mjs`. Secrets are never included in health/readiness JSON responses.
