@@ -32,6 +32,10 @@ wait_ready() {
   return 1
 }
 
+verify_release() {
+  docker compose exec -T sylora node scripts/verify-release.mjs "$@"
+}
+
 if [ "$MODE" = "dry-run" ]; then
   echo "[dry-run] validating compose + health locally"
   release_sha="$(git rev-parse HEAD)"
@@ -40,7 +44,7 @@ if [ "$MODE" = "dry-run" ]; then
   docker compose config -q
   docker compose up -d --build
   wait_ready || { echo "[dry-run] /api/ready not ready in time" >&2; exit 1; }
-  node scripts/verify-release.mjs http://127.0.0.1:8787 "$release_sha" 15
+  verify_release http://127.0.0.1:8787 "$release_sha" 15
   echo "[dry-run] readiness and exact release identity OK"
   exit 0
 fi
@@ -117,11 +121,11 @@ if ! wait_ready; then
   rollback
   exit 1
 fi
-if ! node scripts/verify-release.mjs http://127.0.0.1:8787 "$target_sha" 20; then
+if ! verify_release http://127.0.0.1:8787 "$target_sha" 20; then
   rollback
   exit 1
 fi
-if ! node scripts/verify-release.mjs "$PUBLIC_BASE_URL" "$target_sha" 90; then
+if ! verify_release "$PUBLIC_BASE_URL" "$target_sha" 90; then
   rollback
   exit 1
 fi
