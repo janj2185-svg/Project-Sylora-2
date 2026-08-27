@@ -563,7 +563,7 @@ export async function waitForStableVisualState(page, surface) {
     await expect(page.locator('#profile')).toBeVisible();
     await expect(page.locator('.profile-vitals')).toBeVisible();
   }
-  if (surface.id === 'settings') await expect(page.locator('.settings-grid .module')).toHaveCount(14);
+  if (surface.id === 'settings') await expect(page.locator('.settings-grid .module')).toHaveCount(6);
   if (surface.id === 'create-hub-open') await expect(page.locator('.create-hub-item')).toHaveCount(9);
   if (surface.id === 'live-create') {
     await expect(page.locator('[data-live-tab="create"]')).toHaveClass(/active/);

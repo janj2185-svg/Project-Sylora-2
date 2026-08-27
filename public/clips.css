@@ -12,7 +12,5 @@ body[data-view="clips"] .clip-info{position:absolute;left:0;right:0;bottom:0;pad
 body[data-view="clips"] .clip-info h3{margin:6px 0;font-size:20px}
 body[data-view="clips"] .clip-info .eyebrow{color:#e7c1b3!important}
 body[data-view="clips"] .media-meta{font-size:11px;opacity:.68}
-.upload-progress{height:7px;border-radius:99px;overflow:hidden;background:#e8e2db}.upload-progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--sy-route-accent),var(--sy-champagne));transition:.2s}
 @media(max-width:1180px){body[data-view="clips"] .clip-list{grid-template-columns:1fr}}
 @media(max-width:760px){body[data-view="clips"] #app>.hero{min-height:0;padding:25px 21px;border-radius:24px}body[data-view="clips"] #app>.hero h1{font-size:40px}body[data-view="clips"] #clipUpload{grid-template-columns:1fr;padding:18px!important}body[data-view="clips"] .clip-shell{min-height:470px;border-radius:22px}body[data-view="clips"] .clip-shell video{height:66vh}}
-@media(prefers-reduced-motion:reduce){.upload-progress i{transition:none}}
