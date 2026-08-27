@@ -16,6 +16,7 @@ import { SyloraCompanionClient, normalizeCompanionUrl } from './companion-client
 import { mountTikTokOwnerPilot } from './tiktok-live-pilot.js';
 import { isRtcConfigCacheFresh } from './rtc-config-cache.js';
 import { bindMediaFilePicker, mediaFilePickerMarkup } from './media-file-picker.js';
+import { authErrorKey, authText, validateAuthInput } from './auth-ui.js?v=20260827-auth1';
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,liveRtcConfigCachedAt=0,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null,tiktokPilotCleanup=null;const studioPeers=new Map();
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0;
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
@@ -167,7 +168,73 @@ async function renderFeed(){
 function postHtml(p){return `<article class="card post" data-id="${p.id}"><div class="user"><span class="avatar">${esc((p.author?.displayName||'?')[0].toUpperCase())}</span><div><b>${esc(p.author?.displayName||'User')}</b><small>@${esc(p.author?.username||'unknown')} · ${new Date(p.createdAt).toLocaleString()}</small></div></div><div class="post-text">${esc(p.text)}</div><div class="actions"><button class="react ${p.reacted?'on':''}">✦ ${p.reactionCount}</button><button class="comments">◌ ${p.commentCount}</button>${state.me?`<button class="ask-sylora ghost" data-type="post" data-id="${p.id}">Ask Sylora</button>`:''}${state.me&&p.author?.id!==state.me.id?`<button class="follow" data-user="${p.author.id}">＋ Підписатися</button><button class="report-post" data-post="${p.id}">⚑ Report</button><button class="block-user" data-user="${p.author.id}">⊘ Block</button>`:''}</div><div class="comment-zone"></div></article>`}
 function bindPosts(){document.querySelectorAll('.react').forEach(b=>b.onclick=async()=>{if(!state.me)return renderAuth();await api(`/api/posts/${b.closest('.post').dataset.id}/react`,{method:'POST'});renderFeed()});document.querySelectorAll('.comments').forEach(b=>b.onclick=()=>loadComments(b.closest('.post')));document.querySelectorAll('.follow').forEach(b=>b.onclick=async()=>{await api(`/api/users/${b.dataset.user}/follow`,{method:'POST'});toast('Статус підписки змінено')});document.querySelectorAll('.report-post').forEach(b=>b.onclick=async()=>{const reason=prompt('Причина скарги');if(!reason)return;await api('/api/reports',{method:'POST',body:JSON.stringify({targetType:'post',targetId:b.dataset.post,reason})});toast('Скаргу надіслано')});document.querySelectorAll('.block-user').forEach(b=>b.onclick=async()=>{if(!confirm('Заблокувати цього користувача?'))return;await api(`/api/users/${b.dataset.user}/block`,{method:'POST'});toast('Користувача заблоковано');renderFeed()});document.querySelectorAll('.ask-sylora').forEach(b=>b.onclick=async()=>{if(!state.me)return renderAuth();const q=prompt('Ask Sylora','поясни')||'поясни';try{const out=await api('/api/ai/ask',{method:'POST',body:JSON.stringify({contentType:b.dataset.type,contentId:b.dataset.id,question:q,view:state.view})});toast(out.answer||'OK')}catch(e){toast(humanError(e.message))}})}
 async function loadComments(post){const {comments}=await api(`/api/posts/${post.dataset.id}/comments`);const zone=post.querySelector('.comment-zone');zone.innerHTML=`<div style="margin-top:14px">${comments.map(c=>`<p><b>@${esc(c.author.username)}</b> ${esc(c.text)}</p>`).join('')}${state.me?`<form class="composer comment-form"><textarea name="text" maxlength="1000" placeholder="Коментар..."></textarea><button class="primary">Надіслати</button></form>`:''}</div>`;zone.querySelector('form')?.addEventListener('submit',async e=>{e.preventDefault();const text=new FormData(e.currentTarget).get('text');await api(`/api/posts/${post.dataset.id}/comments`,{method:'POST',body:JSON.stringify({text})});loadComments(post)})}
-function renderAuth(){app.innerHTML=`<div class="card auth"><span class="eyebrow">SYLORA ID</span><h2>${esc(t('authTitle'))}</h2><div class="tabs"><button class="primary" id="regTab">${esc(t('register'))}</button><button class="ghost" id="loginTab">${esc(t('login'))}</button></div><form id="authForm" class="fields"><input name="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+" placeholder="Username" required><input name="email" type="email" placeholder="Email" required><input name="password" type="password" minlength="10" maxlength="256" placeholder="${esc(t('password'))}" required><button class="primary">${esc(t('create'))}</button></form><p id="authError" class="muted"></p></div>`;let mode='register';const form=document.querySelector('#authForm');document.querySelector('#loginTab').onclick=()=>{mode='login';form.innerHTML=`<input name="identity" placeholder="${esc(t('identity'))}" required><input name="password" type="password" placeholder="${esc(t('password'))}" required><button class="primary">${esc(t('login'))}</button>`};document.querySelector('#regTab').onclick=renderAuth;form.onsubmit=async e=>{e.preventDefault();const input=Object.fromEntries(new FormData(form));try{const out=await api(`/api/auth/${mode}`,{method:'POST',body:JSON.stringify(input)});state.token=out.token;clearRtcConfigCache();localStorage.setItem('sylora_token',state.token);const session=await api('/api/me');state.me=session.user;state.wallet=session.wallet||null;setLocale(state.me.locale);applyShellLanguage();account();refreshRightRail();refreshRailProgress();startUserEvents();nav('feed')}catch(err){document.querySelector('#authError').textContent=err.message}}}
+function renderAuth(){
+  const copy=key=>authText(getLocale(),key);
+  app.innerHTML=`<div class="card auth auth-shell"><span class="eyebrow">SYLORA ID</span><h2>${esc(t('authTitle'))}</h2><div class="tabs auth-tabs" role="tablist"><button type="button" class="primary" id="regTab" role="tab" aria-selected="true" aria-controls="authForm">${esc(t('register'))}</button><button type="button" class="ghost" id="loginTab" role="tab" aria-selected="false" aria-controls="authForm">${esc(t('login'))}</button></div><form id="authForm" class="fields auth-fields" novalidate><div id="authFields" class="auth-field-list"></div><button type="submit" class="primary auth-submit" id="authSubmit">${esc(t('create'))}</button><p id="authError" class="auth-error" role="alert" aria-live="polite" hidden></p></form></div>`;
+  const form=document.querySelector('#authForm'),fields=document.querySelector('#authFields'),submit=document.querySelector('#authSubmit'),error=document.querySelector('#authError'),registerTab=document.querySelector('#regTab'),loginTab=document.querySelector('#loginTab');
+  let mode='register',busy=false;
+  const fieldMarkup=()=>mode==='register'
+    ?`<label class="auth-field"><span>${esc(copy('usernameLabel'))}</span><input name="username" minlength="3" maxlength="30" pattern="[A-Za-z0-9_]{3,30}" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="authUsernameHint" required><small id="authUsernameHint">${esc(copy('usernameHint'))}</small></label><label class="auth-field"><span>${esc(copy('emailLabel'))}</span><input name="email" type="email" maxlength="254" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" required></label><label class="auth-field"><span>${esc(copy('passwordLabel'))}</span><input name="password" type="password" minlength="10" maxlength="256" autocomplete="new-password" aria-describedby="authPasswordHint" required><small id="authPasswordHint">${esc(copy('passwordHint'))}</small></label>`
+    :`<label class="auth-field"><span>${esc(copy('identityLabel'))}</span><input name="identity" maxlength="254" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label class="auth-field"><span>${esc(copy('passwordLabel'))}</span><input name="password" type="password" maxlength="256" autocomplete="current-password" required></label>`;
+  const showError=message=>{error.textContent=message||'';error.hidden=!message};
+  const setBusy=next=>{busy=next;form.setAttribute('aria-busy',String(next));submit.disabled=next;registerTab.disabled=next;loginTab.disabled=next;submit.textContent=next?copy('working'):t(mode==='register'?'create':'login')};
+  const bindFields=()=>fields.querySelectorAll('input').forEach(field=>field.addEventListener('input',()=>{field.removeAttribute('aria-invalid');showError('')}));
+  const setMode=(next,{focus=true}={})=>{
+    if(busy)return;
+    mode=next;
+    registerTab.className=mode==='register'?'primary':'ghost';
+    loginTab.className=mode==='login'?'primary':'ghost';
+    registerTab.setAttribute('aria-selected',String(mode==='register'));
+    loginTab.setAttribute('aria-selected',String(mode==='login'));
+    fields.innerHTML=fieldMarkup();
+    submit.textContent=t(mode==='register'?'create':'login');
+    showError('');
+    bindFields();
+    if(focus)requestAnimationFrame(()=>fields.querySelector('input')?.focus());
+  };
+  registerTab.addEventListener('click',()=>setMode('register'));
+  loginTab.addEventListener('click',()=>setMode('login'));
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(busy)return;
+    fields.querySelectorAll('input').forEach(field=>field.removeAttribute('aria-invalid'));
+    showError('');
+    const validation=validateAuthInput(mode,Object.fromEntries(new FormData(form)));
+    if(!validation.ok){
+      const field=form.elements.namedItem(validation.field);
+      field?.setAttribute('aria-invalid','true');
+      showError(copy(validation.messageKey));
+      field?.focus();
+      return;
+    }
+    let authenticated=false;
+    setBusy(true);
+    try{
+      const out=await api(`/api/auth/${mode}`,{method:'POST',body:JSON.stringify(validation.input)});
+      if(!out?.token||!out?.user)throw Object.assign(new Error('AUTH_RESPONSE_INVALID'),{status:502});
+      authenticated=true;
+      state.token=out.token;state.me=out.user;state.wallet=null;
+      clearRtcConfigCache();
+      localStorage.setItem('sylora_token',state.token);
+      try{
+        const session=await api('/api/me');
+        state.me=session.user||state.me;state.wallet=session.wallet||null;
+      }catch(sessionError){
+        if(sessionError?.status===401)throw sessionError;
+        reportClientIssue('auth-session',sessionError);
+      }
+      if(state.me?.locale)setLocale(state.me.locale);
+      applyShellLanguage();account();refreshRightRail();refreshRailProgress();startUserEvents();nav('feed');
+    }catch(err){
+      if(authenticated&&err?.status===401){state.token='';state.me=null;state.wallet=null;localStorage.removeItem('sylora_token')}
+      showError(copy(authErrorKey(err)));
+    }finally{
+      if(form.isConnected)setBusy(false);
+    }
+  });
+  setMode('register',{focus:false});
+  requestAnimationFrame(()=>fields.querySelector('input')?.focus());
+}
 async function renderGifts(){const {gifts,creatorShareBps}=await api('/api/gifts');let meData=null,users=[];if(state.me){meData=await api('/api/me');state.wallet=meData.wallet;account();users=(await api('/api/users')).users}app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA GIFT CONSTELLATION</span><h1>Емоція, що оживає.</h1><p>Власні подарунки SYLORA: світло, рух, звук і realtime-взаємодія.</p><div class="scene-readout"><span><small>КОЛЕКЦІЯ</small><b>${gifts.length}</b></span><span><small>РІВНІ</small><b>ORBIT</b></span><span><small>ЕФЕКТИ</small><b>LIVE</b></span></div>${meData?`<div class="balance">◈ ${meData.wallet.balance.toLocaleString()} LUMEN</div>`:'<button id="giftLogin" class="primary">Увійти для відправлення</button>'}</div>${state.me?`<div class="card auth"><div class="inline-fields"><label>Отримувач<select id="giftRecipient"><option value="">Оберіть користувача</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)} — ${esc(u.displayName)}</option>`).join('')}</select></label><label>Combo<select id="giftQuantity"><option value="1">×1</option><option value="5">×5</option><option value="10">×10</option></select></label></div><p class="muted">Creator share у тестовій економіці: ${(creatorShareBps/100).toFixed(0)}%.</p></div>`:''}<div class="gifts gift-constellation">${gifts.map((g,i)=>`<div class="card gift" data-gift="${g.id}" style="--gift-index:${i}"><div class="gift-orb" style="background:${g.color};color:${g.color}"><i>${liveGiftGlyph(g.id)}</i></div><strong>${esc(g.name)}</strong><small>${g.tier} · ◈ ${g.price}</small></div>`).join('')}</div>`;document.querySelector('#giftLogin')?.addEventListener('click',renderAuth);document.querySelectorAll('.gift').forEach(x=>x.onclick=async()=>{if(!state.me)return renderAuth();const recipientId=document.querySelector('#giftRecipient').value,quantity=Number(document.querySelector('#giftQuantity').value);if(!recipientId)return toast('Спочатку обери отримувача');try{const out=await api('/api/gifts/send',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({giftId:x.dataset.gift,recipientId,quantity})});if(state.wallet){state.wallet.balance=out.balance;account()}refreshRailProgress();toast(`Надіслано ×${quantity} · баланс ◈ ${out.balance}`);renderGifts()}catch(e){toast(e.message)}})}
 
 async function renderProfile(){
