@@ -1266,3 +1266,24 @@ body[data-view="more"] .settings-group .module>span:nth-child(2){min-width:0}
 body[data-view="more"] .settings-group .module h3{margin:0 0 4px}
 body[data-view="more"] .settings-group .module>i{color:var(--sy-route-accent);font-style:normal;font-size:15px}
 @media(max-width:700px){body[data-view="more"] .settings-group{padding:15px;border-radius:23px}body[data-view="more"] .settings-group .settings-grid{grid-template-columns:1fr}body[data-view="more"] .settings-group .settings-grid .module{min-height:84px;padding:11px 12px}}
+
+
+/* Mobile session control ------------------------------------------------- */
+body[data-view="profile"] .profile-mobile-signout{
+  display:none!important;
+}
+
+@media(max-width:900px){
+  body[data-view="profile"] .profile-mobile-signout{
+    display:inline-flex!important;
+    width:100%;
+    min-height:46px;
+    align-items:center;
+    justify-content:center;
+    margin-top:16px;
+    border-color:rgba(180,85,85,.24)!important;
+    background:rgba(255,244,244,.78)!important;
+    color:#7a3030!important;
+    font-weight:720;
+  }
+}

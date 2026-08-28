@@ -50,3 +50,17 @@ test('register, session, profile navigation, logout, and login work through the 
   await page.locator('#logout').click();
   await expect(page.locator('#signin')).toBeVisible();
 });
+
+
+test('mobile profile exposes logout and clears the local session', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const account = uniqueAccount('mobile_logout');
+  await registerViaUi(page, account);
+
+  await page.locator('.mobile-dock button[data-view="profile"]').click();
+  await expect(page.locator('#profileLogout')).toBeVisible();
+  await page.locator('#profileLogout').click();
+
+  await expect(page.locator('#signin')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('sylora_token'))).toBeNull();
+});

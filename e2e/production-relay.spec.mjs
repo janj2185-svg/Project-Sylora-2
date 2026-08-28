@@ -1,12 +1,29 @@
 import { test, expect } from '@playwright/test';
 
-const token = String(process.env.SYLORA_E2E_AUTH_TOKEN || '').trim();
-test.skip(!token, 'SYLORA_E2E_AUTH_TOKEN is required for the read-only production relay probe.');
+const configuredToken = String(process.env.SYLORA_E2E_AUTH_TOKEN || '').trim();
+const identity = String(process.env.SYLORA_E2E_AUTH_IDENTITY || '').trim();
+const password = String(process.env.SYLORA_E2E_AUTH_PASSWORD || '');
+test.skip(!configuredToken && !(identity && password), 'A token or a dedicated probe identity/password is required for the production relay probe.');
 
 test('authenticated browser media flows through TURN with relay-only ICE', async ({ page, request }) => {
-  const response = await request.get('/api/live/rtc-config', {
-    headers: { authorization: `Bearer ${token}` }
-  });
+  let token = configuredToken;
+  let createdSession = false;
+  if (!token) {
+    const loginResponse = await request.post('/api/auth/login', {
+      data: { identity, password }
+    });
+    const loginBody = await loginResponse.json().catch(() => ({}));
+    const safeLoginError = loginBody?.code || loginBody?.error || 'UNKNOWN';
+    expect(loginResponse.status(), `Probe login failed: ${safeLoginError}`).toBe(200);
+    token = String(loginBody?.token || '').trim();
+    expect(Boolean(token), 'Probe login succeeded without a session token.').toBe(true);
+    createdSession = true;
+  }
+
+  try {
+    const response = await request.get('/api/live/rtc-config', {
+      headers: { authorization: `Bearer ${token}` }
+    });
   const rtc = await response.json();
   expect(response.status(), JSON.stringify(rtc)).toBe(200);
   expect(rtc.turnConfigured).toBe(true);
@@ -104,5 +121,13 @@ test('authenticated browser media flows through TURN with relay-only ICE', async
   expect(result.rightState).toBe('connected');
   expect(result.receivedVideoTracks).toBe(1);
   expect(result.leftCandidate.local).toBe('relay');
-  expect(result.rightCandidate.local).toBe('relay');
+    expect(result.rightCandidate.local).toBe('relay');
+  } finally {
+    if (createdSession && token) {
+      await request.post('/api/auth/logout', {
+        headers: { authorization: `Bearer ${token}` },
+        data: {}
+      }).catch(() => null);
+    }
+  }
 });
