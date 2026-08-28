@@ -7,6 +7,11 @@ on:
         description: Full 40-character production commit SHA
         required: true
         type: string
+      probe_identity:
+        description: Dedicated production probe username or email
+        required: true
+        default: kvasnytsiaivan
+        type: string
 
 permissions:
   contents: read
@@ -52,10 +57,12 @@ jobs:
         env:
           SYLORA_E2E_BASE_URL: https://getsylora.com
           SYLORA_E2E_AUTH_TOKEN: ${{ secrets.SYLORA_E2E_AUTH_TOKEN }}
+          SYLORA_E2E_AUTH_IDENTITY: ${{ inputs.probe_identity }}
+          SYLORA_E2E_AUTH_PASSWORD: ${{ secrets.SYLORA_E2E_AUTH_PASSWORD }}
           SYLORA_E2E_SECURE_PROBE: '1'
         run: |
-          if [ -z "$SYLORA_E2E_AUTH_TOKEN" ]; then
-            echo "::error::Configure the SYLORA_E2E_AUTH_TOKEN Actions secret with a revocable production session."
+          if [ -z "$SYLORA_E2E_AUTH_TOKEN" ] && [ -z "$SYLORA_E2E_AUTH_PASSWORD" ]; then
+            echo "::error::Configure SYLORA_E2E_AUTH_TOKEN or the dedicated SYLORA_E2E_AUTH_PASSWORD Actions secret."
             exit 1
           fi
           npm run test:e2e:production:relay
