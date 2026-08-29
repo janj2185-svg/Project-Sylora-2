@@ -17,6 +17,8 @@ import { mountTikTokOwnerPilot } from './tiktok-live-pilot.js';
 import { isRtcConfigCacheFresh } from './rtc-config-cache.js';
 import { bindMediaFilePicker, mediaFilePickerMarkup } from './media-file-picker.js';
 import { authErrorKey, authText, validateAuthInput } from './auth-ui.js?v=20260827-auth1';
+import { uiCopy } from './locales/ui-runtime.js?v=20260829-live3';
+const u=key=>uiCopy(getLocale(),key);
 const state={token:localStorage.getItem('sylora_token')||'',me:null,wallet:null,view:'feed',intent:null,inboxTab:'messages',liveTab:'discover',incomingCall:null};const app=document.querySelector('#app');let giftEngine={play:async()=>{}};const recentRealtimeIds=new Map();let userEventsAbort=null,liveEventSource=null,liveViewerSource=null,liveViewerPeer=null,liveViewerId=null,liveViewerLiveId=null,liveViewerHostPeerId=null,liveViewerAnnounceTimer=null,liveRtcConfigCache=null,liveRtcConfigCachedAt=0,studioSourceStream=null,studioRecorder=null,studioChunks=[],studioRaf=0,studioLastBlob=null,studioLiveSource=null,studioBroadcastStream=null,studioHostPeerId=null,studioOverlayImage=null,syloraRecognition=null,syloraVoiceEnabled=localStorage.getItem('sylora_voice')==='1',syloraRealtimePeer=null,syloraRealtimeStream=null,syloraRealtimeChannel=null,syloraRealtimeAudio=null,syloraAudioContext=null,syloraAudioRaf=0,syloraCallTimer=null,syloraCallStartedAt=0,conferenceSessionCleanup=null,activeCallCleanup=null,tiktokPilotCleanup=null;const studioPeers=new Map();
 let studioObsClient=null,studioCompanionClient=null,studioObsCredentials=null,studioObsReconnectTimer=null,studioObsReconnectAttempt=0,studioAudioContext=null,studioAudioGain=null,studioAudioAnalyser=null,studioAudioDestination=null,studioAudioMeterRaf=0,studioDistributionPoll=0;
 const STUDIO_PROFILES={vertical720:{label:'Vertical · 720×1280 · 30 FPS',width:720,height:1280,fps:30},vertical1080:{label:'Vertical · 1080×1920 · 30 FPS',width:1080,height:1920,fps:30},vertical1080p60:{label:'Vertical · 1080×1920 · 60 FPS',width:1080,height:1920,fps:60},horizontal1080:{label:'Landscape · 1920×1080 · 30 FPS',width:1920,height:1080,fps:30}};
@@ -527,17 +529,17 @@ async function renderLive(){
   const hasTikTokDestination=Boolean(distribution?.destinations?.some(item=>item.enabled&&item.provider==='tiktok'));
   const routerReady=Boolean(distribution?.configuration?.configured);
   const setupSteps=[
-    ['01','Увійти в SYLORA',state.me?'Готово':'Потрібен вхід',Boolean(state.me),'login'],
-    ['02','Додати TikTok stream key',hasTikTokDestination?'Напрямок увімкнено':'Ще не додано',hasTikTokDestination,'studio'],
-    ['03','Підготувати OBS / RTMPS',routerReady?'Media router готовий':'Сервер ще не налаштований',routerReady,'studio'],
-    ['04','Підключити TikTok чат','Через TikFinity Companion',false,'create'],
-    ['05','Перевірити сигнал','Після запуску OBS',false,'studio'],
-    ['06','Почати реальний ефір',hasTikTokDestination&&routerReady?'Можна готувати':'Заблоковано до готовності',hasTikTokDestination&&routerReady,'studio']
+    ['01',u('liveSignIn'),state.me?u('ready'):u('loginRequired'),Boolean(state.me),'login'],
+    ['02',u('addTikTokKey'),hasTikTokDestination?u('destinationEnabled'):u('notAdded'),hasTikTokDestination,'studio'],
+    ['03',u('prepareObs'),routerReady?u('routerReady'):u('serverNotConfigured'),routerReady,'studio'],
+    ['04',u('connectTikTokChat'),u('viaCompanion'),false,'create'],
+    ['05',u('checkSignal'),u('afterObsStart'),false,'studio'],
+    ['06',u('startRealLive'),hasTikTokDestination&&routerReady?u('canPrepare'):u('blockedUntilReady'),hasTikTokDestination&&routerReady,'studio']
   ];
   const roomCards=visibleRooms.map(r=>{const opponent=rooms.find(x=>x.id!==r.id&&x.host?.id!==r.host?.id);return`<article class="live-room-card"><div><span class="status-pill status-pill--live">● LIVE · ${r.viewerCount||0}</span><h3>${esc(r.title)}</h3><p>@${esc(r.host.username)}</p></div><div class="live-tools"><button class="depth-button watch-live" data-id="${r.id}">Дивитися</button><button class="ghost open-live" data-id="${r.id}">Чат</button>${state.me?`<button class="ghost ask-live" data-id="${r.id}">Sylora</button>`:''}${state.me?.id===r.host?.id&&opponent?`<button class="ghost resonance-start" data-id="${r.id}" data-opponent="${opponent.id}">✦ Battle</button>`:''}${state.me?.id===r.host?.id?`<button class="ghost live-copilot" data-id="${r.id}">Copilot</button>`:''}</div></article>`}).join('');
   app.innerHTML=`<section class="route-hero-row compact live-route-head"><div><span class="status-pill status-pill--live">${referenceIcon('live')} SYLORA LIVE</span><h1>Живий простір.</h1><p>Камера, мікрофон, гості, battles, gifts, captions, модерація та відновлення з’єднання — один керований lifecycle.</p></div><div class="live-tabs filter-row"><button type="button" data-live-tab="discover" class="${tab==='discover'?'active':''}">${esc(t('discoverLive'))}</button><button type="button" data-live-tab="following" class="${tab==='following'?'active':''}">${esc(t('following'))}</button><button type="button" data-live-tab="create" class="${tab==='create'?'active':''}">${esc(t('createLive'))}</button><button type="button" data-live-tab="battles" class="${tab==='battles'?'active':''}">${esc(t('battles'))}</button><button type="button" data-live-tab="studio">Studio</button></div></section>
   <div class="live-layout">
-    <section class="live-lifecycle live-readiness"><div class="lifecycle-heading"><div><small>ЗАПУСК У TIKTOK · ПО КРОКАХ</small><b>${state.me?'Нічого не запускається без твоєї явної дії':'Увійди, щоб налаштувати реальний ефір'}</b></div><span class="status-pill ${hasTikTokDestination&&routerReady?'status-pill--success':''}">${hasTikTokDestination&&routerReady?'ГОТОВО ДО ПЕРЕВІРКИ':'НАЛАШТУВАННЯ НЕ ЗАВЕРШЕНО'}</span></div><div class="live-setup-grid">${setupSteps.map(([number,label,status,ready,target])=>`<button type="button" class="live-setup-step ${ready?'is-ready':'is-pending'}" data-live-setup="${target}"><span>${number}</span><span><b>${label}</b><small>${status}</small></span><i>${ready?'✓':'→'}</i></button>`).join('')}</div></section>
+    <section class="live-lifecycle live-readiness"><div class="lifecycle-heading"><div><small>${esc(u('liveStepTitle'))}</small><b>${esc(state.me?u('liveNoAutoStart'):u('signInToConfigure'))}</b></div><span class="status-pill ${hasTikTokDestination&&routerReady?'status-pill--success':''}">${esc(hasTikTokDestination&&routerReady?u('readyToCheck'):u('liveNotFinished'))}</span></div><div class="live-setup-grid">${setupSteps.map(([number,label,status,ready,target])=>`<button type="button" class="live-setup-step ${ready?'is-ready':'is-pending'}" data-live-setup="${target}"><span>${number}</span><span><b>${esc(label)}</b><small>${esc(status)}</small></span><i>${ready?'✓':'→'}</i></button>`).join('')}</div></section>
     <section class="live-stage-card"><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><div class="live-stage-shade"></div><div class="live-stage-top"><div><span class="status-pill status-pill--live">${referenceIcon('live')} LIVE</span><span class="status-pill">${Number(stageRoom?.viewerCount||0).toLocaleString()} дивляться</span></div><button type="button" data-live-tab="studio" aria-label="Відкрити Studio">${referenceIcon('studio')}</button></div><div class="live-stage-copy"><small>SYLORA ORIGINAL · LIVING HORIZON</small><h1>${esc(stageRoom?.title||t('startLive'))}</h1><p>${stageRoom?'Живий простір реагує на аудиторію, чат і голос ведучого.':'Створи перший LIVE — сцена, чат і Sylora вже підготовлені.'}</p><div class="host-line"><span class="avatar">${esc((stageRoom?.host?.username||state.me?.username||'S').slice(0,1).toUpperCase())}</span><span><b>${esc(stageRoom?.host?.username||state.me?.displayName||'SYLORA Creator')}</b><small>${stageRoom?'ведучий LIVE':'твоя майбутня сцена'}</small></span></div></div><div class="stage-controls">${stageRoom?`<button class="watch-live" data-id="${stageRoom.id}">${referenceIcon('play')} Дивитися</button><button class="open-live" data-id="${stageRoom.id}">${referenceIcon('mail')} Чат</button>${state.me?`<button class="ask-live" data-id="${stageRoom.id}">✦ Sylora</button>`:''}`:`<button data-live-empty-action="create">＋ Створити LIVE</button><button data-live-tab="studio">${referenceIcon('studio')} Studio</button>`}</div></section>
     <aside class="live-chat-panel"><div class="panel-tabs"><span>Живий чат</span></div><div class="chat-stream"><div class="chat-event">${referenceIcon('activity')}<span><b>${stageRoom?'Чат доступний':'Чат ще не підключено'}</b><small>${stageRoom?'Відкрий активний LIVE, щоб бачити повідомлення в реальному часі.':'Повідомлення з’являться тільки після запуску ефіру.'}</small></span></div><div class="sylora-chat"><span class="ai-mark">✦</span><p><b>Sylora</b><small>Відповідає лише за твоїми правилами. Автоматичний режим вимкнений за замовчуванням.</small></p></div>${stageRoom?`<button class="depth-button open-live live-chat-open" data-id="${stageRoom.id}">Відкрити чат →</button>`:''}</div>${state.me&&tab==='create'?'<div id="tiktokPilotMount"></div>':''}</aside>
     <div class="live-lower"><section class="glass-card live-director"><div class="card-top"><span>LIVE DIRECTOR</span><b>${(ent.battleModes||[]).length} modes</b></div>${state.me&&tab==='create'?`<div class="card fields live-creator-launchpad"><input id="liveTitle" maxlength="120" placeholder="Назва LIVE"><button id="goLive" class="depth-button">＋ ${esc(t('createLive'))}</button><button class="ghost" id="openStudioFromLive">Creator Studio</button><input id="eventTitle" maxlength="160" placeholder="Назва події"><input id="eventWhen" maxlength="80" placeholder="Коли починається"><button id="createEventBtn" class="ghost">＋ ${esc(t('createEvent'))}</button></div>`:(state.me?`<div class="director-grid"><button data-live-tab="create"><span>＋</span><span><b>Новий LIVE</b><small>камера або Studio</small></span></button><button data-live-tab="battles"><span>✦</span><span><b>Battles</b><small>co-host mode</small></span></button><button data-live-tab="studio"><span>▣</span><span><b>Studio</b><small>OBS · multistream</small></span></button></div>`:`<button id="liveLogin" class="depth-button">${esc(t('signin'))}</button>`)}</section><section class="glass-card live-room-browser"><div class="card-top"><span>${tab==='following'?esc(t('following')):tab==='battles'?esc(t('battles')):'LIVE ЗАРАЗ'}</span><b>${visibleRooms.length}</b></div><div class="live-room-grid">${roomCards||emptyCopy}</div></section></div>
@@ -612,27 +614,27 @@ function rememberDistributionSelection(){try{localStorage.setItem('sylora_distri
 function distributionErrorText(error){
   const code=String(error?.message||'LIVE_DISTRIBUTION_ERROR'),reasons=error?.data?.details?.reasons;
   const labels={
-    MEDIA_ROUTER_NOT_CONFIGURED:'Media router ще не підключено на сервері.',
-    MEDIA_ROUTER_CONTROL_CREDENTIALS_INVALID:'Перевір серверні credentials для Control API media router.',
-    MEDIA_ROUTER_UNAVAILABLE:'Media router зараз недоступний.',
-    STREAM_SECRET_STORAGE_NOT_CONFIGURED:'На сервері не налаштоване шифрування stream keys.',
-    STREAM_SECRET_KEY_INVALID:'Ключ шифрування stream keys має неправильний формат.',
-    PUBLIC_RTMP_INGEST_NOT_CONFIGURED:'Не налаштовано публічний OBS ingest URL.',
-    RTMPS_INGEST_REQUIRED_IN_PRODUCTION:'Production ingest мусить працювати через RTMPS.',
-    RTMPS_REQUIRED_IN_PRODUCTION:'Цей напрямок має використовувати RTMPS.',
-    STREAM_DESTINATION_REQUIRED:'Оберіть хоча б один напрямок.',
-    STREAM_DESTINATION_LIMIT:'За один ефір дозволено максимум 8 напрямків.',
-    STREAM_DESTINATION_NOT_FOUND:'Один із напрямків більше не існує.',
-    STREAM_DESTINATION_NOT_READY:'Один із напрямків вимкнений або не має ключа.',
-    STREAM_DESTINATION_SECRET_UNREADABLE:'Stream key напрямку не розшифровується — перевір стабільність master key.',
-    STREAM_DESTINATION_HOST_NOT_ALLOWED:'Цей RTMP host не дозволений політикою сервера.',
-    PRIVATE_STREAM_DESTINATION_FORBIDDEN:'Приватні та локальні RTMP-адреси заборонені.',
-    RTMP_SERVER_URL_INVALID:'Перевір RTMP server URL.',
-    RTMP_PROTOCOL_REQUIRED:'Потрібна адреса rtmp:// або rtmps://.',
-    STREAM_KEY_INVALID:'Stream key має неправильний формат.',
-    DISTRIBUTION_ALREADY_ACTIVE:'Для цього LIVE multistream уже активний.',
-    STREAM_DESTINATION_IN_ACTIVE_SESSION:'Спочатку зупини multistream — активний напрямок не можна змінювати.',
-    DISTRIBUTION_SESSION_NOT_ACTIVE:'Активного multistream немає.'
+    MEDIA_ROUTER_NOT_CONFIGURED:u('distributionRouterMissing'),
+    MEDIA_ROUTER_CONTROL_CREDENTIALS_INVALID:u('distributionRouterCredentials'),
+    MEDIA_ROUTER_UNAVAILABLE:u('distributionRouterUnavailable'),
+    STREAM_SECRET_STORAGE_NOT_CONFIGURED:u('distributionEncryptionMissing'),
+    STREAM_SECRET_KEY_INVALID:u('distributionEncryptionInvalid'),
+    PUBLIC_RTMP_INGEST_NOT_CONFIGURED:u('distributionIngestMissing'),
+    RTMPS_INGEST_REQUIRED_IN_PRODUCTION:u('distributionRtmpsRequired'),
+    RTMPS_REQUIRED_IN_PRODUCTION:u('distributionDestinationRtmps'),
+    STREAM_DESTINATION_REQUIRED:u('distributionSelectDestination'),
+    STREAM_DESTINATION_LIMIT:u('distributionMax'),
+    STREAM_DESTINATION_NOT_FOUND:u('distributionDestinationMissing'),
+    STREAM_DESTINATION_NOT_READY:u('distributionDestinationNotReady'),
+    STREAM_DESTINATION_SECRET_UNREADABLE:u('distributionSecretUnreadable'),
+    STREAM_DESTINATION_HOST_NOT_ALLOWED:u('distributionHostForbidden'),
+    PRIVATE_STREAM_DESTINATION_FORBIDDEN:u('distributionPrivateForbidden'),
+    RTMP_SERVER_URL_INVALID:u('distributionInvalidUrl'),
+    RTMP_PROTOCOL_REQUIRED:u('distributionProtocolRequired'),
+    STREAM_KEY_INVALID:u('distributionInvalidKey'),
+    DISTRIBUTION_ALREADY_ACTIVE:u('distributionActive'),
+    STREAM_DESTINATION_IN_ACTIVE_SESSION:u('distributionDestinationActive'),
+    DISTRIBUTION_SESSION_NOT_ACTIVE:u('distributionNotActive')
   };
   if(Array.isArray(reasons)&&reasons.length)return reasons.map(x=>labels[x]||x).join(' · ');
   return labels[code]||code;
