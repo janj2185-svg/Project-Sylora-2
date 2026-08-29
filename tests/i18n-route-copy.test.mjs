@@ -104,3 +104,13 @@ test('Wallet and Settings reference copy including accessibility labels is local
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Communities cards, creation, discovery and channel states are localized',()=>{
+  const bridge=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  for(const literal of ['Будуй коло своїх.','＋ Створити спільноту','НОВА СПІЛЬНОТА','ЖИВІ ФОРМАТИ','Увімкнути discovery','МОЇ ДОСЯГНЕННЯ','Додати канал','Написати в канал…']){
+    assert.ok(bridge.includes(`'${literal}'`),`missing Communities localization alias: ${literal}`);
+  }
+  for(const key of ['communityHero','createCommunity','newCommunity','livingFormats','enableDiscovery','myAchievements','addChannel','writeChannel']){
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
