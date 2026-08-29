@@ -1,4 +1,4 @@
-import {getLocale} from './i18n.js?v=20260829-reference2';
+import {getLocale} from './i18n.js?v=20260829-live5';
 import {uiCopy} from './locales/ui-runtime.js?v=20260826-ui5';
 
 const TOOL_KEYS={
