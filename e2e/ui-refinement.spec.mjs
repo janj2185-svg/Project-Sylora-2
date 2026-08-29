@@ -67,14 +67,14 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   for(const [locale,home] of Object.entries(localeExpectations)){
     await selectLocaleFromSettings(page,locale);
     await expect(page.locator('html')).toHaveAttribute('lang',locale);
-    await expect(page.locator('button[data-view="feed"]').first()).toHaveText(home);
+    await expect(page.locator('.sylora-sidebar button[data-view="feed"] > span:nth-child(2)')).toHaveText(home);
     expect(await page.evaluate(()=>localStorage.getItem('sylora_locale'))).toBe(locale);
   }
 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang','ru');
   await expect(page.locator('#localeSwitch')).toHaveValue('ru');
-  await expect(page.locator('button[data-view="feed"]').first()).toHaveText('Главная');
+  await expect(page.locator('.sylora-sidebar button[data-view="feed"] > span:nth-child(2)')).toHaveText('Главная');
   await expect(page.locator('#syloraDegraded')).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({path:`${qaDir}/home-1366-ru.png`,fullPage:true});
@@ -220,7 +220,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
   await page.screenshot({path:`${qaDir}/live-390-hub.png`,fullPage:true});
 
   for(const [view,ready,name] of [
-    ['messages','.messages-hero','inbox'],
+    ['messages','.inbox-layout','inbox'],
     ['profile','.profile-hero','profile'],
     ['more','.settings-scene','settings']
   ]){
@@ -241,7 +241,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
     ['ai','.sylora-ai-hero.ai-presence-container','ai'],
     ['live','.live-tabs','live'],
     ['studio','.studio-stage.program-canvas','studio'],
-    ['messages','.messages-hero','inbox'],
+    ['messages','.inbox-layout','inbox'],
     ['profile','.profile-hero','profile'],
     ['more','.settings-scene','settings']
   ]){

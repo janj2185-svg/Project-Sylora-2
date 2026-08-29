@@ -70,7 +70,7 @@ export const VISUAL_SURFACES = Object.freeze([
   Object.freeze({ id: 'live', path: '/live', view: 'live', ready: '.live-tabs' }),
   Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage.program-canvas' }),
   Object.freeze({ id: 'sylora', path: '/ai', view: 'ai', ready: '.sylora-ai-hero.ai-presence-container' }),
-  Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.messages-hero' }),
+  Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.inbox-layout' }),
   Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-hero' }),
   Object.freeze({ id: 'settings', path: '/more', view: 'more', ready: '.settings-scene' }),
   Object.freeze({
@@ -558,7 +558,7 @@ export async function waitForStableVisualState(page, surface) {
     await expect(page.locator('#feed .post.muted')).toBeVisible();
   }
   if (surface.id === 'live') {
-    await expect(page.locator('[data-live-tab="discover"]')).toHaveClass(/active/);
+    await expect(page.locator('.live-tabs [data-live-tab="discover"]')).toHaveClass(/active/);
     await expect(page.locator('.live-empty-state')).toBeVisible();
     await expect(page.locator('.live-room-card')).toHaveCount(0);
   }
