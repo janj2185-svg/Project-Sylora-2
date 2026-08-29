@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [app, html, system, living, tiktokPilot] = await Promise.all([
+const [app, html, system, living, tiktokPilot, bridge] = await Promise.all([
   readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../public/design-system-2026.css', import.meta.url), 'utf8'),
   readFile(new URL('../public/design-living-horizon.css', import.meta.url), 'utf8'),
-  readFile(new URL('../public/tiktok-live-pilot.js', import.meta.url), 'utf8')
+  readFile(new URL('../public/tiktok-live-pilot.js', import.meta.url), 'utf8'),
+  readFile(new URL('../public/living-horizon-bridge.css', import.meta.url), 'utf8')
 ]);
 
 test('global shell exposes one header gift action and one contextual wallet action', () => {
@@ -78,4 +79,12 @@ test('LIVE chat replies auto-detect language before voice playback', () => {
   assert.match(app, /autoDetect\?detectSyloraSpeechLocale\(text\):syloraSpeechLocale\(\)/);
   assert.match(tiktokPilot, /client\.tiktokEvents\(cursor\)/);
   assert.match(tiktokPilot, /event\.type==='chat'\|\|event\.type==='question'/);
+});
+
+test('sidebar has a real persisted desktop collapse and a visible mobile close control', () => {
+  assert.match(html, /id="sidebarToggle"/);
+  assert.match(app, /sylora_sidebar_collapsed/);
+  assert.match(app, /classList\.toggle\('sidebar-collapsed'/);
+  assert.match(bridge, /body\.sidebar-collapsed\{--sy-reference-sidebar:76px\}/);
+  assert.match(bridge, /\.sidebar-toggle:after\{content:"×"/);
 });

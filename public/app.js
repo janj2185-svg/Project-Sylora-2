@@ -148,6 +148,10 @@ function nav(view){if(conferenceSessionCleanup){conferenceSessionCleanup();confe
 document.addEventListener('click',event=>{const button=event.target.closest?.('.nav[data-view]');if(button)nav(button.dataset.view)});
 document.querySelector('#globalSearch')?.addEventListener('click',launchCommandPalette);
 document.querySelector('#mobileMenu')?.addEventListener('click',()=>document.body.classList.toggle('mobile-menu-open'));
+const sidebarToggle=document.querySelector('#sidebarToggle');
+function setSidebarCollapsed(collapsed){document.body.classList.toggle('sidebar-collapsed',collapsed);sidebarToggle?.setAttribute('aria-expanded',String(!collapsed));if(sidebarToggle){sidebarToggle.textContent=collapsed?'›':'‹';sidebarToggle.setAttribute('aria-label',collapsed?'Розгорнути бічну панель':'Згорнути бічну панель')}try{localStorage.setItem('sylora_sidebar_collapsed',collapsed?'1':'0')}catch{}}
+if(innerWidth>=1100)setSidebarCollapsed(localStorage.getItem('sylora_sidebar_collapsed')==='1');
+sidebarToggle?.addEventListener('click',()=>{if(innerWidth<768){document.body.classList.remove('mobile-menu-open');return}setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'))});
 document.addEventListener('click',event=>{if(document.body.classList.contains('mobile-menu-open')&&!event.target.closest('.left-rail')&&!event.target.closest('#mobileMenu'))document.body.classList.remove('mobile-menu-open')});
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();launchCommandPalette()}});
 document.querySelectorAll('[data-create-hub]').forEach(b=>b.addEventListener('click',launchCreateHub));
