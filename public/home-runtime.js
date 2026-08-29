@@ -1,4 +1,5 @@
 const KEY='sylora_home_engaged_v1';
+const HOME_HERO_SELECTOR='.home-screen .hero-copy,.living-horizon.home-compact';
 
 function isFeed(){return document.body?.dataset?.view==='feed'}
 function engaged(){try{return localStorage.getItem(KEY)==='1'}catch{return false}}
@@ -18,7 +19,7 @@ function boot(){
   bodyObserver.observe(document.body,{attributes:true,attributeFilter:['data-view']});
   window.addEventListener('scroll',()=>{if(window.scrollY>72)markEngaged()},{passive:true});
   document.addEventListener('click',event=>{
-    if(event.target?.closest?.('.living-horizon.home-compact'))markEngaged();
+    if(event.target?.closest?.(HOME_HERO_SELECTOR))markEngaged();
   });
 }
 

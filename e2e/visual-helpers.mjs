@@ -29,8 +29,11 @@ export const VISUAL_VIEWPORTS = Object.freeze([
 export const VISUAL_TOUCH_POINTS = 1;
 
 const CANONICAL_BRAND_URL = '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+const CANONICAL_LOCKUP_URL = '/assets/brand/sylora-canonical-lockup.png';
+const CANONICAL_SYMBOL_URL = '/assets/brand/sylora-canonical-symbol.png';
 const CANONICAL_BRAND_IMAGE_SELECTOR = [
-  `.brand img[src="${CANONICAL_BRAND_URL}"]`,
+  `.brand-lockup-full[src="${CANONICAL_LOCKUP_URL}"]`,
+  `.brand-lockup-symbol[src="${CANONICAL_SYMBOL_URL}"]`,
   `.shell-wallet img[src="${CANONICAL_BRAND_URL}"]`
 ].join(', ');
 const CANONICAL_BRAND_BACKGROUND_SELECTOR = '.sylora-presence-image';
@@ -63,9 +66,9 @@ const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
 });
 
 export const VISUAL_SURFACES = Object.freeze([
-  Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.living-horizon.home-compact' }),
+  Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.home-screen .hero-copy' }),
   Object.freeze({ id: 'live', path: '/live', view: 'live', ready: '.live-tabs' }),
-  Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage' }),
+  Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage.program-canvas' }),
   Object.freeze({ id: 'sylora', path: '/ai', view: 'ai', ready: '.sylora-ai-hero.ai-presence-container' }),
   Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.messages-hero' }),
   Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-hero' }),
@@ -76,7 +79,7 @@ export const VISUAL_SURFACES = Object.freeze([
   }),
   Object.freeze({
     id: 'live-create', path: '/live', view: 'live', ready: '#liveTitle',
-    open: async page => page.locator('[data-live-tab="create"]').click()
+    open: async page => page.locator('.live-tabs [data-live-tab="create"]').click()
   }),
   Object.freeze({
     id: 'clips-create', path: '/clips', view: 'clips', ready: '#clipUpload',
@@ -443,6 +446,18 @@ async function clearVisualAiState(page) {
 
 async function waitForStableVisualAssets(page) {
   await page.evaluate(async () => {
+    const canonicalDimensions = new Map([
+      ['/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png', [1100, 650]],
+      ['/assets/brand/sylora-canonical-lockup.png', [976, 569]],
+      ['/assets/brand/sylora-canonical-symbol.png', [310, 395]]
+    ]);
+    const assertCanonicalDimensions = (url, width, height, kind) => {
+      const dimensions = canonicalDimensions.get(new URL(url, location.href).pathname);
+      if (!dimensions) return;
+      if (width !== dimensions[0] || height !== dimensions[1]) {
+        throw new Error(`Canonical ${kind} dimensions drifted: ${width}x${height}`);
+      }
+    };
     if (document.fonts?.ready) await document.fonts.ready;
     const images = [...document.images].filter(image => image.currentSrc || image.src);
     await Promise.all(images.map(async image => {
@@ -454,10 +469,12 @@ async function waitForStableVisualAssets(page) {
       }
       if (typeof image.decode === 'function') await image.decode();
       if (!image.naturalWidth) throw new Error(`Image failed to decode: ${image.currentSrc || image.src}`);
-      if (
-        new URL(image.currentSrc || image.src, location.href).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
-        (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
-      ) throw new Error(`Canonical brand dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+      assertCanonicalDimensions(
+        image.currentSrc || image.src,
+        image.naturalWidth,
+        image.naturalHeight,
+        'brand'
+      );
     }));
     const backgroundUrls = new Set();
     const collect = style => {
@@ -475,10 +492,7 @@ async function waitForStableVisualAssets(page) {
       image.onload = async () => {
         try {
           await image.decode?.();
-          if (
-            new URL(url).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
-            (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
-          ) throw new Error(`Canonical background dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+          assertCanonicalDimensions(url, image.naturalWidth, image.naturalHeight, 'background');
           resolve();
         } catch (error) { reject(error); }
       };
@@ -520,18 +534,27 @@ export async function waitForStableVisualState(page, surface) {
   await expect(page.locator('.shell-wallet')).toHaveCount(1);
   await expect(page.locator('.rail-orbit')).toHaveCount(1);
   await expect(page.locator('#logout')).toHaveCount(1);
-  await expect(page.locator('.brand img')).toHaveAttribute(
+  await expect(page.locator('.brand-zone .brand-lockup-full')).toHaveAttribute(
     'src',
-    '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png'
+    CANONICAL_LOCKUP_URL
   );
-  await expect(page.locator('.brand img')).toHaveAttribute(
+  await expect(page.locator('.brand-zone .brand-lockup-full')).toHaveAttribute(
     'data-brand-sha256',
-    'dc50f228968b2cebe46a2030cb5b22789482f680caca58171f06b0f25db40f08'
+    '061430e7d2fceefb660d049838603cffc0f30433a704dd3eb239b9f59e57fa50'
+  );
+  await expect(page.locator('.mobile-brand .brand-lockup-symbol')).toHaveAttribute(
+    'src',
+    CANONICAL_SYMBOL_URL
+  );
+  await expect(page.locator('.mobile-brand .brand-lockup-symbol')).toHaveAttribute(
+    'data-brand-sha256',
+    '9975f9f178eee4cf747f258e68d268ef512b4786342aee45bf932e8a2f941df1'
   );
 
   if (surface.id === 'home') {
     await expect(page.locator('#composer')).toBeVisible();
-    await expect(page.locator('.eco-empty-state')).toBeVisible();
+    await expect(page.locator('.home-horizon-scene')).toBeVisible();
+    await expect(page.locator('[data-integration-view="studio"] .platform-pills i')).toHaveCount(4);
     await expect(page.locator('#feed .post.muted')).toBeVisible();
   }
   if (surface.id === 'live') {
@@ -566,7 +589,7 @@ export async function waitForStableVisualState(page, surface) {
   if (surface.id === 'settings') await expect(page.locator('.settings-grid .module')).toHaveCount(6);
   if (surface.id === 'create-hub-open') await expect(page.locator('.create-hub-item')).toHaveCount(9);
   if (surface.id === 'live-create') {
-    await expect(page.locator('[data-live-tab="create"]')).toHaveClass(/active/);
+    await expect(page.locator('.live-tabs [data-live-tab="create"]')).toHaveClass(/active/);
     await expect(page.locator('#goLive')).toBeVisible();
     await expect(page.locator('#createEventBtn')).toBeVisible();
   }
@@ -701,7 +724,7 @@ function assertNonOverlappingCanonicalTargets(targets) {
 async function assertCanonicalTargetsRestored(page, targets) {
   await assertVisualScrollOrigin(page);
   const restoredClips = [];
-  for (const { target, clip, role } of targets) {
+  for (const { target, clip, role, assetUrl } of targets) {
     const restoredClip = await canonicalElementClip(page, target);
     if (
       !restoredClip ||
@@ -718,7 +741,7 @@ async function assertCanonicalTargetsRestored(page, targets) {
         getComputedStyle(element).backgroundImage.includes(canonicalUrl), CANONICAL_BRAND_URL
       );
       if (!restoredBackground) throw new Error('Canonical presence background was not restored');
-    } else if (await target.getAttribute('src') !== CANONICAL_BRAND_URL) {
+    } else if (await target.getAttribute('src') !== assetUrl) {
       throw new Error(`Canonical ${role} image source drifted across paint restoration`);
     }
     restoredClips.push(restoredClip);
@@ -866,7 +889,8 @@ async function collectCanonicalPaintTargets(page) {
     const clip = await canonicalElementClip(page, target);
     if (!clip) continue;
     const role = await target.evaluate(element => element.closest('.brand') ? 'header' : 'wallet');
-    targets.push({ target, clip, role, hideProperty: 'visibility', minimumContrast: CANONICAL_IMAGE_MIN_CONTRAST });
+    const assetUrl = await target.getAttribute('src');
+    targets.push({ target, clip, role, assetUrl, hideProperty: 'visibility', minimumContrast: CANONICAL_IMAGE_MIN_CONTRAST });
     canonicalImagesChecked += 1;
   }
   if (canonicalImagesChecked === 0) {

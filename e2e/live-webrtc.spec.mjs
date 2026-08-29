@@ -39,7 +39,7 @@ test('host Studio canvas reaches an authenticated viewer through real WebRTC sig
 
     const title = `SYLORA E2E ${Date.now()}`;
     await host.locator('button[data-view="live"]').first().click();
-    await host.locator('[data-live-tab="create"]').click();
+    await host.locator('.live-tabs [data-live-tab="create"]').click();
     await host.locator('#liveTitle').fill(title);
     const createResponsePromise = host.waitForResponse(response =>
       response.url().endsWith('/api/live') && response.request().method() === 'POST'

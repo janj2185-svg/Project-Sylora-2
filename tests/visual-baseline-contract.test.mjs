@@ -253,7 +253,7 @@ function rawCaptureFixture(commit='a'.repeat(40),pngByViewport=new Map()){
       sha256:createHash('sha256').update(png).digest('hex'),
       bytes:png.length,
       paintStability:{
-        canonicalImagesChecked:touch?1:2,
+        canonicalImagesChecked:1,
         canonicalBackgroundsChecked:0,
         canonicalPixelContribution:true,
         canonicalContentContrast:true,
