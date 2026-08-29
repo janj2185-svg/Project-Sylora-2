@@ -209,3 +209,13 @@ body[data-view="more"] .settings-runtime-page{padding-top:20px!important}body[da
 @media (prefers-reduced-motion:reduce){
   .sylora-sidebar.left-rail{transition:none}
 }
+
+.live-readiness{background:linear-gradient(145deg,#fffdfae8,#f1ebe5d9)}
+.live-setup-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}
+.live-setup-step{display:grid;grid-template-columns:34px minmax(0,1fr) 18px;align-items:center;gap:9px;min-height:58px;padding:9px 10px;border:1px solid #40372f16;border-radius:14px;text-align:left;background:linear-gradient(145deg,#fff,#f4efea);box-shadow:0 8px 18px #332a2310,inset 0 1px #fff;cursor:pointer}
+.live-setup-step>span:first-child{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#eae3dc;color:#7d746e;font-size:8px;font-weight:850;letter-spacing:.08em}
+.live-setup-step b{display:block;font-size:9px}.live-setup-step small{display:block;margin-top:2px;color:#8b8581;font-size:7px;line-height:1.35}.live-setup-step>i{font-style:normal;color:#9a8f87}
+.live-setup-step.is-ready{border-color:#78a98d42;background:linear-gradient(145deg,#fbfffc,#edf7f0)}
+.live-setup-step.is-ready>span:first-child{background:#dceee3;color:#34704c}.live-setup-step.is-ready>i{color:#34704c}
+.live-chat-panel .panel-tabs>span{display:block;padding:11px 13px;color:#262225;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:767px){.live-setup-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory}.live-setup-step{flex:0 0 230px;scroll-snap-align:start}}
