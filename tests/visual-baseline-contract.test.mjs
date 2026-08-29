@@ -1028,6 +1028,43 @@ test('touch visual contexts use one pre-navigation CDP owner and trusted post-na
   assert.equal(await verifyVisualTouchInput(null,{hasTouch:false},null),null);
   await assert.rejects(verifyVisualTouchInput(touchPage,{hasTouch:true},null),/active CDP session/);
 
+  let retryEvaluations=0;
+  const retryCalls=[];
+  const retryPage={
+    async evaluate(){
+      retryEvaluations+=1;
+      if(retryEvaluations===2)return {
+        pointerType:'',pointerTrusted:false,touchStart:false,touchTrusted:false
+      };
+      if(retryEvaluations===5)return {
+        pointerType:'touch',pointerTrusted:true,touchStart:true,touchTrusted:true
+      };
+    }
+  };
+  const retrySession={async send(method,params){retryCalls.push({method,params});}};
+  assert.deepEqual(await verifyVisualTouchInput(retryPage,{hasTouch:true},retrySession),evidence);
+  assert.equal(retryEvaluations,6);
+  assert.deepEqual(retryCalls.map(call=>call.method),[
+    'Input.dispatchTouchEvent','Input.dispatchTouchEvent',
+    ...expectedReset.map(call=>call.method),
+    'Input.dispatchTouchEvent','Input.dispatchTouchEvent'
+  ]);
+
+  let absentEvaluations=0;
+  const absentPage={
+    async evaluate(){
+      absentEvaluations+=1;
+      if(absentEvaluations===2||absentEvaluations===5)return {
+        pointerType:'',pointerTrusted:false,touchStart:false,touchTrusted:false
+      };
+    }
+  };
+  await assert.rejects(
+    verifyVisualTouchInput(absentPage,{hasTouch:true},retrySession),
+    /Chromium CDP touch probe failed:.*attempts/
+  );
+  assert.equal(absentEvaluations,6);
+
   let endFailureEvaluations=0;
   const endFailureCalls=[];
   const endFailurePage={async evaluate(){endFailureEvaluations+=1;}};

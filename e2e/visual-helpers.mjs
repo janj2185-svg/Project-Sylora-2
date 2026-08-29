@@ -195,83 +195,90 @@ export async function verifyVisualTouchInput(page, viewport, session) {
   if (!viewport.hasTouch) return null;
   if (!session) throw new Error('Touch visual probe requires an active CDP session');
 
-  await page.evaluate(() => {
-    const probe = document.createElement('button');
-    probe.type = 'button';
-    probe.id = 'sylora-visual-touch-probe';
-    probe.setAttribute('aria-label', 'Visual touch probe');
-    Object.assign(probe.style, {
-      position: 'fixed',
-      inset: '0 auto auto 0',
-      width: '24px',
-      height: '24px',
-      zIndex: '2147483647',
-      opacity: '0.01',
-      touchAction: 'none'
-    });
-    globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = {
-      pointerType: '',
-      pointerTrusted: false,
-      touchStart: false,
-      touchTrusted: false
-    };
-    probe.addEventListener('pointerdown', event => {
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerTrusted = event.isTrusted;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-    probe.addEventListener('touchstart', event => {
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchTrusted = event.isTrusted;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true, passive: false });
-    probe.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-    document.body.append(probe);
-  });
-
-  let result;
-  let touchActive = false;
-  try {
-    await session.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ id: 1, x: 12, y: 12, radiusX: 1, radiusY: 1, force: 1 }]
-    });
-    touchActive = true;
-    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    touchActive = false;
-    result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
-  } finally {
-    if (touchActive) {
-      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }).catch(() => {});
-    }
+  const attempts = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) await applyVisualTouchEmulation(session, viewport);
     await page.evaluate(() => {
-      document.querySelector('#sylora-visual-touch-probe')?.remove();
-      delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
-      if (document.querySelector('#sylora-visual-touch-probe')) {
-        throw new Error('Visual touch probe cleanup failed');
-      }
+      const probe = document.createElement('button');
+      probe.type = 'button';
+      probe.id = 'sylora-visual-touch-probe';
+      probe.setAttribute('aria-label', 'Visual touch probe');
+      Object.assign(probe.style, {
+        position: 'fixed',
+        inset: '0 auto auto 0',
+        width: '24px',
+        height: '24px',
+        zIndex: '2147483647',
+        opacity: '0.01',
+        touchAction: 'none'
+      });
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = {
+        pointerType: '',
+        pointerTrusted: false,
+        touchStart: false,
+        touchTrusted: false
+      };
+      probe.addEventListener('pointerdown', event => {
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerTrusted = event.isTrusted;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+      probe.addEventListener('touchstart', event => {
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchTrusted = event.isTrusted;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true, passive: false });
+      probe.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+      document.body.append(probe);
     });
-  }
 
-  if (
-    !result?.touchStart ||
-    !result.touchTrusted ||
-    result.pointerType !== 'touch' ||
-    !result.pointerTrusted
-  ) {
-    throw new Error(`Chromium CDP touch probe failed: ${JSON.stringify(result)}`);
+    let result;
+    let touchActive = false;
+    try {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ id: 1, x: 12, y: 12, radiusX: 1, radiusY: 1, force: 1 }]
+      });
+      touchActive = true;
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      touchActive = false;
+      result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
+    } finally {
+      if (touchActive) {
+        await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }).catch(() => {});
+      }
+      await page.evaluate(() => {
+        document.querySelector('#sylora-visual-touch-probe')?.remove();
+        delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
+        if (document.querySelector('#sylora-visual-touch-probe')) {
+          throw new Error('Visual touch probe cleanup failed');
+        }
+      });
+    }
+
+    attempts.push(result);
+    if (
+      result?.touchStart && result.touchTrusted &&
+      result.pointerType === 'touch' && result.pointerTrusted
+    ) {
+      return {
+        touchStart: true,
+        touchTrusted: true,
+        pointerType: 'touch',
+        pointerTrusted: true
+      };
+    }
+    const noEventDelivered =
+      result?.pointerType === '' && result.pointerTrusted === false &&
+      result.touchStart === false && result.touchTrusted === false;
+    if (!noEventDelivered) break;
   }
-  return {
-    touchStart: true,
-    touchTrusted: true,
-    pointerType: 'touch',
-    pointerTrusted: true
-  };
+  throw new Error(`Chromium CDP touch probe failed: ${JSON.stringify({ attempts })}`);
 }
 
 async function browserAuthRequest(page, path, payload, token = '') {
