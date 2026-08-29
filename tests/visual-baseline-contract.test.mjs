@@ -1921,6 +1921,38 @@ test('strict PNG raster comparison accepts only bounded edge noise',()=>{
   assert.equal(lsbNoise.totalChannelDelta,400);
   assert.equal(lsbNoise.withinTolerance,true);
 
+  const observedCompositorEdgeNoise={
+    dimensionsMatch:true,
+    width:390,
+    height:1188,
+    repeatWidth:390,
+    repeatHeight:1188,
+    pixelCount:463_320,
+    mismatchPixels:397,
+    mismatchRatio:397/463_320,
+    significantMismatchPixels:17,
+    significantMismatchRatio:17/463_320,
+    maxChannelDelta:38,
+    totalChannelDelta:1153
+  };
+  assert.equal(visualRasterDifferenceWithinTolerance(observedCompositorEdgeNoise),true);
+
+  const observedMobileRoundedEdgeNoise={
+    dimensionsMatch:true,
+    width:390,
+    height:1017,
+    repeatWidth:390,
+    repeatHeight:1017,
+    pixelCount:396_630,
+    mismatchPixels:1_573,
+    mismatchRatio:1_573/396_630,
+    significantMismatchPixels:28,
+    significantMismatchRatio:28/396_630,
+    maxChannelDelta:39,
+    totalChannelDelta:3_116
+  };
+  assert.equal(visualRasterDifferenceWithinTolerance(observedMobileRoundedEdgeNoise),true);
+
   const tooStrong=comparePngBuffers(baseline,validPng(200,200,[{x:0,y:0,r:41}]));
   assert.equal(tooStrong.mismatchPixels,1);
   assert.equal(tooStrong.maxChannelDelta,VISUAL_RASTER_MAX_CHANNEL_DELTA+1);

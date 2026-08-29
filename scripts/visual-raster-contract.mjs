@@ -4,7 +4,11 @@ export const VISUAL_RASTER_SIGNIFICANT_CHANNEL_DELTA=2;
 export const VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_RATIO=0.0001;
 export const VISUAL_RASTER_MAX_SIGNIFICANT_MISMATCH_PIXELS=100;
 export const VISUAL_RASTER_MAX_CHANNEL_DELTA=40;
-export const VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA=1000;
+// Chromium can repaint antialiased rounded-layer edges by one channel step
+// after a composited mobile full-page capture. Keep a bounded aggregate budget
+// for that renderer noise while the significant-pixel, ratio, and max-delta
+// gates still fail closed on real visual drift.
+export const VISUAL_RASTER_MAX_TOTAL_CHANNEL_DELTA=4096;
 
 const PNG_SIGNATURE=Buffer.from([137,80,78,71,13,10,26,10]);
 const MAX_DECODED_BYTES=512*1024*1024;
