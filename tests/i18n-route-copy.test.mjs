@@ -125,3 +125,15 @@ test('Learning catalog, tools, course details and action states are localized',(
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Business metrics, workspaces, assistant and action states are localized',()=>{
+  const appSource=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  const source=appSource.split('async function renderBusinessReference(){')[1].split('function mountSyloraPressInteractions(){')[0];
+  for(const literal of ['<h1>Робота в одному ритмі.</h1>','>＋ Draft invoice</button>','<small>ОРГАНІЗАЦІЇ</small>','Фактур ще немає.','>Додати клієнта</button>',"toast('Draft invoice створено')","toast('CRM запис створено')",'placeholder="Meeting title"']){
+    assert.ok(!source.includes(literal),`hard-coded Business copy remains: ${literal}`);
+  }
+  for(const key of ['businessRhythm','businessSafetyCopy','draftInvoice','organizationsUpper','invoicesRealData','quickActions','countryProfile','organizationName','businessAiCopy','invoiceDraftCreated','meetingTitle','summaryDecisions','teamAdded','businessSectionDashboard']){
+    assert.ok(source.includes(`u('${key}')`)||source.includes(`'${key}'`),`Business route is not using ${key}`);
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
