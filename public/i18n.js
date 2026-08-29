@@ -7,7 +7,7 @@
 export const DEFAULT_UI_LOCALE='uk';
 export const SUPPORTED_UI_LOCALES=Object.freeze(['uk','en','pl','de','ru']);
 export const FUTURE_UI_LOCALES=Object.freeze(['es','fr','it','pt']);
-export const PRIORITY_VOICE_LOCALES=Object.freeze(['uk','en','pl','de','ru']);
+export const PRIORITY_VOICE_LOCALES=Object.freeze(['uk','en','pl','de','ru','es','fr','it','pt']);
 
 const supported=new Set(SUPPORTED_UI_LOCALES);
 

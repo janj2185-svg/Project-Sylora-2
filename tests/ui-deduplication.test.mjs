@@ -59,9 +59,16 @@ test('LIVE setup reports real TikTok readiness instead of decorative integration
   assert.doesNotMatch(app, /<div class="platform-pills"><i>TikTok<\/i><i>YouTube<\/i><i>OBS<\/i><i>TikFinity<\/i><\/div>/);
 });
 
-test('TikTok copilot uses the selected Sylora voice and all five locale codes', () => {
+test('TikTok copilot uses the selected Sylora voice and core locale codes', () => {
   assert.match(app, /de:'de-DE',ru:'ru-RU'/);
   assert.match(app, /speak:speakSylora/);
   assert.match(tiktokPilot, /speak=\(\)=>false/);
   assert.doesNotMatch(tiktokPilot, /new SpeechSynthesisUtterance|function speakLocal/);
+});
+
+test('Sylora voice language can extend beyond the five fully localized UI languages', () => {
+  assert.match(app, /es:'es-ES',fr:'fr-FR',it:'it-IT',pt:'pt-PT'/);
+  assert.match(app, /id='aiVoiceLocale'/);
+  assert.match(app, /sylora_voice_locale/);
+  assert.match(app, /\^\(uk\|pl\|en\|de\|ru\|es\|fr\|it\|pt\)/);
 });
