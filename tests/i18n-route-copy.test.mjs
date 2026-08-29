@@ -114,3 +114,14 @@ test('Communities cards, creation, discovery and channel states are localized',(
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Learning catalog, tools, course details and action states are localized',()=>{
+  const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  for(const literal of ['<h1>Рости у власному ритмі.</h1>','<h1>Навчання, що оживає.</h1>','Опублікованих курсів поки немає.','<h3>Навчальний простір</h3>',"toast('Колоду створено')","toast('План готовий')",'>Позначити виконаним</button>']){
+    assert.ok(!source.includes(literal),`hard-coded Learning copy remains: ${literal}`);
+  }
+  for(const key of ['growAtYourPace','learningComesAlive','continueLearning','studyWorkspace','research','courseTitle','deckCreated','planReady','enrollFree','markCompleted','tryAnotherExplanation']){
+    assert.ok(source.includes(`u('${key}')`),`Learning route is not using ${key}`);
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
