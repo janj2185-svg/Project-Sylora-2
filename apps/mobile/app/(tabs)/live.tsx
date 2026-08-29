@@ -27,7 +27,7 @@ export default function LiveTab() {
   };
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <LivingBackground live />
+      <LivingBackground variant="live" />
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl tintColor="#FFF" refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
         <View style={styles.heading}><Text style={styles.eyebrow}>SYLORA LIVE</Text><Text style={styles.title}>Ефір, який відчуває аудиторію.</Text><Text style={styles.copy}>Камера, мікрофон, Sylora co-host і мультистрім — у єдиному життєвому циклі.</Text></View>
         <IntegrationStrip />

@@ -16,6 +16,7 @@ export default function RootLayout() {
           <Stack.Screen name="video/[id]" />
           <Stack.Screen name="profile/[username]" />
           <Stack.Screen name="chat/[id]" />
+          <Stack.Screen name="integrations" />
           <Stack.Screen name="gift/[id]" options={{ presentation: 'modal' }} />
         </Stack>
       </AuthProvider>

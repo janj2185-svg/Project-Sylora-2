@@ -6,12 +6,13 @@ Native Expo/React Native client for the existing SYLORA API. It is a development
 
 - Stable `Home / LIVE / Sylora / Inbox / Profile` navigation and `sylora://` deep-link scheme.
 - Full canonical 1100×650 logo rendered with `contain`; the symbol, wordmark and slogan are never cropped or redrawn.
-- Living Horizon PEARL/FROST/CRYSTAL/METAL surfaces, slow reduced-motion-aware background animation, haptics and live control states. VOID is limited to LIVE.
+- Living Horizon PEARL/FROST/CRYSTAL/METAL surfaces, reduced-motion-aware semantic scenes for Home, LIVE, Sylora, Inbox, Profile and Studio, haptics and live control states. VOID is limited to LIVE.
 - Login/registration with session tokens stored in iOS Keychain / Android Keystore through SecureStore.
 - Instant clip player with the next item prepared by a second `expo-video` player.
 - Native host camera/microphone preview, WebRTC signaling, viewer playback, mute, camera switch and LIVE termination.
 - OpenAI Realtime voice through `/api/ai/realtime`; the standard API key stays on the server.
 - Owner-scoped TikFinity relay journal with manual, mention/gift, or all-event Sylora response modes.
+- Interactive creator connection hub for TikTok owner relay, YouTube stream keys, local OBS control, TikFinity pairing and RTMP(S) distribution. It reads actual router/destination readiness and never displays an unconfigured provider as connected.
 - Five visible interface locales in Profile: Ukrainian, English, Polish, German and Russian. The preference is stored securely and synchronized to `/api/me`.
 
 ## Run locally

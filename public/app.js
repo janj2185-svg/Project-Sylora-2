@@ -1,4 +1,4 @@
-import { t, setLocale, getLocale, humanError } from './i18n.js?v=20260818-i18n3';
+import { t, setLocale, getLocale, humanError } from './i18n.js?v=20260829-shell1';
 import { openCreateHub } from './create-hub.js';
 import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';
@@ -153,11 +153,21 @@ async function renderFeed(){
   const hasEcosystemContent=liveCards.length+peopleCards.length+communityCards.length+courseCards.length+bizCards.length>0;
   const onboardingHtml=hasEcosystemContent?'':`<section class="eco-empty-state"><span class="eyebrow">SYLORA</span><h2>${esc(t('homeEmptyTitle'))}</h2><p>${esc(t('homeEmptyText'))}</p><button type="button" class="primary" data-eco-nav="explore">${esc(t('explore'))}</button></section>`;
   const unread=Number(hub?.inboxPreview?.unreadNotifications)||0,conversationCount=(hub?.inboxPreview?.conversations||[]).length,continueItem=hub?.continue?.[0]||null,focusView=continueItem?.view||'ai';
+  const integrationCards=[
+    ['tiktok','TT','TikTok',t('ownerRelay'),'live'],
+    ['youtube','YT','YouTube',t('streamKeyRequired'),'studio'],
+    ['obs','OBS','OBS',t('localControl'),'studio'],
+    ['tikfinity','TF','TikFinity',t('localBridge'),'live'],
+    ['rtmp','RT','RTMP(S)',t('routerSetup'),'studio']
+  ].map(([platform,mark,name,status,view])=>`<button type="button" class="integration-bridge" data-platform="${platform}" data-integration-view="${view}" aria-label="${esc(`${name} · ${status}`)}"><span class="integration-mark">${mark}</span><span class="integration-copy"><b>${name}</b><small>${esc(status)}</small></span><span class="integration-arrow">→</span></button>`).join('');
+  const integrationHtml=`<section class="card home-connectivity"><div class="home-connectivity-head"><div><span class="eyebrow">CREATOR NETWORK</span><h2>${esc(t('streamConnections'))}</h2></div><p>${esc(t('integrationTruth'))}</p></div><div class="integration-grid">${integrationCards}</div></section>`;
   app.innerHTML=`<section class="living-horizon home-compact"><div class="horizon-copy"><span class="eyebrow">SYLORA · ${esc(t('home').toUpperCase())}</span><h1>${esc(homeTitle)}</h1><p>${esc(t('personalCenter'))}</p><div class="home-brief-meta"><span><small>LIVE</small><b>${rooms.length}</b></span><span><small>${esc(t('notifications'))}</small><b>${unread}</b></span><span><small>${esc(t('conversations'))}</small><b>${conversationCount}</b></span></div></div><aside class="home-focus-panel"><div><span class="eyebrow">${esc(t('dailyBrief'))}</span><h2>${esc(continueItem?.label||t('personalCenter'))}</h2><p>${continueItem?esc(continueItem.kind):'SYLORA AI · LIVE · Studio · Business'}</p></div><div class="home-focus-actions"><button type="button" class="primary" data-horizon-view="${esc(focusView)}">${esc(continueItem?t('continue'):'Sylora AI')} <span>→</span></button><button type="button" class="ghost" data-focus-create>${esc(t('createHub'))}</button></div></aside><div class="horizon-flow" aria-label="SYLORA navigation"><button data-horizon-view="live"><i>◉</i><span>LIVE</span></button><button data-horizon-view="clips"><i>▷</i><span>Clips</span></button><button data-horizon-view="studio"><i>✦</i><span>Studio</span></button><button class="horizon-create" data-horizon-create type="button"><i>+</i><span>${esc(t('createHub'))}</span></button><button data-horizon-view="messages"><i>◌</i><span>${esc(t('inbox'))}</span></button><button data-horizon-view="learning"><i>⌬</i><span>${esc(t('science'))}</span></button><button data-horizon-view="business"><i>▱</i><span>${esc(t('business'))}</span></button></div></section>
+  ${integrationHtml}
   <div class="ecosystem-feed">${continueHtml}${inboxHtml}${onboardingHtml}${strip(t('recommendedLive'),liveCards,'live')}${strip(t('people'),peopleCards,'explore')}<section class="eco-strip"><div class="eco-strip-head"><b>${esc(t('forYou'))}</b></div><div class="eco-carousel"><button type="button" class="eco-card" data-eco-nav="clips"><b>Clips</b><small>${esc(t('vertical'))}</small></button><button type="button" class="eco-card" data-eco-nav="videos"><b>${esc(t('videos'))}</b><small>${esc(t('longForm'))}</small></button></div></section>${strip(t('communities'),communityCards,'communities')}${strip(t('science'),courseCards,'learning')}${strip(t('business'),bizCards,'business')}</div>
   ${state.me?`<form id="composer" class="card composer"><textarea name="text" maxlength="4000" placeholder="${esc(t('composer'))} ${esc(state.me.displayName)}?"></textarea><button class="primary">${esc(t('publish'))}</button></form>`:`<div class="card auth"><b>${esc(t('joinTitle'))}</b><p class="muted">${esc(t('joinText'))}</p><button id="join" class="primary">${esc(t('join'))}</button></div>`}
   <div id="feed">${posts.map(postHtml).join('')||`<div class="card post muted">${esc(t('emptyFeed'))}</div>`}</div>`;
   document.querySelectorAll('[data-horizon-view]').forEach(x=>x.onclick=()=>nav(x.dataset.horizonView));
+  document.querySelectorAll('[data-integration-view]').forEach(x=>x.onclick=()=>nav(x.dataset.integrationView));
   document.querySelectorAll('[data-horizon-create],[data-focus-create]').forEach(button=>button.addEventListener('click',launchCreateHub));
   document.querySelectorAll('[data-eco-nav]').forEach(x=>x.onclick=()=>{const v=x.dataset.ecoNav;if(v==='live'&&x.dataset.liveId){state.intent=x.dataset.liveId;nav('live');return}if(v==='learning'&&x.dataset.course){state.intent=x.dataset.course;nav('learning');return}nav(v)});
   document.querySelector('#join')?.addEventListener('click',renderAuth);
@@ -615,13 +625,26 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
 
 function renderMore(){
   const groups=[
-    {title:'Особисте й безпека',copy:'Ідентичність, приватність і контроль даних.',items:[['identity','◈','SYLORA Identity','Навички, портфоліо та рівні приватності.'],['dashboard','▣','Personal Dashboard','Today · Tasks · Goals · Continuity.'],['security','⛨','Центр безпеки','Приватність, експорт даних і provenance.']]},
-    {title:'Системні інструменти',copy:'Унікальні робочі поверхні й інтеграції.',items:[['canvas','▭','Sylora Canvas','Документи, плани та дослідження.'],['agents','⬡','Agent Marketplace','AI-агенти з явними дозволами.'],['developer','⌁','Developer Platform','API-ключі, scopes і sandbox.']]},
-    ...(state.me?.role==='admin'?[{title:'Адміністрування',copy:'Службові інструменти платформи.',items:[['admin','⚙','Moderation','Reports та audit log.']]}]:[])
+    {title:t('personalSecurity'),copy:t('personalSecurityCopy'),items:[['identity','◈',t('identityTitle'),t('identityCopy')],['dashboard','▣',t('dashboardTitle'),t('dashboardCopy')],['security','⛨',t('securityCenter'),t('securityCenterCopy')]]},
+    {title:t('systemTools'),copy:t('systemToolsCopy'),items:[['canvas','▭',t('canvasTitle'),t('canvasCopy')],['agents','⬡',t('agentMarketplace'),t('agentMarketplaceCopy')],['developer','⌁',t('developerPlatform'),t('developerPlatformCopy')]]},
+    ...(state.me?.role==='admin'?[{title:t('administration'),copy:t('administrationCopy'),items:[['admin','⚙',t('moderation'),t('moderationCopy')]]}]:[])
   ];
+  const localeOptions=[['uk','Українська'],['en','English'],['pl','Polski'],['de','Deutsch'],['ru','Русский']]
+    .map(([value,label])=>`<option value="${value}">${label}</option>`).join('');
   const module=([view,icon,title,copy])=>`<button type="button" class="card module" data-go="${view}"><span class="icon">${icon}</span><span><h3>${esc(title)}</h3><p>${esc(copy)}</p></span><i>→</i></button>`;
-  app.innerHTML=`<section class="settings-scene settings-hero"><div class="settings-copy"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>Твій простір керування.</h1><p>Ідентичність, приватність, безпека та системні інструменти — без повторення основної навігації.</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><div class="settings-groups">${groups.map(group=>`<section class="settings-group"><div class="settings-group-head"><span class="eyebrow">CONTROL GROUP</span><h2>${esc(group.title)}</h2><p>${esc(group.copy)}</p></div><div class="settings-grid">${group.items.map(module).join('')}</div></section>`).join('')}</div>`;
+  app.innerHTML=`<section class="settings-scene settings-hero"><div class="settings-copy"><span class="eyebrow">SYLORA · PERSONAL SYSTEM</span><h1>${esc(t('settingsTitle'))}</h1><p>${esc(t('settingsIntro'))}</p></div><div class="settings-orbit" aria-hidden="true"><i>✦</i><span></span><span></span><span></span></div></section><section class="card settings-language"><div><span class="eyebrow">SYLORA · I18N</span><h2>${esc(t('interfaceLanguage'))}</h2><p>${esc(t('interfaceLanguageHint'))}</p></div><label class="settings-language-control"><select id="settingsLocaleSwitch" aria-label="${esc(t('interfaceLanguage'))}">${localeOptions}</select></label></section><div class="settings-groups">${groups.map(group=>`<section class="settings-group"><div class="settings-group-head"><span class="eyebrow">CONTROL GROUP</span><h2>${esc(group.title)}</h2><p>${esc(group.copy)}</p></div><div class="settings-grid">${group.items.map(module).join('')}</div></section>`).join('')}</div>`;
   document.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>nav(x.dataset.go));
+  const settingsLocale=document.querySelector('#settingsLocaleSwitch');
+  settingsLocale.value=getLocale();
+  settingsLocale.onchange=async event=>{
+    const locale=setLocale(event.target.value);
+    applyShellLanguage();
+    if(state.me){
+      try{const out=await api('/api/me',{method:'PATCH',body:JSON.stringify({locale})});state.me=out.user}
+      catch(error){toast(humanError(error.message))}
+    }
+    account();refreshRightRail();renderMore();
+  };
 }
 async function renderIdentity(){
   const [{identity},kg]=await Promise.all([api('/api/identity'),api('/api/kg').catch(()=>({nodes:[],edges:[]}))]);

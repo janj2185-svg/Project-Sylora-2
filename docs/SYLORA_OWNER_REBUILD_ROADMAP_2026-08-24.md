@@ -1,8 +1,10 @@
 # SYLORA owner rebuild roadmap — 2026-08-24
 
+**Revised by owner direction on 2026-08-29:** the persistent mobile map is now `Home / LIVE / Sylora / Inbox / Profile`. Earlier acceptance text that removed Sylora from the dock and substituted Create is superseded. Create remains contextual in Home/Studio; Sylora is available on demand and must not overlay Home.
+
 ## Owner decision
 
-The product must feel like one premium system, not stacked redesign patches. Home is ecosystem-first and contains no Sylora assistant presence. Sylora appears only in an explicit AI or LIVE co-host context and her visual presence can be hidden without disabling the product.
+The product must feel like one premium system, not stacked redesign patches. Home is ecosystem-first and contains no permanent Sylora assistant overlay. Sylora has one explicit mobile destination and appears contextually as a LIVE co-host; her visual presence can be hidden without disabling text or voice functions.
 
 ## Gaps found before implementation
 
@@ -16,12 +18,13 @@ The product must feel like one premium system, not stacked redesign patches. Hom
 
 ## Implemented without parallel duplicates
 
-- Removed Home/global Sylora entry points and replaced the mobile center item with Create.
+- Removed duplicated Home/global Sylora panels and kept one on-demand Sylora destination in the stable five-item mobile navigation; Create remains contextual in Home/Studio.
 - Kept one contextual AI workspace and added a persistent Hide/Show Sylora visual control.
 - Added one loopback Companion TikFinity bridge with pairing-token auth, origin allowlist, event normalization, deduplication, bounded queue and reconnect.
 - Added the authenticated `/api/ai/live-copilot/respond` boundary. External event content is untrusted, tools are disabled, output is short, and responses are never reported as sent to TikTok.
 - Added a LIVE-only owner panel with manual-first response mode, mentions/gifts/co-host modes, a seven-second cooldown, local voice and a development simulator.
 - Refactored Settings into three product groups and added route-specific premium accents, button light and restrained header motion.
+- Added an explicit five-language interface selector, a truthful TikTok/YouTube/OBS/TikFinity/RTMP(S) connection surface and route-semantic ambient motion with reduced-motion fallback.
 - Routed history/login/logout transitions through the same cleanup path.
 - Removed `scripts/patch-consolidation.mjs` and `scripts/patch-platform-intel.mjs` after their output had been superseded.
 
@@ -45,7 +48,7 @@ References: <https://developers.tiktok.com/doc/overview>, <https://tikfinity.zer
 
 ## Owner acceptance checklist
 
-- Home has no Sylora portrait, AI card, AI dock item or assistant recommendation.
+- Home has no permanent Sylora portrait, AI rail or assistant overlay; the stable dock contains exactly one on-demand Sylora destination.
 - AI visual Hide/Show survives reload and does not disable text/voice functions.
 - Pairing token is never written to localStorage and is cleared after connection.
 - The LIVE journal displays external text safely and shows its Local Bridge truth label.

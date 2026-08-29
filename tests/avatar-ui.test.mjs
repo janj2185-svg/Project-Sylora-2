@@ -2,15 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-test('assembled avatar mounts whole-character images and final CSS loads last', () => {
+test('assembled avatar mounts whole-character images before the shell convergence layer', () => {
   const html = fs.readFileSync('public/index.html', 'utf8');
   assert.match(html, /design-avatar-assembled\.css\?v=/);
+  assert.match(html, /design-living-horizon-v3\.css\?v=/);
   assert.ok(html.indexOf('design-ai-2026.css') < html.indexOf('design-avatar-assembled.css'));
+  assert.ok(html.indexOf('design-avatar-assembled.css') < html.indexOf('design-living-horizon-v3.css'));
   assert.doesNotMatch(html, /design-scenes-v[56]\.css/);
   assert.match(html, /data-view="more"/);
   const dock = html.split('mobile-dock')[1].split('</nav>')[0];
   assert.match(dock, /data-view="profile"/);
   assert.match(dock, /data-view="messages"/);
+  assert.match(dock, /data-view="ai"/);
   assert.match(dock, /data-i18n="inbox"/);
   assert.doesNotMatch(dock, /data-view="more"/);
   assert.doesNotMatch(dock, /data-view="gifts"/);

@@ -16,7 +16,7 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { locale, setLocale, t } = useI18n();
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}><LivingBackground /><ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.safe} edges={['top']}><LivingBackground variant="profile" /><ScrollView contentContainerStyle={styles.content}>
       <BrandLogo width={170} />
       <GlassCard style={styles.identity}><View style={styles.avatar}><Text>{user?.displayName?.[0] || 'S'}</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>{user?.displayName}</Text><Text style={styles.username}>@{user?.username}</Text></View><Text style={styles.pro}>PRO</Text></GlassCard>
       <GlassCard style={styles.section}><Text style={styles.eyebrow}>{t('settings').toUpperCase()}</Text><Text style={styles.title}>{t('language')}</Text><View style={styles.languages}>{locales.map(item => <Pressable key={item} onPress={() => { setLocale(item); api.request('/api/me', { method: 'PATCH', body: JSON.stringify({ locale: item }) }).catch(() => {}); }} style={[styles.language, item === locale && styles.languageActive]}><Text style={[styles.languageText, item === locale && styles.languageTextActive]}>{localeLabels[item]}</Text></Pressable>)}</View></GlassCard>

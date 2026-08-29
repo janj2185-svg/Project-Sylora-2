@@ -34,7 +34,7 @@ export default function SyloraScreen() {
   const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.28, 0.62] });
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <LivingBackground />
+      <LivingBackground variant="sylora" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.hero}>

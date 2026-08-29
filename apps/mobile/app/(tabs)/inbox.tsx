@@ -14,7 +14,7 @@ export default function InboxScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   useEffect(() => { api.request<{ conversations: Conversation[] }>('/api/conversations').then(data => setConversations(data.conversations)).catch(() => {}); }, []);
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}><LivingBackground /><ScrollView contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.safe} edges={['top']}><LivingBackground variant="inbox" /><ScrollView contentContainerStyle={styles.content}>
       <View style={styles.hero}><Text style={styles.eyebrow}>INTELLIGENT INBOX</Text><Text style={styles.title}>Важливе не губиться.</Text><Text style={styles.copy}>Повідомлення, LIVE-дзвінки й сповіщення зберігають один контекст.</Text></View>
       <SectionTitle eyebrow="MESSAGES" title="Розмови" />
       <GlassCard style={styles.list}>

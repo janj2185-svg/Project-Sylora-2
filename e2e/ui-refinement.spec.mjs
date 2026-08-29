@@ -38,8 +38,9 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   expect(labels).toEqual(['UA','EN','PL','DE','RU']);
 
   await expect(page.locator('.sylora-presence,.sylora-mini,.ai-rail')).toHaveCount(0);
-  await expect(page.locator('.mobile-dock [data-view="ai"]')).toHaveCount(0);
-  await expect(page.locator('.mobile-dock [data-create-hub]')).toHaveCount(1);
+  await expect(page.locator('.mobile-dock [data-view="ai"]')).toHaveCount(1);
+  await expect(page.locator('.mobile-dock [data-create-hub]')).toHaveCount(0);
+  await expect(page.locator('.home-connectivity .integration-bridge')).toHaveCount(5);
 
   for(const [locale,home] of Object.entries(localeExpectations)){
     await page.locator('#localeSwitch').selectOption(locale);
@@ -55,6 +56,19 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   await expect(page.locator('#syloraDegraded')).toBeHidden();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({path:`${qaDir}/home-1366-ru.png`,fullPage:true});
+});
+
+test('Settings exposes the same five persisted interface languages',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await waitBoot(page);
+  await page.goto('/more');
+  await expect(page.locator('body')).toHaveAttribute('data-view','more');
+  const selector=page.locator('#settingsLocaleSwitch');
+  await expect(selector).toBeVisible();
+  await expect(selector.locator('option')).toHaveCount(5);
+  await selector.selectOption('pl');
+  await expect(page.locator('html')).toHaveAttribute('lang','pl');
+  await expect(page.locator('.settings-language h2')).toHaveText('Język interfejsu');
 });
 
 test('all required responsive widths have no accidental horizontal overflow',async({page})=>{

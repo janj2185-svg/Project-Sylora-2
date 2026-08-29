@@ -30,7 +30,7 @@ export default function HomeScreen() {
   const refresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <LivingBackground />
+      <LivingBackground variant="home" />
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
         <View style={styles.header}><BrandLogo width={148} /><View style={styles.signal}><View style={styles.signalDot} /><Text>LIVE READY</Text></View></View>
         <GlassCard style={styles.hero}>

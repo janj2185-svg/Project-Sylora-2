@@ -14,6 +14,13 @@ const account=await readFile(new URL('../public/design-account-2026.css',import.
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
 const appJs=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const consolidation=await readFile(new URL('../public/design-consolidation.css',import.meta.url),'utf8');
+const shellV3=await readFile(new URL('../public/design-living-horizon-v3.css',import.meta.url),'utf8');
+const mobileTabs=await readFile(new URL('../apps/mobile/app/(tabs)/_layout.tsx',import.meta.url),'utf8');
+const mobileBackground=await readFile(new URL('../apps/mobile/src/components/LivingBackground.tsx',import.meta.url),'utf8');
+const mobileIntegrations=await readFile(new URL('../apps/mobile/app/integrations.tsx',import.meta.url),'utf8');
+const mobileLogo=await readFile(new URL('../apps/mobile/src/components/BrandLogo.tsx',import.meta.url),'utf8');
+const localizedRuntimeNames=['i18n-runtime','ui-localization-runtime','studio-mobile-runtime','live-runtime','ai-presence-runtime'];
+const localizedRuntimes=await Promise.all(localizedRuntimeNames.map(name=>readFile(new URL(`../public/${name}.js`,import.meta.url),'utf8')));
 
 test('canonical design system owns global tokens before route-specific composition files',()=>{
   const canonical=html.indexOf('/design-system-2026.css');
@@ -54,10 +61,12 @@ test('route visual identities remain distinct without another global override la
   for(const route of ['profile','messages','more'])assert.match(account,new RegExp(`body\\[data-view="${route}"\\]`));
 });
 
-test('Home and global navigation do not duplicate the contextual Sylora workspace',()=>{
-  assert.doesNotMatch(html,/sylora-mini|ai-rail|mobile-dock[^\n]*data-view="ai"/);
+test('Home stays unobstructed while mobile navigation exposes one on-demand Sylora destination',()=>{
+  assert.doesNotMatch(html,/sylora-mini|ai-rail/);
   assert.doesNotMatch(appJs,/class="sylora-presence"/);
-  assert.match(html,/class="mobile-create" data-create-hub/);
+  const dock=html.split('class="mobile-dock"')[1].split('</nav>')[0];
+  assert.equal((dock.match(/data-view="ai"/g)||[]).length,1);
+  assert.doesNotMatch(dock,/data-create-hub|mobile-create/);
   assert.match(appJs,/id="aiVisualToggle"/);
 });
 
@@ -89,7 +98,7 @@ test('media creation keeps translucent paint outside rounded gradient controls',
 });
 
 test('canonical and route layers retain responsive and reduced-motion contracts',()=>{
-  for(const css of [system,home,live,studio,ai,account]){
+  for(const css of [system,home,live,studio,ai,account,shellV3]){
     assert.match(css,/@media\(max-width:/);
     assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   }
@@ -102,6 +111,33 @@ test('canonical and route layers retain responsive and reduced-motion contracts'
   assert.match(system,/\.rail-orbit i em\{display:block;height:100%/);
   assert.match(system,/\.sylora-press-ripple\{[\s\S]*position:absolute!important;[\s\S]*pointer-events:none!important;/);
   assert.match(system,/:is\(button,\.primary,\.ghost,\.module,\.gift\)\{position:relative;isolation:isolate\}/);
+  assert.match(shellV3,/\.brand-lockup\{[\s\S]*?object-fit:contain!important;[\s\S]*?clip-path:none!important;/);
+  assert.match(shellV3,/\.route-atmosphere/);
+  assert.match(shellV3,/body\[data-view="live"\] \.route-atmosphere/);
+  assert.match(shellV3,/body\[data-view="ai"\] \.route-atmosphere/);
+});
+
+test('native shell keeps the same five destinations, master logo and semantic motion contract',()=>{
+  const screens=[...mobileTabs.matchAll(/<Tabs\.Screen name="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(screens,['home','live','sylora','inbox','profile']);
+  assert.match(mobileLogo,/SYLORA_CANONICAL_LOGO_MASTER\.png/);
+  assert.match(mobileLogo,/resizeMode="contain"/);
+  for(const variant of ['home','live','sylora','inbox','profile','studio'])assert.match(mobileBackground,new RegExp(`scene === '${variant}'`));
+  assert.match(mobileBackground,/AccessibilityInfo\.isReduceMotionEnabled/);
+});
+
+test('native creator connections are interactive and report actual distribution readiness',()=>{
+  for(const service of ['TikTok','YouTube','OBS','TikFinity','RTMP\\(S\\)'])assert.match(mobileIntegrations,new RegExp(service));
+  assert.match(mobileIntegrations,/\/api\/studio\/distribution/);
+  assert.match(mobileIntegrations,/configuration\?\.configured === true/);
+  assert.match(mobileIntegrations,/router\.replace\('\/\(tabs\)\/live'\)/);
+});
+
+test('immutable shell modules share one cache version and one localization instance',()=>{
+  const shellVersion=html.match(/design-living-horizon-v3\.css\?v=([^"']+)/)?.[1];
+  assert.ok(shellVersion);
+  for(const name of [...localizedRuntimeNames,'app'])assert.match(html,new RegExp(`${name}\\.js\\?v=${shellVersion}`));
+  for(const source of [appJs,...localizedRuntimes])assert.match(source,new RegExp(`i18n\\.js\\?v=${shellVersion}`));
 });
 
 test('Studio mobile runtime keeps one current body portal across in-place rerenders',()=>{
