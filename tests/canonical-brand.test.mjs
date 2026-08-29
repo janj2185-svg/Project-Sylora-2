@@ -7,8 +7,14 @@ import {fileURLToPath} from 'node:url';
 
 const EXPECTED_SHA256='dc50f228968b2cebe46a2030cb5b22789482f680caca58171f06b0f25db40f08';
 const CANONICAL_URL='/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+const LOCKUP_SHA256='061430e7d2fceefb660d049838603cffc0f30433a704dd3eb239b9f59e57fa50';
+const SYMBOL_SHA256='9975f9f178eee4cf747f258e68d268ef512b4786342aee45bf932e8a2f941df1';
+const LOCKUP_URL='/assets/brand/sylora-canonical-lockup.png';
+const SYMBOL_URL='/assets/brand/sylora-canonical-symbol.png';
 const PUBLIC_DIR=fileURLToPath(new URL('../public/',import.meta.url));
 const CANONICAL_FILE=path.join(PUBLIC_DIR,'assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png');
+const LOCKUP_FILE=path.join(PUBLIC_DIR,'assets/brand/sylora-canonical-lockup.png');
+const SYMBOL_FILE=path.join(PUBLIC_DIR,'assets/brand/sylora-canonical-symbol.png');
 const UI_SOURCE_EXTENSIONS=new Set(['.css','.html','.js','.mjs','.json','.webmanifest']);
 
 async function uiSourceFiles(directory){
@@ -27,6 +33,13 @@ test('canonical production logo bytes are immutable and retain master dimensions
   assert.equal(png.subarray(1,4).toString('ascii'),'PNG');
   assert.equal(png.readUInt32BE(16),1100,'canonical width changed');
   assert.equal(png.readUInt32BE(20),650,'canonical height changed');
+  for(const [file,sha,width,height] of [[LOCKUP_FILE,LOCKUP_SHA256,976,569],[SYMBOL_FILE,SYMBOL_SHA256,310,395]]){
+    const approved=await readFile(file);
+    assert.equal(createHash('sha256').update(approved).digest('hex'),sha);
+    assert.equal(approved.subarray(1,4).toString('ascii'),'PNG');
+    assert.equal(approved.readUInt32BE(16),width,'approved brand export width changed');
+    assert.equal(approved.readUInt32BE(20),height,'approved brand export height changed');
+  }
 });
 
 test('web shell, favicon, and wallet use the canonical master directly',async()=>{
@@ -35,12 +48,14 @@ test('web shell, favicon, and wallet use the canonical master directly',async()=
   const homeCss=await readFile(path.join(PUBLIC_DIR,'design-home-2026.css'),'utf8');
   const systemCss=await readFile(path.join(PUBLIC_DIR,'design-system-2026.css'),'utf8');
   const app=await readFile(path.join(PUBLIC_DIR,'app.js'),'utf8');
-  const brandTag=html.match(/<a class="brand"[\s\S]*?<\/a>/)?.[0]||'';
+  const brandTag=html.match(/<a class="[^"]*\bbrand\b[^"]*"[\s\S]*?<\/a>/)?.[0]||'';
 
-  assert.match(html,new RegExp(`<link rel="preload" as="image" href="${CANONICAL_URL.replaceAll('/','\\/')}" fetchpriority="high"`));
-  assert.match(html,new RegExp(`<link rel="icon" type="image/png" href="${CANONICAL_URL.replaceAll('/','\\/')}"`));
-  assert.ok(brandTag.includes(`src="${CANONICAL_URL}"`),'shell brand is not the canonical master');
-  assert.ok(brandTag.includes(`data-brand-sha256="${EXPECTED_SHA256}"`),'shell brand checksum marker is missing');
+  assert.match(html,new RegExp(`<link rel="preload" as="image" href="${LOCKUP_URL.replaceAll('/','\\/')}" fetchpriority="high"`));
+  assert.match(html,new RegExp(`<link rel="icon" type="image/png" href="${SYMBOL_URL.replaceAll('/','\\/')}"`));
+  assert.ok(brandTag.includes(`src="${LOCKUP_URL}"`),'shell brand is not the approved transparent lockup');
+  assert.ok(brandTag.includes(`data-brand-sha256="${LOCKUP_SHA256}"`),'shell lockup checksum marker is missing');
+  assert.ok(brandTag.includes(`src="${SYMBOL_URL}"`),'compact shell symbol is missing');
+  assert.ok(brandTag.includes(`data-brand-sha256="${SYMBOL_SHA256}"`),'shell symbol checksum marker is missing');
   assert.match(brandTag,/decoding="sync" loading="eager" fetchpriority="high"/);
   assert.doesNotMatch(brandTag,/<svg|\.svg\b/i,'shell brand must not use redrawn SVG geometry');
   const walletImages=[...app.matchAll(/<img src="\$\{CANONICAL_BRAND_ASSET\}"[^>]*>/g)].map(match=>match[0]);
@@ -66,12 +81,13 @@ test('web shell, favicon, and wallet use the canonical master directly',async()=
 
 test('web UI cannot reference an unverified logo-like asset',async()=>{
   const logoReference=/\/assets\/[A-Za-z0-9_./-]*(?:logo|brand|mark|app-icon)[A-Za-z0-9_./-]*/gi;
+  const approvedUrls=new Set([CANONICAL_URL,LOCKUP_URL,SYMBOL_URL]);
   const violations=[];
 
   for(const file of await uiSourceFiles(PUBLIC_DIR)){
     const source=await readFile(file,'utf8');
     for(const match of source.matchAll(logoReference)){
-      if(match[0]!==CANONICAL_URL){
+      if(!approvedUrls.has(match[0])){
         violations.push(`${path.relative(PUBLIC_DIR,file)}: ${match[0]}`);
       }
     }

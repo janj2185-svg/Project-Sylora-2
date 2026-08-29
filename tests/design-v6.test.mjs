@@ -15,6 +15,8 @@ const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8'
 const appJs=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
 const consolidation=await readFile(new URL('../public/design-consolidation.css',import.meta.url),'utf8');
 const shellV3=await readFile(new URL('../public/design-living-horizon-v3.css',import.meta.url),'utf8');
+const reference=await readFile(new URL('../public/living-horizon-reference.css',import.meta.url),'utf8');
+const referenceBridge=await readFile(new URL('../public/living-horizon-bridge.css',import.meta.url),'utf8');
 const mobileTabs=await readFile(new URL('../apps/mobile/app/(tabs)/_layout.tsx',import.meta.url),'utf8');
 const mobileBackground=await readFile(new URL('../apps/mobile/src/components/LivingBackground.tsx',import.meta.url),'utf8');
 const mobileIntegrations=await readFile(new URL('../apps/mobile/app/integrations.tsx',import.meta.url),'utf8');
@@ -64,25 +66,47 @@ test('route visual identities remain distinct without another global override la
 test('Home stays unobstructed while mobile navigation exposes one on-demand Sylora destination',()=>{
   assert.doesNotMatch(html,/sylora-mini|ai-rail/);
   assert.doesNotMatch(appJs,/class="sylora-presence"/);
-  const dock=html.split('class="mobile-dock"')[1].split('</nav>')[0];
+  const dock=html.match(/<nav class="[^"]*\bmobile-dock\b[^"]*"[\s\S]*?<\/nav>/)?.[0]||'';
+  assert.ok(dock,'mobile dock is missing');
   assert.equal((dock.match(/data-view="ai"/g)||[]).length,1);
   assert.doesNotMatch(dock,/data-create-hub|mobile-create/);
   assert.match(appJs,/id="aiVisualToggle"/);
 });
 
 test('flagship routes prioritize outcomes over repetitive card stacks',()=>{
-  assert.match(appJs,/class="home-focus-panel"/);
-  assert.match(appJs,/class="home-brief-meta"/);
+  for(const className of ['home-horizon-scene','quick-worlds','home-feature-grid','featured-live','pulse-card','context-stack'])assert.match(appJs,new RegExp(`class="[^"]*${className}`));
   assert.equal((appJs.match(/data-horizon-create/g)||[]).length,2,'one Home trigger plus its binding must remain deterministic');
-  assert.match(appJs,/data-focus-create/);
-  assert.match(home,/\.ecosystem-feed\{display:grid;grid-template-columns:repeat\(12,minmax\(0,1fr\)\)/);
-  assert.match(home,/\.home-focus-panel\{/);
-  assert.match(home,/\.horizon-copy\{[^}]*max-width:none;[^}]*width:auto/);
+  assert.match(appJs,/TikTok · YouTube · OBS · TikFinity/);
+  assert.match(reference,/\.screen-grid\{/);
+  assert.match(reference,/\.home-feature-grid\{/);
+  assert.match(reference,/\.pulse-card\{/);
+  assert.match(reference,/\.sylora-app\[data-screen=home\] \.world-button>span/);
+  assert.match(referenceBridge,/\.platform-pills\{/);
   assert.match(consolidation,/\.create-hub-grid\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
-  assert.match(appJs,/className='ai-workspace-grid'/);
-  assert.match(ai,/\.ai-workspace-grid\{[\s\S]*?grid-template-columns:minmax\(0,1\.48fr\) minmax\(292px,\.72fr\)/);
+  assert.match(appJs,/app\.classList\.add\('sylora-layout','sylora-runtime-layout'\)/);
+  assert.match(reference,/\.sylora-layout\{[\s\S]*?grid-template-columns:minmax\(320px,\.8fr\) minmax\(430px,1\.15fr\) 270px/);
+  assert.match(referenceBridge,/#app\.sylora-runtime-layout\{[\s\S]*?gap:16px/);
   assert.match(account,/body\[data-view="more"\] \.settings-scene\{/);
   assert.equal((appJs.match(/SYLORA · PERSONAL SYSTEM/g)||[]).length,1,'settings must render one canonical hero');
+});
+
+test('approved reference structure covers every primary destination with real runtime handlers',()=>{
+  for(const className of [
+    'discovery-grid','community-layout','learning-layout','business-layout','inbox-layout','profile-page','wallet-layout',
+    'live-layout','studio-reference-layout','sylora-runtime-layout','settings-layout'
+  ])assert.match(appJs,new RegExp(className),`missing reference structure ${className}`);
+  for(const handler of [
+    'renderExploreReference','renderCommunitiesReference','renderLearningReference','renderBusinessReference',
+    'renderMessagesReference','renderProfileReference','renderWalletReference'
+  ])assert.match(appJs,new RegExp(`function ${handler}\\(`),`missing ${handler}`);
+  for(const contract of [
+    '.discovery-grid{','.community-layout{','.learning-layout{','.business-layout,.wallet-layout{',
+    '.inbox-layout{','.profile-cover{','.wallet-balance{'
+  ])assert.ok(reference.includes(contract),`approved reference CSS missing ${contract}`);
+  assert.match(referenceBridge,/\.brand-zone \.brand-lockup-full\{[^}]*object-fit:contain!important;[^}]*clip-path:none!important/);
+  assert.match(referenceBridge,/@media \(max-width:767px\)\{[\s\S]*?\.brand-zone \.brand-lockup-full\{[^}]*max-height:118px!important;[^}]*object-fit:contain!important/);
+  assert.match(appJs,/TikTok · YouTube · OBS · TikFinity/);
+  assert.match(appJs,/Українська[\s\S]*English[\s\S]*Polski[\s\S]*Deutsch[\s\S]*Русский/);
 });
 
 test('Home activation remains stable through the complete touch click',()=>{
