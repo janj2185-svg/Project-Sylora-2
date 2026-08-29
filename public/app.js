@@ -1,4 +1,4 @@
-import { t, setLocale, getLocale, humanError } from './i18n.js?v=20260829-shell1';
+import { t, setLocale, getLocale, humanError } from './i18n.js?v=20260829-shell2';
 import { openCreateHub } from './create-hub.js';
 import { openCommandPalette } from './command-palette.js';
 import { SyloraMotionRig, handPoseForGesture } from './sylora-motion.js';

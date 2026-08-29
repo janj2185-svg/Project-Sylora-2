@@ -23,6 +23,14 @@ body>header{
   isolation:isolate;
 }
 
+/* Keep the animated horizon inside the viewport while the logo itself may
+   remain unclipped. The legacy -16% insets expanded document.scrollWidth,
+   which also made the fixed mobile dock resolve against an oversized page. */
+body>header::after{
+  left:0!important;
+  right:0!important;
+}
+
 .brand{
   width:132px!important;
   min-width:132px!important;

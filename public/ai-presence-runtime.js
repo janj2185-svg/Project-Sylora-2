@@ -1,4 +1,4 @@
-import {t} from './i18n.js?v=20260829-shell1';
+import {t} from './i18n.js?v=20260829-shell2';
 
 function sourceStatus(){
   const source=document.querySelector('#syloraDegraded');

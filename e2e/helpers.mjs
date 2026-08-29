@@ -187,5 +187,9 @@ export async function expectNoHorizontalOverflow(page) {
       offenders
     };
   });
+  expect(
+    Math.max(overflow.documentScrollWidth, overflow.bodyScrollWidth) - overflow.viewport,
+    JSON.stringify(overflow)
+  ).toBeLessThanOrEqual(1);
   expect(overflow.offenders, JSON.stringify(overflow)).toEqual([]);
 }

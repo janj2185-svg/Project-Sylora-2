@@ -112,6 +112,7 @@ test('canonical and route layers retain responsive and reduced-motion contracts'
   assert.match(system,/\.sylora-press-ripple\{[\s\S]*position:absolute!important;[\s\S]*pointer-events:none!important;/);
   assert.match(system,/:is\(button,\.primary,\.ghost,\.module,\.gift\)\{position:relative;isolation:isolate\}/);
   assert.match(shellV3,/\.brand-lockup\{[\s\S]*?object-fit:contain!important;[\s\S]*?clip-path:none!important;/);
+  assert.match(shellV3,/body>header::after\{\s*left:0!important;\s*right:0!important;\s*\}/);
   assert.match(shellV3,/\.route-atmosphere/);
   assert.match(shellV3,/body\[data-view="live"\] \.route-atmosphere/);
   assert.match(shellV3,/body\[data-view="ai"\] \.route-atmosphere/);

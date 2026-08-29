@@ -1,4 +1,4 @@
-import {SUPPORTED_UI_LOCALES,getLocale,setLocale,localeLabel,t} from './i18n.js?v=20260829-shell1';
+import {SUPPORTED_UI_LOCALES,getLocale,setLocale,localeLabel,t} from './i18n.js?v=20260829-shell2';
 
 const expected=SUPPORTED_UI_LOCALES.join(',');
 
