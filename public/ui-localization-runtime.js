@@ -24,6 +24,14 @@ for(const [source,key] of Object.entries({
 }))SOURCE_ALIASES.set(source,key);
 
 for(const [source,key] of Object.entries({
+  'Розділи налаштувань':'settingsSections','5 повних локалізацій':'fullLocalizations','голос, пам’ять, дозволи':'voiceMemoryPermissions','Безпека':'security','сесії та приватність':'sessionsPrivacy','Система':'system','повний інтерфейс':'fullInterface','SELECT':'select','ПЕРЕКЛАД ІНТЕРФЕЙСУ':'interfaceTranslation','Меню, системні кнопки, помилки й підказки':'translatedUiParts','Контент користувачів залишається мовою оригіналу; вибір синхронізується з профілем.':'userContentOriginal','Трансляції без хаосу.':'broadcastNoChaos','Слабка мережа, reconnect, OBS, TikFinity та зовнішні платформи видно в одному місці.':'broadcastOverview','Режим слабкої мережі':'weakNetworkMode','adaptive quality і автоматичне відновлення':'adaptiveRecovery','локальний SYLORA Companion, pairing у LIVE':'companionLocalPairing','захищені stream keys через RTMP(S) router':'protectedStreamKeys','додаються як окремі контрольовані напрямки':'controlledDestinations','Жива, але під контролем.':'aliveControlled','Natural Luna voice, емоційна українська інтонація, lip-sync, пам’ять і прозорі дозволи.':'syloraVoiceSummary','Природний голос':'naturalVoice','Не перекривати головний екран':'dontCoverHome','Sylora доступна за запитом, голосом і через mobile dock':'syloraOnRequest','Пам’ять і дозволи':'memoryPermissions','важливі дії завжди потребують підтвердження':'criticalConfirm','Відкрити Sylora':'openSylora','CONTROL GROUP':'controlGroup'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'ДОСТУПНИЙ БАЛАНС':'balanceUpper','Ваші LUMEN, подарунки й creator-заробіток в одному захищеному просторі.':'walletAuthedCopy','Увійдіть, щоб побачити баланс і надсилати живі подарунки.':'walletGuestCopy','Увійти в гаманець':'signInWallet','БАЛАНС':'balanceLabel','ПОДАРУНКИ':'giftsUpper','живих ефектів':'livingEffects','тестова економіка':'testEconomy','НАДІСЛАТИ ПОДАРУНОК':'sendGiftUpper','Створіть живий момент.':'createLivingMoment','Колекція подарунків готується.':'giftCollectionPreparing','РУХ LUMEN':'lumenMovement','Останні транзакції':'recentTransactions','Транзакцій поки немає.':'noTransactionsYet','Кінематографічні подарунки':'cinematicGifts','Світло, звук і рух запускаються лише у справжньому LIVE.':'giftsOnlyRealLive','Відкрити LIVE':'openLive','Захищений гаманець':'protectedWallet','Баланс і журнал підтверджуються сервером.':'walletServerVerified','Спочатку оберіть отримувача':'chooseRecipientFirst'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
   'Оновити простір':'updateSpace','Ваш живий простір у SYLORA.':'livingSpaceFallback','Редагувати профіль':'editProfile','Меню профілю':'profileMenuLabel','ПІДПИСНИКІВ':'audienceUpper','ПУБЛІКАЦІЙ':'postsUpper','ЗАРОБЛЕНО':'earnedUpper','ORBIT РІВЕНЬ':'orbitLevel','Мій простір':'mySpace','Мої Clips і відео':'myClipsVideos','Створити нове':'createNew','Вийти в ефір':'goLive','ПЕРСОНАЛЬНИЙ ПРОСТІР':'personalSpace','Мова інтерфейсу':'interfaceLanguage','до ORBIT':'untilOrbit','Останні події':'latestEvents','Останні рухи':'latestMovements','Транзакцій немає.':'noTransactions','Профіль оновлено':'profileUpdated','Обкладинка профілю буде доступна після вибору медіа':'coverMediaRequired'
 }))SOURCE_ALIASES.set(source,key);
 
@@ -100,14 +108,23 @@ function translateTextNode(node){
 }
 
 function translateAttributes(root){
-  const nodes=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
-  for(const el of nodes){
+  const fields=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
+  for(const el of fields){
     const current=String(el.getAttribute('placeholder')||'').trim();
     const key=el.dataset.syloraPlaceholder||PLACEHOLDER_ALIASES.get(current);
     if(!key)continue;
     el.dataset.syloraPlaceholder=key;
     const next=uiCopy(getLocale(),key);
     if(next&&next!==current)el.setAttribute('placeholder',next);
+  }
+  const labelled=root.matches?.('[aria-label]')?[root]:[...(root.querySelectorAll?.('[aria-label]')||[])];
+  for(const el of labelled){
+    const current=String(el.getAttribute('aria-label')||'').trim();
+    const key=el.dataset.syloraAria||SOURCE_ALIASES.get(current);
+    if(!key)continue;
+    el.dataset.syloraAria=key;
+    const next=uiCopy(getLocale(),key);
+    if(next&&next!==current)el.setAttribute('aria-label',next);
   }
 }
 

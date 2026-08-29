@@ -93,3 +93,14 @@ test('Profile reference statistics, editor, activity and action states are local
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Wallet and Settings reference copy including accessibility labels is localized',()=>{
+  const bridge=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  for(const literal of ['ДОСТУПНИЙ БАЛАНС','НАДІСЛАТИ ПОДАРУНОК','Останні транзакції','Захищений гаманець','Розділи налаштувань','ПЕРЕКЛАД ІНТЕРФЕЙСУ','Трансляції без хаосу.','Жива, але під контролем.']){
+    assert.ok(bridge.includes(`'${literal}'`),`missing Wallet/Settings localization alias: ${literal}`);
+  }
+  assert.match(bridge,/querySelectorAll\?\.\('\[aria-label\]'\)/,'aria-label localization is not wired');
+  for(const key of ['balanceUpper','sendGiftUpper','recentTransactions','protectedWallet','settingsSections','interfaceTranslation','broadcastNoChaos','aliveControlled']){
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
