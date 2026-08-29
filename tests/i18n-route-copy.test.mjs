@@ -53,3 +53,13 @@ test('LIVE director and dynamic action copy use the centralized locale namespace
     assert.ok(source.includes(`u('${key}')`),`LIVE route is not using ${key}`);
   }
 });
+
+test('Studio primary and reference layouts use centralized copy in all five locales',()=>{
+  const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  for(const literal of ['<h1>Твоя сцена.</h1>','Output profile для canvas','Прибрати image','Назва scene','Зупинити broadcast','<b>Поточна сцена</b>','<button class="active" type="button">Controls</button>']){
+    assert.ok(!source.includes(literal),`hard-coded Studio copy remains: ${literal}`);
+  }
+  for(const key of ['studioHeroTitle','studioHeroCopy','cameraMic','audioMixer','sceneName','stopBroadcast','studioSecurityNote','currentScene','controls','companionPairingFlow']){
+    assert.ok(source.includes(`u('${key}')`),`Studio route is not using ${key}`);
+  }
+});
