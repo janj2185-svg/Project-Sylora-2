@@ -19,6 +19,10 @@ const SOURCE_ALIASES=new Map(Object.entries({
   'Close':'close','Закрити':'close'
 }));
 
+for(const [source,key] of Object.entries({
+  'Навчайся й досліджуй разом.':'scienceTitle','Керуй роботою без хаосу.':'businessTitle','← Назад':'conferenceBack','ПІДКЛЮЧЕННЯ':'conferenceConnecting','учасн.':'conferenceParticipants','Камера':'conferenceCamera','Мікрофон':'conferenceMic','Вийти':'conferenceLeave','Запитати Sylora…':'conferenceAsk','тільки за запитом':'conferenceOnRequest','очікуємо':'conferenceWaiting','В ЕФІРІ':'conferenceLive','Власник кімнати ще не увімкнув Sylora':'conferenceOwnerOff','Потрібен доступ до камери й мікрофона':'conferencePermission','Потрібен доступ до мікрофона':'conferenceMicPermission','Не вдалося підключити конференцію':'conferenceConnectionError','ЗАПУСК У TIKTOK · ПО КРОКАХ':'liveStepTitle','НАЛАШТУВАННЯ НЕ ЗАВЕРШЕНО':'liveNotFinished','Нічого не запускається без твоєї явної дії':'liveNoAutoStart','Відкрити Studio':'studioOpen'
+}))SOURCE_ALIASES.set(source,key);
+
 const PLACEHOLDER_ALIASES=new Map(Object.entries({
   'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description'
 }));
