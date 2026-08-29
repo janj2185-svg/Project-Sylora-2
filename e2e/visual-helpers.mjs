@@ -27,6 +27,7 @@ export const VISUAL_VIEWPORTS = Object.freeze([
 ]);
 
 export const VISUAL_TOUCH_POINTS = 1;
+export const VISUAL_BACKGROUND_URL_PATTERN_SOURCE = String.raw`url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)`;
 
 const CANONICAL_BRAND_URL = '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
 const CANONICAL_LOCKUP_URL = '/assets/brand/sylora-canonical-lockup.png';
@@ -445,7 +446,7 @@ async function clearVisualAiState(page) {
 }
 
 async function waitForStableVisualAssets(page) {
-  await page.evaluate(async () => {
+  await page.evaluate(async backgroundUrlPatternSource => {
     const canonicalDimensions = new Map([
       ['/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png', [1100, 650]],
       ['/assets/brand/sylora-canonical-lockup.png', [976, 569]],
@@ -478,8 +479,11 @@ async function waitForStableVisualAssets(page) {
     }));
     const backgroundUrls = new Set();
     const collect = style => {
-      for (const match of String(style?.backgroundImage || '').matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
-        backgroundUrls.add(new URL(match[1], location.href).href);
+      const value = String(style?.backgroundImage || '');
+      for (const match of value.matchAll(new RegExp(backgroundUrlPatternSource, 'g'))) {
+        const rawUrl = String(match[1] ?? match[2] ?? match[3] ?? '').trim();
+        if (!rawUrl || rawUrl.startsWith('#') || /^%23/i.test(rawUrl)) continue;
+        backgroundUrls.add(new URL(rawUrl, location.href).href);
       }
     };
     for (const element of document.querySelectorAll('body, body *')) {
@@ -501,7 +505,7 @@ async function waitForStableVisualAssets(page) {
     })));
     scrollTo(0, 0);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
+  }, VISUAL_BACKGROUND_URL_PATTERN_SOURCE);
 }
 
 export async function waitForVisualQuiescence(page) {

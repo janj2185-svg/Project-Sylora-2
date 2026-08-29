@@ -11,6 +11,7 @@ import {deflateSync} from 'node:zlib';
 import {verifyPassword} from '../src/auth.mjs';
 import visualPlaywrightConfigObject from '../playwright.visual.config.mjs';
 import {
+  VISUAL_BACKGROUND_URL_PATTERN_SOURCE,
   VISUAL_TOUCH_POINTS,
   applyVisualTouchEmulation,
   captureStableVisualScreenshot,
@@ -900,6 +901,16 @@ test('pinned headless-shell selection is proven from sanitized runtime evidence'
   ]){
     assert.throws(()=>assertVisualProjectConfiguration({...validUse,launchOptions:{args}}),/must be exactly/);
   }
+});
+
+test('visual background asset parsing keeps quoted data-SVG fragments atomic',()=>{
+  const dataUrl="data:image/svg+xml,%3Csvg%3E%3Cfilter id='n'/%3E%3Crect filter='url(%23n)'/%3E%3C/svg%3E";
+  const value=`url("${dataUrl}"), url("/assets/brand/sylora-canonical-symbol.png")`;
+  const urls=[...value.matchAll(new RegExp(VISUAL_BACKGROUND_URL_PATTERN_SOURCE,'g'))]
+    .map(match=>match[1]??match[2]??match[3]);
+  assert.deepEqual(urls,[dataUrl,'/assets/brand/sylora-canonical-symbol.png']);
+  assert.equal(urls.includes('%23n'),false);
+  assert.match(visualHelpersSource,/rawUrl\.startsWith\('#'\) \|\| \/\^%23\/i\.test\(rawUrl\)/);
 });
 
 test('touch visual contexts use one pre-navigation CDP owner and trusted post-navigation input evidence',async()=>{
