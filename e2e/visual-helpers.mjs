@@ -27,10 +27,14 @@ export const VISUAL_VIEWPORTS = Object.freeze([
 ]);
 
 export const VISUAL_TOUCH_POINTS = 1;
+export const VISUAL_BACKGROUND_URL_PATTERN_SOURCE = String.raw`url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*))\s*\)`;
 
 const CANONICAL_BRAND_URL = '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png';
+const CANONICAL_LOCKUP_URL = '/assets/brand/sylora-canonical-lockup.png';
+const CANONICAL_SYMBOL_URL = '/assets/brand/sylora-canonical-symbol.png';
 const CANONICAL_BRAND_IMAGE_SELECTOR = [
-  `.brand img[src="${CANONICAL_BRAND_URL}"]`,
+  `.brand-lockup-full[src="${CANONICAL_LOCKUP_URL}"]`,
+  `.brand-lockup-symbol[src="${CANONICAL_SYMBOL_URL}"]`,
   `.shell-wallet img[src="${CANONICAL_BRAND_URL}"]`
 ].join(', ');
 const CANONICAL_BRAND_BACKGROUND_SELECTOR = '.sylora-presence-image';
@@ -63,12 +67,12 @@ const VISUAL_SCREENSHOT_OPTIONS = Object.freeze({
 });
 
 export const VISUAL_SURFACES = Object.freeze([
-  Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.living-horizon.home-compact' }),
+  Object.freeze({ id: 'home', path: '/', view: 'feed', ready: '.home-screen .hero-copy' }),
   Object.freeze({ id: 'live', path: '/live', view: 'live', ready: '.live-tabs' }),
-  Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage' }),
+  Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage.program-canvas' }),
   Object.freeze({ id: 'sylora', path: '/ai', view: 'ai', ready: '.sylora-ai-hero.ai-presence-container' }),
-  Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.messages-hero' }),
-  Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-hero' }),
+  Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.inbox-layout' }),
+  Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-page' }),
   Object.freeze({ id: 'settings', path: '/more', view: 'more', ready: '.settings-scene' }),
   Object.freeze({
     id: 'create-hub-open', path: '/', view: 'feed', ready: '#syloraCreateHub',
@@ -76,7 +80,7 @@ export const VISUAL_SURFACES = Object.freeze([
   }),
   Object.freeze({
     id: 'live-create', path: '/live', view: 'live', ready: '#liveTitle',
-    open: async page => page.locator('[data-live-tab="create"]').click()
+    open: async page => page.locator('.live-tabs [data-live-tab="create"]').click()
   }),
   Object.freeze({
     id: 'clips-create', path: '/clips', view: 'clips', ready: '#clipUpload',
@@ -191,83 +195,90 @@ export async function verifyVisualTouchInput(page, viewport, session) {
   if (!viewport.hasTouch) return null;
   if (!session) throw new Error('Touch visual probe requires an active CDP session');
 
-  await page.evaluate(() => {
-    const probe = document.createElement('button');
-    probe.type = 'button';
-    probe.id = 'sylora-visual-touch-probe';
-    probe.setAttribute('aria-label', 'Visual touch probe');
-    Object.assign(probe.style, {
-      position: 'fixed',
-      inset: '0 auto auto 0',
-      width: '24px',
-      height: '24px',
-      zIndex: '2147483647',
-      opacity: '0.01',
-      touchAction: 'none'
-    });
-    globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = {
-      pointerType: '',
-      pointerTrusted: false,
-      touchStart: false,
-      touchTrusted: false
-    };
-    probe.addEventListener('pointerdown', event => {
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerTrusted = event.isTrusted;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-    probe.addEventListener('touchstart', event => {
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
-      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchTrusted = event.isTrusted;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true, passive: false });
-    probe.addEventListener('click', event => {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }, { capture: true });
-    document.body.append(probe);
-  });
-
-  let result;
-  let touchActive = false;
-  try {
-    await session.send('Input.dispatchTouchEvent', {
-      type: 'touchStart',
-      touchPoints: [{ id: 1, x: 12, y: 12, radiusX: 1, radiusY: 1, force: 1 }]
-    });
-    touchActive = true;
-    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    touchActive = false;
-    result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
-  } finally {
-    if (touchActive) {
-      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }).catch(() => {});
-    }
+  const attempts = [];
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) await applyVisualTouchEmulation(session, viewport);
     await page.evaluate(() => {
-      document.querySelector('#sylora-visual-touch-probe')?.remove();
-      delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
-      if (document.querySelector('#sylora-visual-touch-probe')) {
-        throw new Error('Visual touch probe cleanup failed');
-      }
+      const probe = document.createElement('button');
+      probe.type = 'button';
+      probe.id = 'sylora-visual-touch-probe';
+      probe.setAttribute('aria-label', 'Visual touch probe');
+      Object.assign(probe.style, {
+        position: 'fixed',
+        inset: '0 auto auto 0',
+        width: '24px',
+        height: '24px',
+        zIndex: '2147483647',
+        opacity: '0.01',
+        touchAction: 'none'
+      });
+      globalThis.__SYLORA_VISUAL_TOUCH_PROBE__ = {
+        pointerType: '',
+        pointerTrusted: false,
+        touchStart: false,
+        touchTrusted: false
+      };
+      probe.addEventListener('pointerdown', event => {
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerType = event.pointerType;
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.pointerTrusted = event.isTrusted;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+      probe.addEventListener('touchstart', event => {
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchStart = true;
+        globalThis.__SYLORA_VISUAL_TOUCH_PROBE__.touchTrusted = event.isTrusted;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true, passive: false });
+      probe.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, { capture: true });
+      document.body.append(probe);
     });
-  }
 
-  if (
-    !result?.touchStart ||
-    !result.touchTrusted ||
-    result.pointerType !== 'touch' ||
-    !result.pointerTrusted
-  ) {
-    throw new Error(`Chromium CDP touch probe failed: ${JSON.stringify(result)}`);
+    let result;
+    let touchActive = false;
+    try {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ id: 1, x: 12, y: 12, radiusX: 1, radiusY: 1, force: 1 }]
+      });
+      touchActive = true;
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      touchActive = false;
+      result = await page.evaluate(() => globalThis.__SYLORA_VISUAL_TOUCH_PROBE__);
+    } finally {
+      if (touchActive) {
+        await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }).catch(() => {});
+      }
+      await page.evaluate(() => {
+        document.querySelector('#sylora-visual-touch-probe')?.remove();
+        delete globalThis.__SYLORA_VISUAL_TOUCH_PROBE__;
+        if (document.querySelector('#sylora-visual-touch-probe')) {
+          throw new Error('Visual touch probe cleanup failed');
+        }
+      });
+    }
+
+    attempts.push(result);
+    if (
+      result?.touchStart && result.touchTrusted &&
+      result.pointerType === 'touch' && result.pointerTrusted
+    ) {
+      return {
+        touchStart: true,
+        touchTrusted: true,
+        pointerType: 'touch',
+        pointerTrusted: true
+      };
+    }
+    const noEventDelivered =
+      result?.pointerType === '' && result.pointerTrusted === false &&
+      result.touchStart === false && result.touchTrusted === false;
+    if (!noEventDelivered) break;
   }
-  return {
-    touchStart: true,
-    touchTrusted: true,
-    pointerType: 'touch',
-    pointerTrusted: true
-  };
+  throw new Error(`Chromium CDP touch probe failed: ${JSON.stringify({ attempts })}`);
 }
 
 async function browserAuthRequest(page, path, payload, token = '') {
@@ -442,7 +453,19 @@ async function clearVisualAiState(page) {
 }
 
 async function waitForStableVisualAssets(page) {
-  await page.evaluate(async () => {
+  await page.evaluate(async backgroundUrlPatternSource => {
+    const canonicalDimensions = new Map([
+      ['/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png', [1100, 650]],
+      ['/assets/brand/sylora-canonical-lockup.png', [976, 569]],
+      ['/assets/brand/sylora-canonical-symbol.png', [310, 395]]
+    ]);
+    const assertCanonicalDimensions = (url, width, height, kind) => {
+      const dimensions = canonicalDimensions.get(new URL(url, location.href).pathname);
+      if (!dimensions) return;
+      if (width !== dimensions[0] || height !== dimensions[1]) {
+        throw new Error(`Canonical ${kind} dimensions drifted: ${width}x${height}`);
+      }
+    };
     if (document.fonts?.ready) await document.fonts.ready;
     const images = [...document.images].filter(image => image.currentSrc || image.src);
     await Promise.all(images.map(async image => {
@@ -454,15 +477,20 @@ async function waitForStableVisualAssets(page) {
       }
       if (typeof image.decode === 'function') await image.decode();
       if (!image.naturalWidth) throw new Error(`Image failed to decode: ${image.currentSrc || image.src}`);
-      if (
-        new URL(image.currentSrc || image.src, location.href).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
-        (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
-      ) throw new Error(`Canonical brand dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+      assertCanonicalDimensions(
+        image.currentSrc || image.src,
+        image.naturalWidth,
+        image.naturalHeight,
+        'brand'
+      );
     }));
     const backgroundUrls = new Set();
     const collect = style => {
-      for (const match of String(style?.backgroundImage || '').matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
-        backgroundUrls.add(new URL(match[1], location.href).href);
+      const value = String(style?.backgroundImage || '');
+      for (const match of value.matchAll(new RegExp(backgroundUrlPatternSource, 'g'))) {
+        const rawUrl = String(match[1] ?? match[2] ?? match[3] ?? '').trim();
+        if (!rawUrl || rawUrl.startsWith('#') || /^%23/i.test(rawUrl)) continue;
+        backgroundUrls.add(new URL(rawUrl, location.href).href);
       }
     };
     for (const element of document.querySelectorAll('body, body *')) {
@@ -475,10 +503,7 @@ async function waitForStableVisualAssets(page) {
       image.onload = async () => {
         try {
           await image.decode?.();
-          if (
-            new URL(url).pathname === '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png' &&
-            (image.naturalWidth !== 1100 || image.naturalHeight !== 650)
-          ) throw new Error(`Canonical background dimensions drifted: ${image.naturalWidth}x${image.naturalHeight}`);
+          assertCanonicalDimensions(url, image.naturalWidth, image.naturalHeight, 'background');
           resolve();
         } catch (error) { reject(error); }
       };
@@ -487,7 +512,7 @@ async function waitForStableVisualAssets(page) {
     })));
     scrollTo(0, 0);
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
+  }, VISUAL_BACKGROUND_URL_PATTERN_SOURCE);
 }
 
 export async function waitForVisualQuiescence(page) {
@@ -520,22 +545,31 @@ export async function waitForStableVisualState(page, surface) {
   await expect(page.locator('.shell-wallet')).toHaveCount(1);
   await expect(page.locator('.rail-orbit')).toHaveCount(1);
   await expect(page.locator('#logout')).toHaveCount(1);
-  await expect(page.locator('.brand img')).toHaveAttribute(
+  await expect(page.locator('.brand-zone .brand-lockup-full')).toHaveAttribute(
     'src',
-    '/assets/brand/canonical/SYLORA_CANONICAL_LOGO_MASTER.png'
+    CANONICAL_LOCKUP_URL
   );
-  await expect(page.locator('.brand img')).toHaveAttribute(
+  await expect(page.locator('.brand-zone .brand-lockup-full')).toHaveAttribute(
     'data-brand-sha256',
-    'dc50f228968b2cebe46a2030cb5b22789482f680caca58171f06b0f25db40f08'
+    '061430e7d2fceefb660d049838603cffc0f30433a704dd3eb239b9f59e57fa50'
+  );
+  await expect(page.locator('.mobile-brand .brand-lockup-symbol')).toHaveAttribute(
+    'src',
+    CANONICAL_SYMBOL_URL
+  );
+  await expect(page.locator('.mobile-brand .brand-lockup-symbol')).toHaveAttribute(
+    'data-brand-sha256',
+    '9975f9f178eee4cf747f258e68d268ef512b4786342aee45bf932e8a2f941df1'
   );
 
   if (surface.id === 'home') {
     await expect(page.locator('#composer')).toBeVisible();
-    await expect(page.locator('.eco-empty-state')).toBeVisible();
+    await expect(page.locator('.home-horizon-scene')).toBeVisible();
+    await expect(page.locator('[data-integration-view="studio"] .platform-pills i')).toHaveCount(4);
     await expect(page.locator('#feed .post.muted')).toBeVisible();
   }
   if (surface.id === 'live') {
-    await expect(page.locator('[data-live-tab="discover"]')).toHaveClass(/active/);
+    await expect(page.locator('.live-tabs [data-live-tab="discover"]')).toHaveClass(/active/);
     await expect(page.locator('.live-empty-state')).toBeVisible();
     await expect(page.locator('.live-room-card')).toHaveCount(0);
   }
@@ -561,12 +595,12 @@ export async function waitForStableVisualState(page, surface) {
   }
   if (surface.id === 'profile') {
     await expect(page.locator('#profile')).toBeVisible();
-    await expect(page.locator('.profile-vitals')).toBeVisible();
+    await expect(page.locator('.profile-stats')).toBeVisible();
   }
   if (surface.id === 'settings') await expect(page.locator('.settings-grid .module')).toHaveCount(6);
   if (surface.id === 'create-hub-open') await expect(page.locator('.create-hub-item')).toHaveCount(9);
   if (surface.id === 'live-create') {
-    await expect(page.locator('[data-live-tab="create"]')).toHaveClass(/active/);
+    await expect(page.locator('.live-tabs [data-live-tab="create"]')).toHaveClass(/active/);
     await expect(page.locator('#goLive')).toBeVisible();
     await expect(page.locator('#createEventBtn')).toBeVisible();
   }
@@ -701,7 +735,7 @@ function assertNonOverlappingCanonicalTargets(targets) {
 async function assertCanonicalTargetsRestored(page, targets) {
   await assertVisualScrollOrigin(page);
   const restoredClips = [];
-  for (const { target, clip, role } of targets) {
+  for (const { target, clip, role, assetUrl } of targets) {
     const restoredClip = await canonicalElementClip(page, target);
     if (
       !restoredClip ||
@@ -718,7 +752,7 @@ async function assertCanonicalTargetsRestored(page, targets) {
         getComputedStyle(element).backgroundImage.includes(canonicalUrl), CANONICAL_BRAND_URL
       );
       if (!restoredBackground) throw new Error('Canonical presence background was not restored');
-    } else if (await target.getAttribute('src') !== CANONICAL_BRAND_URL) {
+    } else if (await target.getAttribute('src') !== assetUrl) {
       throw new Error(`Canonical ${role} image source drifted across paint restoration`);
     }
     restoredClips.push(restoredClip);
@@ -866,7 +900,8 @@ async function collectCanonicalPaintTargets(page) {
     const clip = await canonicalElementClip(page, target);
     if (!clip) continue;
     const role = await target.evaluate(element => element.closest('.brand') ? 'header' : 'wallet');
-    targets.push({ target, clip, role, hideProperty: 'visibility', minimumContrast: CANONICAL_IMAGE_MIN_CONTRAST });
+    const assetUrl = await target.getAttribute('src');
+    targets.push({ target, clip, role, assetUrl, hideProperty: 'visibility', minimumContrast: CANONICAL_IMAGE_MIN_CONTRAST });
     canonicalImagesChecked += 1;
   }
   if (canonicalImagesChecked === 0) {

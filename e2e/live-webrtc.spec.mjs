@@ -39,7 +39,7 @@ test('host Studio canvas reaches an authenticated viewer through real WebRTC sig
 
     const title = `SYLORA E2E ${Date.now()}`;
     await host.locator('button[data-view="live"]').first().click();
-    await host.locator('[data-live-tab="create"]').click();
+    await host.locator('.live-tabs [data-live-tab="create"]').click();
     await host.locator('#liveTitle').fill(title);
     const createResponsePromise = host.waitForResponse(response =>
       response.url().endsWith('/api/live') && response.request().method() === 'POST'
@@ -59,7 +59,7 @@ test('host Studio canvas reaches an authenticated viewer through real WebRTC sig
     await expect(host.locator('#broadcastStatus')).toContainText('LIVE WEBRTC');
 
     await viewer.locator('.mobile-dock button[data-view="live"]').click();
-    const watchButton = viewer.locator(`.watch-live[data-id="${liveId}"]`);
+    const watchButton = viewer.locator(`.watch-live[data-id="${liveId}"]`).first();
     await expect(watchButton).toBeVisible();
     await watchButton.click();
 

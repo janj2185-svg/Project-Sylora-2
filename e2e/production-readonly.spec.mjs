@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { expectNoHorizontalOverflow } from './helpers.mjs';
 
+function brandForViewport(page,width){
+  if(width<=767)return page.locator('.mobile-brand .brand-lockup-symbol');
+  if(width<=1099)return page.locator('.brand-zone .brand-lockup-symbol');
+  return page.locator('.brand-zone .brand-lockup-full');
+}
+
 test('@production health, readiness, and shell are available without writes', async ({ page, request }) => {
   const healthResponse = await request.get('/api/health');
   expect(healthResponse.status()).toBe(200);
@@ -22,7 +28,7 @@ test('@production health, readiness, and shell are available without writes', as
     }
   });
   await page.goto('/');
-  await expect(page.locator('.brand')).toBeVisible();
+  await expect(page.locator('.brand-zone .brand-lockup-full')).toBeVisible();
   await expect(page.locator('#globalSearch')).toBeVisible();
   await expect(page.locator('#signin')).toBeVisible();
   await expect(page.locator('#app')).not.toContainText('Запускаємо SYLORA');
@@ -43,7 +49,7 @@ test('@production shell has no horizontal overflow at supported breakpoints', as
   ]) {
     await page.setViewportSize(viewport);
     await page.goto('/');
-    await expect(page.locator('.brand')).toBeVisible();
+    await expect(brandForViewport(page,viewport.width)).toBeVisible();
     await expectNoHorizontalOverflow(page);
     if (viewport.width === 390) await expect(page.locator('.mobile-dock')).toBeVisible();
     if (viewport.width === 1366) await expect(page.locator('.mobile-dock')).toBeHidden();

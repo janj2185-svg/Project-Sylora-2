@@ -328,7 +328,7 @@ export function validateRawCaptureRecord(record,{expectedPath,label='capture rec
     'rasterTotalChannelDelta','rasterSignificantChannelDelta','rasterMaxSignificantMismatchRatio',
     'rasterMaxSignificantMismatchPixelsAllowed','rasterMaxChannelDeltaAllowed','rasterMaxTotalChannelDeltaAllowed'
   ]);
-  const expectedCanonicalImages=touch?1:2;
+  const expectedCanonicalImages=1;
   const expectedCanonicalBackgrounds=0;
   if(record.paintStability.canonicalImagesChecked!==expectedCanonicalImages){
     fail(`capture report ${record.file} canonical image paint evidence drifted`);
