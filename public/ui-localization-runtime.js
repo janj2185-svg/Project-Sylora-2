@@ -24,6 +24,18 @@ for(const [source,key] of Object.entries({
 }))SOURCE_ALIASES.set(source,key);
 
 for(const [source,key] of Object.entries({
+  'Оновити простір':'updateSpace','Ваш живий простір у SYLORA.':'livingSpaceFallback','Редагувати профіль':'editProfile','Меню профілю':'profileMenuLabel','ПІДПИСНИКІВ':'audienceUpper','ПУБЛІКАЦІЙ':'postsUpper','ЗАРОБЛЕНО':'earnedUpper','ORBIT РІВЕНЬ':'orbitLevel','Мій простір':'mySpace','Мої Clips і відео':'myClipsVideos','Створити нове':'createNew','Вийти в ефір':'goLive','ПЕРСОНАЛЬНИЙ ПРОСТІР':'personalSpace','Мова інтерфейсу':'interfaceLanguage','до ORBIT':'untilOrbit','Останні події':'latestEvents','Останні рухи':'latestMovements','Транзакцій немає.':'noTransactions','Профіль оновлено':'profileUpdated','Обкладинка профілю буде доступна після вибору медіа':'coverMediaRequired'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Показати Sylora':'showSylora','Сховати Sylora':'hideSylora','Я ПОРУЧ':'nearbyUpper','Говори природно. Можеш перебити мене у будь-який момент.':'speakNaturallyInterrupt','Мікрофон':'microphone','Завершити':'end','Завершити LIVE':'endLive','ПОТРІБНЕ ТВОЄ РІШЕННЯ':'decisionRequired','Дії SYLORA AI':'syloraActions','Підтвердити':'confirm','Скасувати':'cancel','ЩО SYLORA ЗНАЄ І МОЖЕ':'syloraKnowsCan','Прозорість Personal AI':'personalAiTransparency','Один асистент · один граф пам’яті · різні контексти.':'oneAssistantGraph','Знає':'knows','Доступ':'access','Останні дії':'recentActions','Ще немає дій':'noActionsYet','Експорт пам’яті':'exportMemory','ТИ':'you','Я слухаю.':'listening','Напиши або натисни «Жива розмова» і говори природно.':'writeOrTalk','Говорити з Sylora':'speakToSylora','Озвучення':'voicePlayback','Озвучення увімкнено':'voiceEnabled','Озвучення вимкнено':'voiceDisabled','Голос':'voiceLabel','Автоматично':'automatic','Постійних спогадів поки немає.':'persistentMemoryEmpty','Напр. Мова':'memoryExample'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Чати':'chats','Події':'events','Запрошення':'invites','Дзвінки':'calls','Priority':'priority','Нова розмова':'newConversation','Оберіть людину':'choosePerson','Розмов ще немає.':'noConversations','Усі важливі стани залишаються видимими.':'importantVisible','Оберіть розмову':'chooseConversation','Приватні повідомлення, голосові й відеодзвінки — в одному потоці.':'inboxUnified','Контекст розмови з’явиться після вибору контакту.':'conversationContext','ПРИВАТНІСТЬ':'privacy','Повідомлення й дзвінки доступні лише учасникам розмови.':'conversationPrivacy','оновлюються наживо':'updatesLive','Нових подій немає.':'noNewEvents','кімнати та події':'roomsEvents','Активних запрошень немає.':'noActiveInvites','Бізнес-кімнати':'businessRooms','Science circles':'scienceCircles','WebRTC voice & video':'webrtcVoiceVideo','Почніть розмову.':'startConversationTitle','Голос':'voice','Відео':'video','пропущено':'missed','нічого не приховано':'nothingHidden','Важливе в одному місці':'priorityFallback','AI лише групує потік — повна історія залишається доступною у вкладках.':'priorityExplanation','Порожньо':'empty','Розмова':'conversation','Вкладення':'attachment','Контакт':'contact','Ця розмова доступна лише її учасникам.':'conversationParticipantsOnly','Потрібен співрозмовник':'peerRequired'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
   '♢ Подарунок':'gift','Подарунки SYLORA':'syloraGifts',' · 10 живих ефектів':'tenLivingEffects',
   'Лайки додають імпульс · подарунки підсилюють Resonance.':'resonanceHelp',
   'TURN relay готовий · P2P transport із NAT fallback.':'turnReadyHelp',
@@ -32,7 +44,7 @@ for(const [source,key] of Object.entries({
 }))SOURCE_ALIASES.set(source,key);
 
 const PLACEHOLDER_ALIASES=new Map(Object.entries({
-  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description'
+  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description','Пошук у розмовах':'searchConversations','Напр. Мова':'memoryExample'
 }));
 
 const PROTECTED='[data-user-content],.post-text,.comment-zone p,#liveMessages p,.message-bubble p,.ai-conversation p,.realtime-transcript p,.conference-sylora-messages,.creatorIntelOut,pre,code';

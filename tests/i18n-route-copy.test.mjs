@@ -63,3 +63,33 @@ test('Studio primary and reference layouts use centralized copy in all five loca
     assert.ok(source.includes(`u('${key}')`),`Studio route is not using ${key}`);
   }
 });
+
+test('Inbox reference tabs, empty states, calls and privacy copy are localized',()=>{
+  const bridge=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  for(const literal of ['Чати','Події','Запрошення','Дзвінки','Пошук у розмовах','Почніть розмову.','WebRTC voice & video','ПРИВАТНІСТЬ','Ця розмова доступна лише її учасникам.']){
+    assert.ok(bridge.includes(`'${literal}'`),`missing Inbox localization alias: ${literal}`);
+  }
+  for(const key of ['chats','events','invites','calls','searchConversations','startConversationTitle','webrtcVoiceVideo','privacy','conversationParticipantsOnly']){
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
+
+test('Sylora AI presence, action approval, voice and memory states are localized',()=>{
+  const bridge=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  for(const literal of ['Показати Sylora','Сховати Sylora','ПОТРІБНЕ ТВОЄ РІШЕННЯ','Підтвердити','Скасувати','Я слухаю.','Завершити LIVE','Озвучення увімкнено','Постійних спогадів поки немає.']){
+    assert.ok(bridge.includes(`'${literal}'`),`missing Sylora AI localization alias: ${literal}`);
+  }
+  for(const key of ['showSylora','hideSylora','decisionRequired','confirm','cancel','listening','endLive','voiceEnabled','persistentMemoryEmpty']){
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
+
+test('Profile reference statistics, editor, activity and action states are localized',()=>{
+  const bridge=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
+  for(const literal of ['Оновити простір','Редагувати профіль','ПІДПИСНИКІВ','Мій простір','Мої Clips і відео','Мова інтерфейсу','Останні події','Профіль оновлено']){
+    assert.ok(bridge.includes(`'${literal}'`),`missing Profile localization alias: ${literal}`);
+  }
+  for(const key of ['updateSpace','editProfile','audienceUpper','mySpace','myClipsVideos','interfaceLanguage','latestEvents','profileUpdated']){
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});
