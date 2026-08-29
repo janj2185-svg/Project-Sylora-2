@@ -61,7 +61,7 @@ test('LIVE setup reports real TikTok readiness instead of decorative integration
 
 test('TikTok copilot uses the selected Sylora voice and core locale codes', () => {
   assert.match(app, /de:'de-DE',ru:'ru-RU'/);
-  assert.match(app, /speak:speakSylora/);
+  assert.match(app, /speak:text=>speakSylora\(text,\{autoDetect:true\}\)/);
   assert.match(tiktokPilot, /speak=\(\)=>false/);
   assert.doesNotMatch(tiktokPilot, /new SpeechSynthesisUtterance|function speakLocal/);
 });
@@ -71,4 +71,11 @@ test('Sylora voice language can extend beyond the five fully localized UI langua
   assert.match(app, /id='aiVoiceLocale'/);
   assert.match(app, /sylora_voice_locale/);
   assert.match(app, /\^\(uk\|pl\|en\|de\|ru\|es\|fr\|it\|pt\)/);
+});
+
+test('LIVE chat replies auto-detect language before voice playback', () => {
+  for (const locale of ['uk-UA','pl-PL','ru-RU','de-DE','es-ES','fr-FR','it-IT','pt-PT','en-US']) assert.match(app,new RegExp(locale));
+  assert.match(app, /autoDetect\?detectSyloraSpeechLocale\(text\):syloraSpeechLocale\(\)/);
+  assert.match(tiktokPilot, /client\.tiktokEvents\(cursor\)/);
+  assert.match(tiktokPilot, /event\.type==='chat'\|\|event\.type==='question'/);
 });
