@@ -24,7 +24,17 @@ async function waitBoot(page){
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-view','feed');
   await expect(page.locator('.home-screen .hero-copy')).toBeVisible();
-  await expect(page.locator('#localeSwitch')).toBeVisible();
+  await expect(page.locator('#localeSwitch')).toHaveCount(1);
+}
+
+async function selectLocaleFromSettings(page,locale){
+  await page.goto('/more');
+  const selector=page.locator('#settingsLocaleSwitch');
+  await expect(selector).toBeVisible();
+  await selector.selectOption(locale);
+  await expect(page.locator('html')).toHaveAttribute('lang',locale);
+  await page.goto('/');
+  await expect(page.locator('.home-screen .hero-copy')).toBeVisible();
 }
 
 test('master brand, five-language selector, persistence and ecosystem-first Home render',async({page})=>{
@@ -55,7 +65,7 @@ test('master brand, five-language selector, persistence and ecosystem-first Home
   expect(await page.locator('.home-horizon-orbit--one').evaluate(element=>getComputedStyle(element).animationName)).toBe('home-orbit-one');
 
   for(const [locale,home] of Object.entries(localeExpectations)){
-    await page.locator('#localeSwitch').selectOption(locale);
+    await selectLocaleFromSettings(page,locale);
     await expect(page.locator('html')).toHaveAttribute('lang',locale);
     await expect(page.locator('button[data-view="feed"]').first()).toHaveText(home);
     expect(await page.evaluate(()=>localStorage.getItem('sylora_locale'))).toBe(locale);
@@ -80,13 +90,13 @@ test('Settings exposes the same five persisted interface languages',async({page}
   await expect(selector.locator('option')).toHaveCount(5);
   await selector.selectOption('pl');
   await expect(page.locator('html')).toHaveAttribute('lang','pl');
-  await expect(page.locator('.settings-language h2')).toHaveText('Język interfejsu');
+  await expect(page.locator('#languageSettings h1')).toHaveText('Język interfejsu');
 });
 
 test('all required responsive widths have no accidental horizontal overflow',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   await waitBoot(page);
-  await page.locator('#localeSwitch').selectOption('uk');
+  await selectLocaleFromSettings(page,'uk');
   for(const width of [320,390,430,768,1024,1366,1920]){
     await page.setViewportSize({width,height:Math.min(1080,Math.max(700,Math.round(width*.75)))});
     await waitBoot(page);
@@ -95,7 +105,7 @@ test('all required responsive widths have no accidental horizontal overflow',asy
       await expect(page.locator('.mobile-dock')).toBeVisible();
       await expect(page.locator('#mobileMenu')).toBeVisible();
       await expect(page.locator('.mobile-brand .brand-lockup-symbol')).toBeVisible();
-      await expect(page.locator('#localeSwitch')).toBeVisible();
+      await expect(page.locator('#localeSwitch')).toBeHidden();
     }else if(width<=1099){
       await expect(page.locator('.left-rail')).toBeVisible();
       await expect(page.locator('.brand-zone .brand-lockup-symbol')).toBeVisible();

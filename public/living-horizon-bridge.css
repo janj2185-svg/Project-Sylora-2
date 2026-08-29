@@ -67,7 +67,7 @@ button,input,textarea,select{font:inherit}
 .menu-trigger,.mobile-brand{display:none}
 .route-name span,.route-name strong{display:block}.route-name span{color:#918981;font-size:8px;font-weight:800;letter-spacing:.16em}.route-name strong{margin-top:3px;color:#29252a;font-family:Georgia,"Times New Roman",serif;font-size:15px;font-weight:500;white-space:nowrap}
 #account.top-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}
-#account .top-locale{display:none;width:52px;height:38px;padding:0 8px;border:1px solid #ffffffd1;border-radius:14px;background:#ffffffa1;color:#5d5755;font-size:10px;font-weight:800;box-shadow:inset 0 1px #fff}
+#account .top-locale{display:none!important;width:52px;height:38px;padding:0 8px;border:1px solid #ffffffd1;border-radius:14px;background:#ffffffa1;color:#5d5755;font-size:10px;font-weight:800;box-shadow:inset 0 1px #fff}
 #account .lumen-pill,#account .icon-action,#account .profile-button,#account .header-exit{
   border:1px solid #ffffffd6;background:#ffffff9e;color:#302b2c;box-shadow:0 8px 24px #49392e12,inset 0 1px #fff;cursor:pointer
 }
@@ -132,6 +132,8 @@ body[data-view="more"] .settings-runtime-page{padding-top:20px!important}body[da
 
 @media (max-width:1099px) and (min-width:768px){
   :root{--sy-reference-sidebar:76px}
+  .sylora-sidebar.left-rail{display:block!important}
+  .mobile-dock,.mobile-brand,.menu-trigger{display:none!important}
   .brand-zone{flex-basis:76px!important;height:76px!important;min-height:76px!important;padding:8px!important}
   .brand-zone .brand-lockup{height:58px!important}.brand-zone .brand-lockup-full{display:none!important}.brand-zone .brand-lockup-symbol{display:block!important;width:35px!important;height:44px!important}
   .sylora-sidebar [data-sidebar=group-label],.side-nav .nav.sylora-nav-button>span:nth-child(2),.nav-count,.plan-copy,.plan-card>span:last-child,.account-row>span:nth-child(2),.account-row>span:last-child{display:none!important}
@@ -158,7 +160,7 @@ body[data-view="more"] .settings-runtime-page{padding-top:20px!important}body[da
 
 @media (max-width:767px){
   :root{--sy-reference-sidebar:0px}
-  .sylora-sidebar.left-rail{display:block;position:fixed;left:0;top:0;width:min(82vw,320px);height:100svh;transform:translateX(-105%);transition:transform .28s cubic-bezier(.2,.75,.25,1);pointer-events:none}
+  .sylora-sidebar.left-rail{display:block!important;position:fixed;left:0;top:0;width:min(82vw,320px);height:100svh;transform:translateX(-105%);transition:transform .28s cubic-bezier(.2,.75,.25,1);pointer-events:none}
   body.mobile-menu-open .sylora-sidebar.left-rail{transform:translateX(0);pointer-events:auto}
   body.mobile-menu-open::before{content:"";z-index:45;position:fixed;inset:0;background:#17151a73;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
   .sylora-sidebar.left-rail>[data-sidebar=sidebar]{padding:0 13px 104px;background:linear-gradient(155deg,#fffdfaf7,#f2eee9f0)!important;border-radius:0 24px 24px 0!important;box-shadow:22px 0 55px #201a1738}
@@ -171,6 +173,7 @@ body[data-view="more"] .settings-runtime-page{padding-top:20px!important}body[da
   #account .lumen-pill{height:38px;padding:0 9px;gap:6px}.top-actions{gap:6px!important}#account .icon-action,#account .profile-button{width:38px;height:38px}
   #app.screen-canvas{min-height:calc(100svh - 67px)!important;padding:13px 12px 94px!important}
   .home-screen .hero-copy{min-height:270px;transition:min-height .32s cubic-bezier(.2,.75,.25,1),padding .32s cubic-bezier(.2,.75,.25,1)}
+  .home-screen .hero-copy h1{width:100%;max-width:100%!important;min-width:0;overflow-wrap:anywhere;word-break:break-word}
   body.sy-home-engaged[data-view="feed"] .home-screen .hero-copy{min-height:186px;padding-top:17px!important;padding-bottom:44px!important}
   body.sy-home-engaged[data-view="feed"] .home-screen .hero-copy>p{display:none}
   body.sy-home-engaged[data-view="feed"] .home-screen .hero-copy h1{max-width:82%;font-size:30px;line-height:1.02}
