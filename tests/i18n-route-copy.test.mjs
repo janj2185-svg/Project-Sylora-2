@@ -43,3 +43,13 @@ test('technical protocol names remain literal product vocabulary',()=>{
   const all=JSON.stringify(UI_RUNTIME_COPY);
   for(const token of ['OBS','WebRTC','LIVE'])assert.ok(all.includes(token),`technical token ${token} unexpectedly absent`);
 });
+
+test('LIVE director and dynamic action copy use the centralized locale namespace',()=>{
+  const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  for(const literal of ['placeholder="Назва LIVE"','<b>Новий LIVE</b>','<small>камера або Studio</small>','LIVE ЗАРАЗ','Copilot ready',"toast('Legacy Resonance Battle')"]){
+    assert.ok(!source.includes(literal),`hard-coded LIVE copy remains: ${literal}`);
+  }
+  for(const key of ['liveDirector','liveTitlePlaceholder','newLive','cameraOrStudio','liveNowLabel','copilotReady','battleStarted','legacyBattleStarted']){
+    assert.ok(source.includes(`u('${key}')`),`LIVE route is not using ${key}`);
+  }
+});
