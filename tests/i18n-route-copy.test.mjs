@@ -34,7 +34,7 @@ test('localization bridge relinquishes stale tags when application state writes 
 
 test('critical Studio and LIVE labels are covered by centralized aliases',()=>{
   const source=fs.readFileSync(new URL('../public/ui-localization-runtime.js',import.meta.url),'utf8');
-  for(const literal of ['SOURCES','SCENES','AUDIO MIXER','BROADCAST','RECORD','WAITING FOR HOST','CONNECTION LOST']){
+  for(const literal of ['SOURCES','SCENES','AUDIO MIXER','BROADCAST','RECORD','WAITING FOR HOST','CONNECTION LOST','Подарунки SYLORA','LIVE P2P LIMIT','HOST UNAVAILABLE']){
     assert.ok(source.includes(`'${literal}'`),`missing UI alias ${literal}`);
   }
 });

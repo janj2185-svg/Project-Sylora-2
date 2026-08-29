@@ -34,7 +34,8 @@ let syloraCapabilities=null;let syloraVoiceId=localStorage.getItem('sylora_voice
 async function refreshCapabilities(){try{syloraCapabilities=await api('/api/ai/capabilities')}catch{syloraCapabilities=null}const bar=document.querySelector('#syloraDegraded');if(!bar)return;if(syloraCapabilities?.degraded?.ai||syloraCapabilities?.degraded?.voice){bar.hidden=false;bar.textContent=syloraCapabilities.degraded.ai?'Sylora text AI temporarily unavailable — Inbox, LIVE and create still work.':('Voice unavailable — text still works.')}else bar.hidden=true}
 function degradedBannerHtml(){return '<div id="syloraDegraded" class="sylora-degraded" hidden></div>'}
 async function api(path,opts={}){const h={'content-type':'application/json',...(opts.headers||{})};if(state.token)h.authorization=`Bearer ${state.token}`;const r=await fetch(path,{...opts,headers:h});const j=await r.json().catch(()=>({}));if(!r.ok){if(r.status===401)clearRtcConfigCache();throw Object.assign(new Error(j.message||j.error||'REQUEST_FAILED'),{status:r.status,data:j})}return j}
-function toast(msg){const e=document.querySelector('#toast');e.textContent=msg;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
+function localizedDynamicUiMessage(msg){const text=String(msg??''),gift=text.match(/^Подарунок відправлено · Orbit (\d+)$/);if(gift)return`${u('giftSent')} · Orbit ${gift[1]}`;return text}
+function toast(msg){const e=document.querySelector('#toast');e.textContent=localizedDynamicUiMessage(msg);e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2400)}
 function applyShellLanguage(){document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n))}
 function account(){
   const el=document.querySelector('#account');
