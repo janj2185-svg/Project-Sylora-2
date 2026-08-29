@@ -33,3 +33,18 @@ test('legacy right-rail placeholders and retired Sylora cards are absent', () =>
   assert.doesNotMatch(app, /querySelector\('#live-events'\)/);
   assert.doesNotMatch(living, /\.(?:pulse-card|ai-rail|sylora-mini|sylora-presence|module-grid)(?:\b|-)/);
 });
+
+test('guest shell never leaks a real account identity or fabricates a LIVE host', () => {
+  assert.doesNotMatch(html, /Ivan K\.|kvasnytsiaivan/);
+  assert.match(html, /class="account-row"[^>]*hidden/);
+  assert.doesNotMatch(app, /state\.me\?\.username\|\|'Іване'/);
+  assert.doesNotMatch(app, /Eva Shine|Phoenix Rebirth/);
+  assert.doesNotMatch(app, /Creator Future Meetup|\+840 LUMEN|5 підключень|24K переглядів/);
+  assert.doesNotMatch(html, /class="nav-count"/);
+});
+
+test('primary navigation labels participate in runtime localization', () => {
+  for (const key of ['navMain', 'navSpaces', 'navPersonal', 'learning', 'wallet', 'settings']) {
+    assert.match(html, new RegExp(`data-i18n="${key}"`));
+  }
+});

@@ -14,7 +14,8 @@ const supported=new Set(SUPPORTED_UI_LOCALES);
 const base={
   home:'Home',live:'LIVE',clips:'Clips',studio:'Studio',ai:'Sylora',profile:'Profile',
   inbox:'Inbox',chat:'Inbox',gifts:'Gifts',more:'Settings',explore:'Discover',
-  science:'Learning',business:'Business',communities:'Communities',videos:'Videos',
+  science:'Learning',learning:'Learning',business:'Business',communities:'Communities',videos:'Videos',
+  navMain:'Main',navSpaces:'Spaces',navPersonal:'Personal',startLive:'Start your first LIVE',liveConnected:'A real LIVE room is active.',noLiveNow:'No one is live right now — no simulated broadcasts.',
   signin:'Sign in',signout:'Sign out',create:'Create account',register:'Register',login:'Sign in',
   password:'Password — 10+ characters with a letter and number',identity:'Email or username',
   composer:"What's new?",publish:'Publish',join:'Create account',
@@ -62,7 +63,8 @@ const dictionaries=Object.freeze({
   en:dict(),
   uk:dict({
     home:'Головна',profile:'Профіль',inbox:'Вхідні',chat:'Вхідні',gifts:'Подарунки',more:'Налаштування',
-    explore:'Відкриття',science:'Навчання',business:'Бізнес',communities:'Спільноти',videos:'Відео',
+    explore:'Відкриття',science:'Навчання',learning:'Навчання',business:'Бізнес',communities:'Спільноти',videos:'Відео',
+    navMain:'Головне',navSpaces:'Простори',navPersonal:'Особисте',startLive:'Почати перший LIVE',liveConnected:'Активна справжня LIVE-кімната.',noLiveNow:'Зараз ніхто не в ефірі — без імітації трансляцій.',
     signin:'Увійти',signout:'Вийти',create:'Створити акаунт',register:'Реєстрація',login:'Вхід',
     password:'Пароль — від 10 символів, з літерою і цифрою',identity:'Email або ім’я користувача',
     composer:'Що нового?',publish:'Опублікувати',join:'Створити акаунт',
@@ -104,7 +106,8 @@ const dictionaries=Object.freeze({
   }),
   pl:dict({
     home:'Główna',profile:'Profil',inbox:'Skrzynka',chat:'Skrzynka',gifts:'Prezenty',more:'Ustawienia',
-    explore:'Odkrywaj',science:'Nauka',business:'Biznes',communities:'Społeczności',videos:'Wideo',
+    explore:'Odkrywaj',science:'Nauka',learning:'Nauka',business:'Biznes',communities:'Społeczności',videos:'Wideo',
+    navMain:'Główne',navSpaces:'Przestrzenie',navPersonal:'Osobiste',startLive:'Uruchom pierwszy LIVE',liveConnected:'Prawdziwy pokój LIVE jest aktywny.',noLiveNow:'Nikt teraz nie nadaje — bez symulowanych transmisji.',
     signin:'Zaloguj',signout:'Wyloguj',create:'Utwórz konto',register:'Rejestracja',login:'Logowanie',
     password:'Hasło — minimum 10 znaków, litera i cyfra',identity:'Email lub nazwa użytkownika',
     composer:'Co nowego?',publish:'Opublikuj',join:'Utwórz konto',joinTitle:'Dołącz do SYLORA',
@@ -144,7 +147,8 @@ const dictionaries=Object.freeze({
   }),
   de:dict({
     home:'Start',profile:'Profil',inbox:'Posteingang',chat:'Posteingang',gifts:'Geschenke',more:'Einstellungen',
-    explore:'Entdecken',science:'Lernen',business:'Business',communities:'Communities',videos:'Videos',signin:'Anmelden',signout:'Abmelden',
+    explore:'Entdecken',science:'Lernen',learning:'Lernen',business:'Business',communities:'Communities',videos:'Videos',signin:'Anmelden',signout:'Abmelden',
+    navMain:'Hauptbereich',navSpaces:'Räume',navPersonal:'Persönlich',startLive:'Erstes LIVE starten',liveConnected:'Ein echtes LIVE ist aktiv.',noLiveNow:'Gerade ist niemand live — keine simulierten Streams.',
     create:'Konto erstellen',register:'Registrieren',login:'Anmelden',password:'Passwort — mindestens 10 Zeichen, Buchstabe und Zahl',
     identity:'E-Mail oder Benutzername',composer:'Was gibt’s Neues?',publish:'Veröffentlichen',join:'Konto erstellen',joinTitle:'SYLORA beitreten',
     joinText:'Erstelle ein Konto, um zu veröffentlichen und mitzumachen.',authTitle:'Tritt in deinen Raum ein',searchPlaceholder:'In SYLORA suchen…',
@@ -181,7 +185,8 @@ const dictionaries=Object.freeze({
   }),
   ru:dict({
     home:'Главная',profile:'Профиль',inbox:'Входящие',chat:'Входящие',gifts:'Подарки',more:'Настройки',explore:'Открытия',science:'Обучение',
-    business:'Бизнес',communities:'Сообщества',videos:'Видео',signin:'Войти',signout:'Выйти',create:'Создать аккаунт',register:'Регистрация',login:'Вход',
+    business:'Бизнес',communities:'Сообщества',videos:'Видео',learning:'Обучение',signin:'Войти',signout:'Выйти',create:'Создать аккаунт',register:'Регистрация',login:'Вход',
+    navMain:'Главное',navSpaces:'Пространства',navPersonal:'Личное',startLive:'Начать первый LIVE',liveConnected:'Активна настоящая LIVE-комната.',noLiveNow:'Сейчас никто не в эфире — без имитации трансляций.',
     password:'Пароль — минимум 10 символов, буква и цифра',identity:'Email или имя пользователя',composer:'Что нового?',publish:'Опубликовать',
     join:'Создать аккаунт',joinTitle:'Присоединяйтесь к SYLORA',joinText:'Создайте аккаунт, чтобы публиковать и взаимодействовать.',
     authTitle:'Войдите в своё пространство',searchPlaceholder:'Поиск в SYLORA…',createHub:'Создать',createPost:'Создать публикацию',createClip:'Загрузить клип',
