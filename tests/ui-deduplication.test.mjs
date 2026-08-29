@@ -99,7 +99,7 @@ test('learning business and settings have distinct depth and reduced-motion-safe
 });
 
 test('Studio recording and source states use centralized localized copy', () => {
-  for (const key of ['sourceOpenFailed', 'enableCameraOrScreen', 'downloadRecording', 'publishAsClip', 'recordingReady', 'recordingPublished', 'tryAgain']) {
+  for (const key of ['sourceOpenFailed', 'enableCameraOrScreen', 'downloadRecording', 'publishAsClip', 'recordingReady', 'recordingPublished', 'tryAgain', 'obsSceneError', 'virtualCameraError', 'obsStreamError', 'prepareWithSylora', 'confirmPlanToScene', 'livePlanNeedsConfirmation']) {
     assert.match(app, new RegExp(`u\\('${key}'\\)`));
   }
   assert.doesNotMatch(app, /Не вдалося відкрити source|Запис опубліковано у Clips/);
