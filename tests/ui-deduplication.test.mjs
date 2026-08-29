@@ -97,3 +97,10 @@ test('learning business and settings have distinct depth and reduced-motion-safe
   assert.match(bridge,/body\[data-view="business"\] \.glass-card/);
   assert.match(bridge,/body\[data-view="more"\] \.glass-card/);
 });
+
+test('Studio recording and source states use centralized localized copy', () => {
+  for (const key of ['sourceOpenFailed', 'enableCameraOrScreen', 'downloadRecording', 'publishAsClip', 'recordingReady', 'recordingPublished', 'tryAgain']) {
+    assert.match(app, new RegExp(`u\\('${key}'\\)`));
+  }
+  assert.doesNotMatch(app, /Не вдалося відкрити source|Запис опубліковано у Clips/);
+});
