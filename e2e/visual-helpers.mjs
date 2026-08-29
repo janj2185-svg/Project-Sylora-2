@@ -71,7 +71,7 @@ export const VISUAL_SURFACES = Object.freeze([
   Object.freeze({ id: 'studio', path: '/studio', view: 'studio', ready: '.studio-stage.program-canvas' }),
   Object.freeze({ id: 'sylora', path: '/ai', view: 'ai', ready: '.sylora-ai-hero.ai-presence-container' }),
   Object.freeze({ id: 'inbox', path: '/messages', view: 'messages', ready: '.inbox-layout' }),
-  Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-hero' }),
+  Object.freeze({ id: 'profile', path: '/profile', view: 'profile', ready: '.profile-page' }),
   Object.freeze({ id: 'settings', path: '/more', view: 'more', ready: '.settings-scene' }),
   Object.freeze({
     id: 'create-hub-open', path: '/', view: 'feed', ready: '#syloraCreateHub',
@@ -584,7 +584,7 @@ export async function waitForStableVisualState(page, surface) {
   }
   if (surface.id === 'profile') {
     await expect(page.locator('#profile')).toBeVisible();
-    await expect(page.locator('.profile-vitals')).toBeVisible();
+    await expect(page.locator('.profile-stats')).toBeVisible();
   }
   if (surface.id === 'settings') await expect(page.locator('.settings-grid .module')).toHaveCount(6);
   if (surface.id === 'create-hub-open') await expect(page.locator('.create-hub-item')).toHaveCount(9);

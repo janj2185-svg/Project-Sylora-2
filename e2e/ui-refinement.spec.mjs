@@ -221,7 +221,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
 
   for(const [view,ready,name] of [
     ['messages','.inbox-layout','inbox'],
-    ['profile','.profile-hero','profile'],
+    ['profile','.profile-page','profile'],
     ['more','.settings-scene','settings']
   ]){
     await page.goto(`/${view}`);
@@ -231,7 +231,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
     if(view==='profile'){
       const values=await page.locator('#profile select[name="locale"] option').evaluateAll(options=>options.map(option=>option.value));
       expect(values).toEqual(['uk','en','pl','de','ru']);
-      expect(await page.locator('.profile-hero h1').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+      expect(await page.locator('.profile-identity h1').evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
     }
     await page.screenshot({path:`${qaDir}/${name}-390.png`,fullPage:true});
   }
@@ -242,7 +242,7 @@ test('AI outage is contextual and LIVE state styling follows actual status text'
     ['live','.live-tabs','live'],
     ['studio','.studio-stage.program-canvas','studio'],
     ['messages','.inbox-layout','inbox'],
-    ['profile','.profile-hero','profile'],
+    ['profile','.profile-page','profile'],
     ['more','.settings-scene','settings']
   ]){
     await page.goto(`/${view}`);
