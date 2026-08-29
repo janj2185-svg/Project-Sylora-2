@@ -104,6 +104,7 @@ test('approved reference structure covers every primary destination with real ru
     '.inbox-layout{','.profile-cover{','.wallet-balance{'
   ])assert.ok(reference.includes(contract),`approved reference CSS missing ${contract}`);
   assert.match(referenceBridge,/\.brand-zone \.brand-lockup-full\{[^}]*object-fit:contain!important;[^}]*clip-path:none!important/);
+  assert.match(referenceBridge,/@media \(min-width:768px\)\{\.menu-trigger,\.mobile-brand\{display:none!important\}\}/);
   assert.match(referenceBridge,/@media \(max-width:767px\)\{[\s\S]*?\.brand-zone \.brand-lockup-full\{[^}]*max-height:118px!important;[^}]*object-fit:contain!important/);
   assert.match(appJs,/TikTok · YouTube · OBS · TikFinity/);
   assert.match(appJs,/Українська[\s\S]*English[\s\S]*Polski[\s\S]*Deutsch[\s\S]*Русский/);

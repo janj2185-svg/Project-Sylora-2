@@ -109,10 +109,14 @@ test('all required responsive widths have no accidental horizontal overflow',asy
     }else if(width<=1099){
       await expect(page.locator('.left-rail')).toBeVisible();
       await expect(page.locator('.brand-zone .brand-lockup-symbol')).toBeVisible();
+      await expect(page.locator('.mobile-brand')).toBeHidden();
+      await expect(page.locator('#mobileMenu')).toBeHidden();
       await expect(page.locator('.mobile-dock')).toBeHidden();
     }else{
       await expect(page.locator('.left-rail')).toBeVisible();
       await expect(page.locator('.brand-zone .brand-lockup-full')).toBeVisible();
+      await expect(page.locator('.mobile-brand')).toBeHidden();
+      await expect(page.locator('#mobileMenu')).toBeHidden();
       await expect(page.locator('.mobile-dock')).toBeHidden();
     }
     if(width===320)await page.screenshot({path:`${qaDir}/home-320-uk.png`,fullPage:true});
