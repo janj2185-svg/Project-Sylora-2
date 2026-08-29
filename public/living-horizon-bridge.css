@@ -225,6 +225,16 @@ body[data-view="more"] .settings-runtime-page{padding-top:20px!important}body[da
   .sylora-sidebar.left-rail{transition:none}
 }
 
+body:is([data-view="learning"],[data-view="business"],[data-view="more"]) #app :is(button,.glass-card,.settings-heading,.learning-hero){transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+body:is([data-view="learning"],[data-view="business"],[data-view="more"]) #app button:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 12px 24px #34291f1c,inset 0 1px #fff}
+body[data-view="learning"] :is(.learning-hero,.conference-hub),body[data-view="business"] :is(.business-runtime-page>.hero,.conference-hub),body[data-view="more"] .settings-heading{isolation:isolate;position:relative;overflow:hidden}
+body[data-view="learning"] .learning-hero:after{content:"";position:absolute;right:-45px;top:-55px;width:190px;height:190px;border:1px solid #6a9f9140;border-radius:50%;background:radial-gradient(circle,#83c8b22b 0 7%,transparent 8% 33%,#7cb8a717 34% 35%,transparent 36%);animation:scienceOrbit 13s linear infinite;pointer-events:none}
+body[data-view="business"] .business-runtime-page>.hero:after{content:"";position:absolute;right:-30px;bottom:-50px;width:210px;height:150px;border-radius:42% 58% 45% 55%;background:radial-gradient(circle at 35% 30%,#d3a75b38,transparent 31%),linear-gradient(145deg,#2f364022,#b78a4520);filter:blur(.2px);animation:businessPulse 7s ease-in-out infinite;pointer-events:none}
+body[data-view="more"] .settings-heading:after{content:"✦";position:absolute;right:28px;top:50%;color:#8762ba24;font-size:72px;filter:drop-shadow(0 0 22px #8762ba45);transform:translateY(-50%);animation:settingsBreathe 5s ease-in-out infinite;pointer-events:none}
+body[data-view="learning"] .glass-card{box-shadow:0 16px 34px #356c5d12,inset 0 1px #fff}body[data-view="business"] .glass-card{box-shadow:0 16px 34px #71532714,inset 0 1px #fff}body[data-view="more"] .glass-card{box-shadow:0 16px 34px #5f478314,inset 0 1px #fff}
+@keyframes scienceOrbit{to{transform:rotate(360deg)}}@keyframes businessPulse{50%{transform:translateY(-8px) scale(1.04);opacity:.72}}@keyframes settingsBreathe{50%{transform:translateY(-50%) scale(1.08);opacity:.58}}
+@media (prefers-reduced-motion:reduce){body[data-view="learning"] .learning-hero:after,body[data-view="business"] .business-runtime-page>.hero:after,body[data-view="more"] .settings-heading:after{animation:none}}
+
 .live-readiness{background:linear-gradient(145deg,#fffdfae8,#f1ebe5d9)}
 .live-setup-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:10px}
 .live-setup-step{display:grid;grid-template-columns:34px minmax(0,1fr) 18px;align-items:center;gap:9px;min-height:58px;padding:9px 10px;border:1px solid #40372f16;border-radius:14px;text-align:left;background:linear-gradient(145deg,#fff,#f4efea);box-shadow:0 8px 18px #332a2310,inset 0 1px #fff;cursor:pointer}

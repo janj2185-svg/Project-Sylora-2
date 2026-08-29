@@ -88,3 +88,11 @@ test('sidebar has a real persisted desktop collapse and a visible mobile close c
   assert.match(bridge, /body\.sidebar-collapsed\{--sy-reference-sidebar:76px\}/);
   assert.match(bridge, /\.sidebar-toggle:after\{content:"×"/);
 });
+
+test('learning business and settings have distinct depth and reduced-motion-safe animation', () => {
+  for (const animation of ['scienceOrbit','businessPulse','settingsBreathe']) assert.match(bridge,new RegExp(`@keyframes ${animation}`));
+  assert.match(bridge,/prefers-reduced-motion:reduce/);
+  assert.match(bridge,/body\[data-view="learning"\] \.glass-card/);
+  assert.match(bridge,/body\[data-view="business"\] \.glass-card/);
+  assert.match(bridge,/body\[data-view="more"\] \.glass-card/);
+});
