@@ -15,6 +15,8 @@ test('TikTok LIVE events are normalized and bounded',()=>{
   assert.deepEqual(chat,{id:'m1',type:'chat',occurredAt:'2023-11-14T22:13:20.000Z',user:{id:'viewer',username:'viewer',displayName:'Viewer'},source:'tikfinity-local',text:'hello'});
   const gift=normalizeTikTokLiveEvent({event:'gift',data:{uniqueId:'fan',giftId:'rose',giftName:'Rose',repeatCount:99_999,diamondCount:20}});
   assert.equal(gift.type,'gift');assert.equal(gift.gift.count,10_000);assert.equal(gift.gift.diamonds,20);
+  const normalizedGift=normalizeTikTokLiveEvent({type:'gift',id:'relay-gift',occurredAt:'2026-08-28T12:00:00.000Z',user:{username:'fan',displayName:'Fan'},gift:{id:'rose',name:'Rose',count:3,diamonds:20}});
+  assert.equal(normalizedGift.occurredAt,'2026-08-28T12:00:00.000Z');assert.equal(normalizedGift.gift.count,3);
   assert.equal(normalizeTikTokLiveEvent({event:'unknown'}),null);
 });
 

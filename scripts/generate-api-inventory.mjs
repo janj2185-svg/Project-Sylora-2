@@ -89,6 +89,8 @@ function authorizationFor(endpoint) {
   if (routePath === '/api/v1/identity/me') return 'API_KEY_OR_OWNER';
   if (routePath === '/api/studio/browser-source/events') return 'SIGNED_EPHEMERAL_TOKEN';
   if (routePath === '/api/auth/logout') return 'SESSION_TOKEN';
+  if (/^\/api\/live\/:id\/connectors\/tikfinity\/(?:check|events)$/.test(routePath)) return 'EPHEMERAL_RELAY_TOKEN';
+  if (/^\/api\/live\/:id\/connectors\/tikfinity\/(?:journal|pairings(?:\/:pairingId)?)$/.test(routePath)) return 'OWNER_OR_HOST';
   if (/^\/api\/admin\//.test(routePath) || routePath === '/api/ecosystem/metrics' || /requireAdmin/.test(source)) return 'ADMIN';
   if (!/requireUser/.test(source)) return 'PUBLIC';
   if (routePath === '/api/communities/:id/channels') return 'OWNER_OR_ADMIN';

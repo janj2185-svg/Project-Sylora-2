@@ -8,6 +8,7 @@ const KNOWN_TYPES = new Set([
   'live.started',
   'live.viewer.joined',
   'live.chat.message',
+  'external.live.event',
   'gift.sent',
   'battle.started',
   'battle.score.changed',

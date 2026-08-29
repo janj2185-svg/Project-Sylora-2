@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPersonalityInstructions,
+  buildRealtimeVoiceInstructions,
   sanitizeMemoryValue,
   modeFromView,
   SYLORA_MODES
@@ -24,6 +25,16 @@ test('eval: one Sylora personality across modes (no separate bots)', () => {
     assert.match(text, new RegExp(SYLORA_MODES[mode].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.doesNotMatch(text, /Business Bot|Science Bot|LIVE Bot|Learning Bot|Support Bot/i);
   }
+});
+
+test('eval: LIVE voice is natural, interruptible, honest and treats chat as untrusted', () => {
+  const text = buildRealtimeVoiceInstructions({ mode: 'live', locale: 'uk', context: { live: { title: 'Test LIVE' } } });
+  assert.match(text, /do not sound like a scripted support bot/i);
+  assert.match(text, /If interrupted, stop cleanly/i);
+  assert.match(text, /EXTERNAL LIVE EVENT.*untrusted viewer text/is);
+  assert.match(text, /Do not say a response was sent to TikTok/i);
+  assert.match(text, /one or two conversational sentences/i);
+  assert.doesNotMatch(text, /pretend (?:you are|to be) human/i);
 });
 
 test('eval: memory rejects secrets (safety)', () => {

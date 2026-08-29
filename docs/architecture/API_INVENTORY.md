@@ -6,14 +6,14 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 311 |
-| Active | 257 |
+| Total unique endpoints | 317 |
+| Active | 263 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
 | Unverified | 54 |
 | Frontend-used | 195 |
-| Backend-only | 116 |
+| Backend-only | 122 |
 
 ## Status contract
 
@@ -213,6 +213,12 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | GET | `/api/live/:id/chat` | PUBLIC | YES | ACTIVE | KEEP |
 | POST | `/api/live/:id/chat` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | POST | `/api/live/:id/cohost` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
+| POST | `/api/live/:id/connectors/tikfinity/check` | EPHEMERAL_RELAY_TOKEN | NO | ACTIVE | KEEP |
+| POST | `/api/live/:id/connectors/tikfinity/events` | EPHEMERAL_RELAY_TOKEN | NO | ACTIVE | KEEP |
+| GET | `/api/live/:id/connectors/tikfinity/journal` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
+| GET | `/api/live/:id/connectors/tikfinity/pairings` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
+| POST | `/api/live/:id/connectors/tikfinity/pairings` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
+| DELETE | `/api/live/:id/connectors/tikfinity/pairings/:pairingId` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
 | GET | `/api/live/:id/copilot` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
 | GET | `/api/live/:id/creator-insights` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
 | GET | `/api/live/:id/distribution` | OWNER_OR_HOST | YES | ACTIVE | KEEP |

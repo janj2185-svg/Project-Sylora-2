@@ -1,5 +1,9 @@
 # SYLORA — working core v0.1
 
+## Native Android and iOS client
+
+The production-oriented mobile vertical slice lives in [`apps/mobile`](apps/mobile). It uses Expo SDK 57 development builds with native WebRTC for camera, microphone, viewer transport and OpenAI Realtime voice. See [`apps/mobile/README.md`](apps/mobile/README.md) for device setup, TikFinity owner pairing and the external signing/platform approvals that cannot be embedded in source code.
+
 This is the first runnable vertical slice of SYLORA. It deliberately implements fewer things for real instead of pretending the entire long-term platform already exists.
 
 The canonical visual direction is defined in [SYLORA Canonical Product Design](docs/SYLORA-CANONICAL-DESIGN.md) and anchored by the user-approved reference at `docs/design/sylora-canonical-ui-reference.png`. New tabs and redesign work must remain in that single light, luminous SYLORA design language across desktop, tablet and mobile.

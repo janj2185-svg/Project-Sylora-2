@@ -5,7 +5,7 @@ const EVENT_TYPES=new Set(['chat','question','gift','like','follow','share','sub
 
 function clipped(value,max=500){return String(value??'').trim().slice(0,max)}
 function number(value,fallback=0){const parsed=Number(value);return Number.isFinite(parsed)?parsed:fallback}
-function timestamp(value){const parsed=number(value,Date.now());return new Date(parsed<10_000_000_000?parsed*1000:parsed).toISOString()}
+function timestamp(value){if(typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T/.test(value)){const parsed=Date.parse(value);if(Number.isFinite(parsed))return new Date(parsed).toISOString()}const parsed=number(value,Date.now());return new Date(parsed<10_000_000_000?parsed*1000:parsed).toISOString()}
 function userFrom(data={}){return{id:clipped(data.userId||data.user?.id||data.uniqueId||data.user?.uniqueId||data.nickname,120)||null,username:clipped(data.uniqueId||data.user?.uniqueId||data.username||data.user?.username,80)||null,displayName:clipped(data.nickname||data.user?.nickname||data.displayName||data.user?.displayName||data.uniqueId,120)||'TikTok viewer'}}
 function eventType(rawType,data){
   const type=clipped(rawType,80).toLowerCase().replaceAll('-','_');
@@ -42,7 +42,7 @@ export function normalizeTikTokLiveEvent(input={}){
   const user=userFrom(data);
   const text=clipped(data.comment||data.text||data.question||data.message,500);
   const rawId=clipped(envelope.eventId||envelope.id||data.eventId||data.msgId||data.id,180);
-  const occurredAt=timestamp(envelope.timestamp||envelope.createTime||data.timestamp||data.createTime||Date.now());
+  const occurredAt=timestamp(envelope.occurredAt||envelope.timestamp||envelope.createTime||data.occurredAt||data.timestamp||data.createTime||Date.now());
   const signature=JSON.stringify([type,rawId,user.id,text,occurredAt,data.giftId||data.gift?.id,data.repeatCount]);
   const id=rawId||createHash('sha256').update(signature).digest('hex').slice(0,24);
   const event={id,type,occurredAt,user,source:'tikfinity-local'};
@@ -50,7 +50,7 @@ export function normalizeTikTokLiveEvent(input={}){
   if(type==='gift')event.gift={
     id:clipped(data.giftId||data.gift?.id||data.giftName||data.gift?.name,120)||null,
     name:clipped(data.giftName||data.gift?.name||'Gift',120),
-    count:Math.max(1,Math.min(10_000,number(data.repeatCount||data.repeatEnd||data.count||1,1))),
+    count:Math.max(1,Math.min(10_000,number(data.repeatCount||data.repeatEnd||data.count||data.gift?.count||1,1))),
     diamonds:Math.max(0,Math.min(10_000_000,number(data.diamondCount||data.diamonds||data.gift?.diamondCount,0)))
   };
   if(type==='like')event.likeCount=Math.max(1,Math.min(1_000_000,number(data.likeCount||data.count||1,1)));

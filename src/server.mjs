@@ -30,10 +30,11 @@ import { handleEcosystemRoutes } from './ecosystem/routes.mjs';
 import { PostgresEcosystemRepository } from './repositories/postgres-ecosystem.mjs';
 import { emitGiftLifecycleEvents, emitLiveStartedEvents } from './platform-events.mjs';
 import { createPlatformEvent } from './platform-event-spine.mjs';
-import { sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
+import { buildRealtimeVoiceInstructions, sanitizeMemoryValue } from './ecosystem/sylora-intelligence.mjs';
 import { httpErrorResponse } from './http-errors.mjs';
 import { requestRatePolicy } from './rate-limit-policy.mjs';
 import { buildReleaseInfo } from './release-info.mjs';
+import { LiveConnectorRelay, relayErrorBody } from './live-connector-relay.mjs';
 import {
   LIVE_DISTRIBUTION_PROVIDERS,
   LiveDistributionService,
@@ -67,6 +68,7 @@ const creatorGiftShareBps = runtimeConfig.creatorGiftShareBps;
 const openaiModel = runtimeConfig.ai.model;
 const openaiRealtimeModel = runtimeConfig.ai.realtimeModel;
 const openaiRealtimeVoice = runtimeConfig.ai.realtimeVoice;
+const tiktokRelayEnabled = runtimeConfig.nodeEnv !== 'production' || process.env.SYLORA_FF_TIKTOK_RELAY === '1';
 const liveIceServers = runtimeConfig.iceServers;
 const issueRtcConfigForUser = userId => issueIceServersForUser(liveIceServers, {
   env: process.env,
@@ -121,6 +123,7 @@ const liveDistribution=new LiveDistributionService({
   now:()=>store.now(),
   id:()=>store.id()
 });
+const liveConnectorRelay=new LiveConnectorRelay();
 const outboxRepo=new PostgresOutboxRepository(postgres.pool);
 const conferenceRepo=new PostgresConferenceRepository(postgres.pool);
 const realtimeOutbox=new RealtimeOutbox({repository:outboxRepo,dispatch:dispatchOutboxEvent});
@@ -184,6 +187,12 @@ function liveDistributionFailure(res,error){
   if(known)return json(res,known.status,known.body);
   console.error('[live-distribution]',error?.name||'error');
   return json(res,500,{error:'LIVE_DISTRIBUTION_INTERNAL_ERROR'});
+}
+function liveRelayFailure(res,error){
+  const known=relayErrorBody(error);
+  if(known)return json(res,known.status,known.body);
+  console.error('[live-connector-relay]',error?.name||'error');
+  return json(res,500,{error:'LIVE_RELAY_INTERNAL_ERROR'});
 }
 function companionConnectSrc() {
   const defaults = ['http://127.0.0.1:43179', 'http://localhost:43179', 'ws://127.0.0.1:4455', 'ws://localhost:4455', 'wss://localhost:4455'];
@@ -437,9 +446,16 @@ async function api(req, res, url) {
     if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});
     if(!String(req.headers['content-type']||'').startsWith('application/sdp'))return json(res,415,{error:'SDP_REQUIRED'});
     const sdp=await textBody(req);if(!sdp.trim())return json(res,400,{error:'SDP_REQUIRED'});
-    const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20)};
-    const personality=ecosystem.personalityFor('ai', user);
-    const session={type:'realtime',model:openaiRealtimeModel,instructions:`${personality} Voice mode: speak naturally, warmly, directly and briefly. Voice sessions are conversational only; never claim you published, purchased, transferred, deleted, or changed account data. Use only allowed context. Never expose raw IDs or internal metadata. Context: ${JSON.stringify(voiceContext)}`,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'}},output:{voice:openaiRealtimeVoice}}};
+    const requestedMode=url.searchParams.get('mode')==='live'?'live':'personal',requestedLiveId=safeText(url.searchParams.get('liveId'),180);
+    let liveContext=null;
+    if(requestedMode==='live'){
+      const live=requestedLiveId?await findLiveRoom(requestedLiveId):null;
+      if(!live||live.hostId!==user.id||live.status!=='live')return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+      liveContext={id:live.id,title:live.title,status:live.status,externalRelayEnabled:tiktokRelayEnabled};
+    }
+    const context=await aiContext(user),voiceContext={profile:{displayName:context.profile.displayName,bio:context.profile.bio,locale:context.profile.locale},stats:context.stats,communities:context.communities,courses:context.courses,memories:context.memories.slice(-20),live:liveContext};
+    const instructions=buildRealtimeVoiceInstructions({mode:requestedMode,locale:context.profile.locale||'uk',context:voiceContext});
+    const session={type:'realtime',model:openaiRealtimeModel,output_modalities:['audio'],instructions,audio:{input:{noise_reduction:{type:'near_field'},transcription:{model:'gpt-4o-mini-transcribe'},turn_detection:{type:'semantic_vad'}},output:{voice:openaiRealtimeVoice}}};
     const form=new FormData();form.set('sdp',sdp);form.set('session',JSON.stringify(session));
     try{const upstream=await fetch('https://api.openai.com/v1/realtime/calls',{method:'POST',headers:{authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'OpenAI-Safety-Identifier':hashToken(user.id)},body:form});const answer=await upstream.text();if(!upstream.ok)return json(res,502,{error:'REALTIME_SESSION_FAILED'});res.writeHead(200,{'content-type':'application/sdp','cache-control':'no-store'});return res.end(answer)}catch(error){console.error('OpenAI Realtime session failed',error?.name||'error');return json(res,502,{error:'REALTIME_PROVIDER_ERROR'})}
   }
@@ -633,6 +649,40 @@ async function api(req, res, url) {
   m=route('/api/conferences/:id/signal',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const input=await body(req),kind=safeText(input.kind,30),fromPeerId=safeText(input.fromPeerId,80),toPeerId=safeText(input.toPeerId,80);if(!['peer-join','offer','answer','ice','peer-left'].includes(kind)||!fromPeerId)return json(res,400,{error:'INVALID_SIGNAL'});if(kind==='peer-join'){if(!await conferencePeerRegistry.claim(m.id,fromPeerId,user.id))return json(res,409,{error:'PEER_ID_IN_USE'})}else{if(await conferencePeerRegistry.owner(m.id,fromPeerId)!==user.id)return json(res,403,{error:'SIGNAL_PEER_FORBIDDEN'});if(toPeerId){const targetUserId=await conferencePeerRegistry.owner(m.id,toPeerId);if(!targetUserId||!participants.some(x=>x.id===targetUserId))return json(res,409,{error:'SIGNAL_TARGET_UNKNOWN'})}}const signal={kind,fromPeerId,toPeerId:toPeerId||null,userId:user.id,data:input.data??null,createdAt:store.now()};emitConference(m.id,'signal',signal);if(kind==='peer-left')await conferencePeerRegistry.release(m.id,fromPeerId,user.id);return json(res,202,{accepted:true})}
   m=route('/api/conferences/:id/ai',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;if(!openai)return json(res,503,{error:'AI_PROVIDER_NOT_CONFIGURED'});if(!await allowAi(user.id))return json(res,429,{error:'AI_RATE_LIMITED'});const participants=await conferenceParticipants(m.id,user.id);if(!participants)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});const owned=[...(await listConferences(user.id,'science')),...(await listConferences(user.id,'business'))],room=owned.find(x=>x.id===m.id);if(!room)return json(res,404,{error:'CONFERENCE_NOT_FOUND'});if(!room.syloraEnabled)return json(res,403,{error:'SYLORA_NOT_ENABLED'});const input=await body(req),text=safeText(input.text,4000);if(!text)return json(res,400,{error:'TEXT_REQUIRED'});try{const response=await openai.responses.create({model:openaiModel,store:false,reasoning:{effort:'low'},max_output_tokens:1800,instructions:`You are Sylora participating on demand inside a private ${room.kind} conference. Be concise, factual and useful. Reply in the language of the question. You are an AI assistant, not a human participant. Do not invent meeting facts that were not provided. Do not perform account writes or claim you changed platform data. Room: ${JSON.stringify({title:room.title,description:room.description,kind:room.kind,participants:participants.map(x=>({displayName:x.displayName,role:x.role}))})}`,input:[{role:'user',content:text}]});const answer=safeText(response.output_text,8000);if(!answer)return json(res,502,{error:'AI_EMPTY_RESPONSE'});const event={id:store.id(),text:answer,question:text,askedBy:store.publicUser(user),createdAt:store.now()};emitConference(m.id,'sylora',event);return json(res,200,{message:answer,event})}catch(error){console.error('Conference Sylora request failed',error?.status||error?.name||'error');return json(res,502,{error:'AI_PROVIDER_ERROR'})}}
   m=route('/api/conference-invites/:id/accept',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const accepted=await acceptConference(m.id,user.id);if(!accepted)return json(res,404,{error:'INVITE_NOT_FOUND'});return json(res,200,{accepted})}
+  m=route('/api/live/:id/connectors/tikfinity/check',p);if(req.method==='POST'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    try{const pairing=liveConnectorRelay.verify(token(req),m.id),live=await findLiveRoom(m.id);if(!live||live.status!=='live'){liveConnectorRelay.closeRoom(m.id);return json(res,404,{error:'LIVE_NOT_FOUND'})}return json(res,200,{connected:true,pairing})}
+    catch(error){return liveRelayFailure(res,error)}
+  }
+  m=route('/api/live/:id/connectors/tikfinity/events',p);if(req.method==='POST'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    try{
+      const live=await findLiveRoom(m.id);if(!live||live.status!=='live'){liveConnectorRelay.closeRoom(m.id);return json(res,404,{error:'LIVE_NOT_FOUND'})}
+      const result=liveConnectorRelay.ingest(token(req),m.id,await body(req));
+      if(result.accepted){emitLive(m.id,'external',result.event);ingestLivePlatformEvent(createPlatformEvent({eventType:'external.live.event',liveRoomId:m.id,actor:{type:'integration',id:'tikfinity-owner-relay'},payload:{type:result.event.type,eventId:result.event.id}}))}
+      return json(res,result.accepted?202:200,{accepted:result.accepted,duplicate:result.duplicate,event:result.event})
+    }catch(error){return liveRelayFailure(res,error)}
+  }
+  m=route('/api/live/:id/connectors/tikfinity/pairings',p);if(req.method==='GET'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId!==user.id||live.status!=='live')return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    return json(res,200,{pairings:liveConnectorRelay.pairingsFor(m.id,user.id),feature:'tiktok_owner_relay'});
+  }
+  if(req.method==='POST'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId!==user.id||live.status!=='live')return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    const issued=liveConnectorRelay.issue({liveId:m.id,userId:user.id});return json(res,201,{...issued,tokenVisibility:'once',transport:'tikfinity-desktop-companion',officialTikTokApi:false});
+  }
+  m=route('/api/live/:id/connectors/tikfinity/pairings/:pairingId',p);if(req.method==='DELETE'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    return json(res,200,liveConnectorRelay.revoke({liveId:m.id,userId:user.id,pairingId:m.pairingId}));
+  }
+  m=route('/api/live/:id/connectors/tikfinity/journal',p);if(req.method==='GET'&&m){
+    if(!tiktokRelayEnabled)return json(res,404,{error:'FEATURE_DISABLED'});
+    const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId!==user.id)return json(res,403,{error:'LIVE_HOST_REQUIRED'});
+    const page=liveConnectorRelay.eventsAfter(m.id,url.searchParams.get('after'),url.searchParams.get('limit'));return json(res,200,{...page,provider:'tikfinity-owner-relay'});
+  }
   if(req.method==='POST'&&p==='/api/live'){const user=await requireUser(req,res);if(!user)return;const input=await body(req),title=safeText(input.title,120);const live=await createLiveRoom({id:store.id(),hostId:user.id,title:title||`${user.displayName} LIVE`,status:'live',viewerCount:0,createdAt:store.now(),endedAt:null});emitLiveStartedEvents({live,host:user});ingestLivePlatformEvent(createPlatformEvent({eventType:'live.started',liveRoomId:live.id,actor:{type:'user',id:user.id},payload:{hostId:user.id,title:live.title}}));return json(res,201,{live});}
   if(req.method==='GET'&&p==='/api/live/rtc-config'){
     const user=await requireUser(req,res);if(!user)return;
@@ -684,7 +734,7 @@ async function api(req, res, url) {
   m=route('/api/live/:id/engagement',p);if(req.method==='GET'&&m){const live=await findLiveRoom(m.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});return json(res,200,{engagement:await liveEngagement(live.id),battle:await activeBattle(live.id)})}
   m=route('/api/live/:id/like',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const live=await findLiveRoom(m.id);if(!live||live.hostId===user.id)return json(res,400,{error:'INVALID_LIKE'});const input=await body(req),engagement=await addLiveLike(live.id,input.amount);const event={liveId:live.id,user:store.publicUser(user),...engagement};emitLive(live.id,'like',event);return json(res,200,{engagement})}
   m=route('/api/live/:id/resonance',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const host=await findLiveRoom(m.id);if(!host||host.hostId!==user.id)return json(res,403,{error:'HOST_ONLY'});if(await activeBattle(host.id))return json(res,409,{error:'RESONANCE_ALREADY_ACTIVE'});const input=await body(req),opponent=await findLiveRoom(safeText(input.opponentLiveId,80));if(!opponent||opponent.id===host.id||opponent.hostId===user.id||await activeBattle(opponent.id))return json(res,400,{error:'INVALID_OPPONENT'});const startedAt=store.now(),endsAt=new Date(Date.now()+3*60_000).toISOString(),battle=liveRepo.enabled?await liveRepo.createBattle({id:store.id(),hostLiveId:host.id,opponentLiveId:opponent.id,startedAt,endsAt}):(()=>{const b={id:store.id(),hostLiveId:host.id,opponentLiveId:opponent.id,status:'live',hostScore:0,opponentScore:0,startedAt,endsAt};store.data.liveBattles.push(b);store.save();return b})();emitLive(host.id,'resonance',battle);emitLive(opponent.id,'resonance',battle);return json(res,201,{battle})}
-  m=route('/api/live/:id/end',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const current=await findLiveRoom(m.id);if(!current||current.hostId!==user.id)return json(res,404,{error:'LIVE_NOT_FOUND'});try{if(await liveDistribution.activeSession(user.id,m.id))await liveDistribution.stop(user.id,m.id)}catch(error){return liveDistributionFailure(res,error)}const live=await endLiveRoom(m.id,user.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});livePeerRegistry.clearLocalRoom(live.id);return json(res,200,{live});}
+  m=route('/api/live/:id/end',p);if(req.method==='POST'&&m){const user=await requireUser(req,res);if(!user)return;const current=await findLiveRoom(m.id);if(!current||current.hostId!==user.id)return json(res,404,{error:'LIVE_NOT_FOUND'});try{if(await liveDistribution.activeSession(user.id,m.id))await liveDistribution.stop(user.id,m.id)}catch(error){return liveDistributionFailure(res,error)}const live=await endLiveRoom(m.id,user.id);if(!live)return json(res,404,{error:'LIVE_NOT_FOUND'});livePeerRegistry.clearLocalRoom(live.id);liveConnectorRelay.closeRoom(live.id);return json(res,200,{live});}
   if(req.method==='GET'&&p==='/api/videos'){const format=url.searchParams.get('format');const videos=store.data.videos.filter(v=>!format||v.format===format).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(v=>{const m=store.data.media.find(x=>x.id===v.mediaId),job=[...store.data.mediaJobs].reverse().find(j=>j.mediaId===v.mediaId&&j.type==='hls');return{...v,author:store.publicUser(store.data.users.find(u=>u.id===v.userId)),media:m?{...m,url:`/media/${m.id}`}:null,stream:job?publicJob(job):null}});return json(res,200,{videos});}
   if(req.method==='POST'&&p==='/api/videos'){const user=await requireUser(req,res);if(!user)return;const input=await body(req);const media=store.data.media.find(x=>x.id===input.mediaId&&x.userId===user.id);if(!media)return json(res,400,{error:'OWNED_MEDIA_REQUIRED'});const format=input.format==='clip'?'clip':'video';const video={id:store.id(),userId:user.id,mediaId:media.id,title:safeText(input.title,120)||'Untitled',description:safeText(input.description,2000),format,visibility:'public',createdAt:store.now()};store.data.videos.push(video);store.save();const job=startHlsJob(media,user);return json(res,201,{video:{...video,media:{...media,url:`/media/${media.id}`},author:store.publicUser(user),stream:publicJob(job)}});}
   if(req.method==='GET'&&p==='/api/stats'){const user=await requireUser(req,res);if(!user)return;const wallet=authSocial.enabled?await walletRepo.ensureWallet(user.id):store.data.wallets.find(w=>w.userId===user.id),social=authSocial.enabled?await authSocial.socialStats(user.id):{posts:store.data.posts.filter(x=>x.userId===user.id).length,followers:store.data.follows.filter(x=>x.followingId===user.id).length,following:store.data.follows.filter(x=>x.followerId===user.id).length},giftStats=authSocial.enabled?await walletRepo.giftStats(user.id):{giftsReceived:store.data.ledger.filter(x=>x.toUserId===user.id&&x.type==='gift').reduce((a,x)=>a+(x.grossAmount??x.amount),0),creatorEarnings:wallet?.earnings||0};return json(res,200,{...social,...giftStats});}

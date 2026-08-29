@@ -32,4 +32,6 @@ export class SyloraCompanionClient {
   disconnectTikTok(){return this.request('/v1/tiktok/disconnect',{method:'POST',body:{}})}
   tiktokEvents(after=0,limit=100){return this.request(`/v1/tiktok/events?after=${encodeURIComponent(after)}&limit=${encodeURIComponent(limit)}`)}
   simulateTikTok(event){return this.request('/v1/tiktok/simulate',{method:'POST',body:event})}
+  connectTikTokRelay({baseUrl,liveId,relayToken}){return this.request('/v1/tiktok/relay/connect',{method:'POST',body:{baseUrl,liveId,relayToken}})}
+  disconnectTikTokRelay(){return this.request('/v1/tiktok/relay/disconnect',{method:'POST',body:{}})}
 }

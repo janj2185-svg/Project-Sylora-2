@@ -7,6 +7,9 @@ node_modules/
 *.log
 .DS_Store
 coverage/
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
 tmp/*
 !tmp/.gitkeep
 :memory:

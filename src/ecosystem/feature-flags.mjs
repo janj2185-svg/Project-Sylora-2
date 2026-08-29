@@ -12,6 +12,9 @@ const DEFAULTS = Object.freeze({
   passkeys_2fa: false,
   semantic_embeddings: !!process.env.SYLORA_EMBEDDING_PROVIDER,
   live_ai_copilot: true,
+  live_realtime_voice: true,
+  native_mobile_shell: true,
+  tiktok_owner_relay: process.env.NODE_ENV !== 'production',
   realtime_translation: true,
   honesty_labels: true,
   daily_brief: true,
@@ -31,6 +34,8 @@ export function resolveFlags(overrides = {}) {
   if (process.env.SYLORA_FF_MARKETPLACE === '1') out.creator_marketplace = true;
   if (process.env.SYLORA_FF_FAMILY === '1') out.family_safety = true;
   if (process.env.SYLORA_FF_2FA === '1') out.passkeys_2fa = true;
+  if (process.env.SYLORA_FF_TIKTOK_RELAY === '1') out.tiktok_owner_relay = true;
+  if (process.env.SYLORA_FF_TIKTOK_RELAY === '0') out.tiktok_owner_relay = false;
   return out;
 }
 

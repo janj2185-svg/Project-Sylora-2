@@ -1,0 +1,31 @@
+name: OpenAI Realtime secret smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openai-realtime-smoke
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify-server-secret-and-realtime-access
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Verify OpenAI Realtime access without exposing the key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_REALTIME_MODEL: ${{ vars.OPENAI_REALTIME_MODEL || 'gpt-realtime-2.1' }}
+        run: node scripts/openai-secret-smoke.mjs

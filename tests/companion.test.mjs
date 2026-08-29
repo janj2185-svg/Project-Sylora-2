@@ -49,7 +49,7 @@ test('companion requires pairing, origin allowlist and bounded OBS actions',asyn
     assert.equal(badOrigin.status,403);
     const fetchImpl=(url,options={})=>fetch(url,{...options,headers:{...(options.headers||{}),origin:'https://sylora.example'}});
     const client=new SyloraCompanionClient({url:base,token,fetchImpl});
-    const health=await client.health();assert.equal(health.service,'sylora-companion');assert.equal(health.version,2);assert.equal(health.simulationEnabled,true);
+    const health=await client.health();assert.equal(health.service,'sylora-companion');assert.equal(health.version,3);assert.equal(health.simulationEnabled,true);assert.equal(health.relay.connected,false);
     const connected=await client.connectObs({url:'ws://127.0.0.1:4455',password:'local-only'});
     assert.equal(connected.connected,true);
     assert.equal(FakeObsClient.last.options.password,'local-only');
