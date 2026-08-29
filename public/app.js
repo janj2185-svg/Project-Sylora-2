@@ -560,7 +560,7 @@ async function renderLive(){
       }catch(err){toast(humanError(e.message||err.message))}
     }
   });
-  if(state.me&&tab==='create')tiktokPilotCleanup=mountTikTokOwnerPilot({root:document.querySelector('#tiktokPilotMount'),api,toast,humanError});
+  if(state.me&&tab==='create')tiktokPilotCleanup=mountTikTokOwnerPilot({root:document.querySelector('#tiktokPilotMount'),api,speak:speakSylora,toast,humanError});
   if(state.intent&&rooms.some(r=>r.id===state.intent)){const id=state.intent;state.intent=null;watchLive(id)}
 }
 function clearRtcConfigCache(){liveRtcConfigCache=null;liveRtcConfigCachedAt=0}
@@ -1101,7 +1101,7 @@ async function renderCanvas(){
   document.querySelector('#canvasForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);await api('/api/canvas',{method:'POST',body:JSON.stringify({title:fd.get('title'),kind:fd.get('kind'),artifact:{body:fd.get('body')}})});toast('Saved');renderCanvas()};
   document.querySelector('#canvasAsk').onsubmit=async e=>{e.preventDefault();const q=new FormData(e.currentTarget).get('q');const out=await api('/api/ai/command',{method:'POST',body:JSON.stringify({text:q,view:'canvas'})});const pre=document.querySelector('#canvasAskOut');pre.hidden=false;pre.textContent=JSON.stringify(out.result||out.plan||out,null,2).slice(0,1800)};
 }
-function syloraSpeechLocale(){return({uk:'uk-UA',pl:'pl-PL',en:'en-US'})[getLocale()]||'uk-UA'}
+function syloraSpeechLocale(){return({uk:'uk-UA',pl:'pl-PL',en:'en-US',de:'de-DE',ru:'ru-RU'})[getLocale()]||'uk-UA'}
 function setSyloraPresence(mode='ready'){
   const hero=document.querySelector('.sylora-ai-hero'),label=document.querySelector('#aiPresenceStatus');if(hero)hero.dataset.presence=mode;
   hero?._syloraMotionRig?.setPresence(mode);
@@ -1110,10 +1110,10 @@ function setSyloraPresence(mode='ready'){
   if(mode==='thinking')setSyloraGesture('thinking');else if(mode==='speaking')setSyloraGesture('explain');else if(mode==='listening')setSyloraGesture('empathy');else if(mode==='muted')setSyloraGesture('neutral');else if(hero?.dataset.emotion==='neutral'||!hero?.dataset.emotion)setSyloraGesture('neutral');
 }
 function stopSyloraVoice(){syloraRecognition?.stop?.();syloraRecognition=null;window.speechSynthesis?.cancel();setSyloraPresence('ready')}
-function speakSylora(text){
-  if(!syloraVoiceEnabled||!text||!('speechSynthesis'in window))return;setSyloraEmotion(detectSyloraEmotion(text),5200);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);utterance.lang=syloraSpeechLocale();utterance.rate=.98;utterance.pitch=1.03;
+function speakSylora(text,{force=false}={}){
+  if((!syloraVoiceEnabled&&!force)||!text||!('speechSynthesis'in window))return false;setSyloraEmotion(detectSyloraEmotion(text),5200);window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(text);utterance.lang=syloraSpeechLocale();utterance.rate=.98;utterance.pitch=1.03;
   const voices=window.speechSynthesis.getVoices(),selected=voices.find(v=>v.voiceURI===syloraVoiceId),exact=voices.find(v=>v.lang?.toLowerCase()===utterance.lang.toLowerCase()),family=voices.find(v=>v.lang?.toLowerCase().startsWith(utterance.lang.slice(0,2).toLowerCase()));if(selected||exact||family)utterance.voice=selected||exact||family;
-  utterance.onstart=()=>setSyloraPresence('speaking');utterance.onend=()=>setSyloraPresence('ready');utterance.onerror=()=>setSyloraPresence('ready');window.speechSynthesis.speak(utterance);
+  utterance.onstart=()=>setSyloraPresence('speaking');utterance.onend=()=>setSyloraPresence('ready');utterance.onerror=()=>setSyloraPresence('ready');window.speechSynthesis.speak(utterance);return true;
 }
 function startSyloraListening(){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition,input=document.querySelector('#aiForm textarea');if(!Recognition||!input)return toast('Голосове введення не підтримується цим браузером');

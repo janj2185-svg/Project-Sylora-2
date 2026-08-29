@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [app, html, system, living] = await Promise.all([
+const [app, html, system, living, tiktokPilot] = await Promise.all([
   readFile(new URL('../public/app.js', import.meta.url), 'utf8'),
   readFile(new URL('../public/index.html', import.meta.url), 'utf8'),
   readFile(new URL('../public/design-system-2026.css', import.meta.url), 'utf8'),
-  readFile(new URL('../public/design-living-horizon.css', import.meta.url), 'utf8')
+  readFile(new URL('../public/design-living-horizon.css', import.meta.url), 'utf8'),
+  readFile(new URL('../public/tiktok-live-pilot.js', import.meta.url), 'utf8')
 ]);
 
 test('global shell exposes one header gift action and one contextual wallet action', () => {
@@ -56,4 +57,11 @@ test('LIVE setup reports real TikTok readiness instead of decorative integration
   assert.match(app, /if\(state\.me&&tab==='create'\)tiktokPilotCleanup=/);
   assert.doesNotMatch(app, /<button class="active" type="button">Живий чат<\/button><button type="button">Гості<\/button><button type="button">Модерація<\/button>/);
   assert.doesNotMatch(app, /<div class="platform-pills"><i>TikTok<\/i><i>YouTube<\/i><i>OBS<\/i><i>TikFinity<\/i><\/div>/);
+});
+
+test('TikTok copilot uses the selected Sylora voice and all five locale codes', () => {
+  assert.match(app, /de:'de-DE',ru:'ru-RU'/);
+  assert.match(app, /speak:speakSylora/);
+  assert.match(tiktokPilot, /speak=\(\)=>false/);
+  assert.doesNotMatch(tiktokPilot, /new SpeechSynthesisUtterance|function speakLocal/);
 });
