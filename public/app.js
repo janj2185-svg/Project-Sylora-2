@@ -476,38 +476,38 @@ function renderVideoUploader(){const box=document.querySelector('#videoUploader'
 async function renderExplore(){app.innerHTML=`<div class="card hero"><span class="eyebrow">UNIVERSAL SEARCH</span><h1>Знайди своїх.</h1><p>People · Posts · Videos · LIVE · Messages · Communities · Projects · Companies · Courses · Research · Files</p><div class="discovery-orbits"><span>Люди</span><span>Ідеї</span><span>Science</span><span>Business</span></div></div><form id="search" class="card searchbar discovery-search"><input name="q" minlength="2" placeholder="Кого або що шукаємо у SYLORA?" autofocus><button class="primary">Знайти</button></form><div id="results" class="discovery-results"></div>`;document.querySelector('#search').onsubmit=async e=>{e.preventDefault();const q=new FormData(e.currentTarget).get('q');const [r,u]=await Promise.all([api(`/api/search?q=${encodeURIComponent(q)}`),state.me?api(`/api/search/universal?q=${encodeURIComponent(q)}`).catch(()=>null):null]);const sections=[['Люди',r.users,x=>`@${esc(x.username)} · ${esc(x.displayName)}`],['Публікації',r.posts,p=>`${esc(p.author?.username||'')}: ${esc(p.text)}`],['Спільноти',r.communities,x=>esc(x.name)],['Курси',r.courses,x=>esc(x.title)],['Бізнес',r.businesses,x=>esc(x.name)],['LIVE',r.lives||[],x=>esc(x.title)],['Agents',r.agents||[],x=>esc(x.name)]];let html=sections.map(([name,items,fn])=>`<div class="card item"><span class="eyebrow">${name}</span>${(items||[]).map(x=>`<p>${fn(x)}</p>`).join('')||'<p class="muted">Нічого не знайдено</p>'}</div>`).join('');if(u?.semantic?.length){html+=`<div class="card item"><span class="eyebrow">SEMANTIC ${u.semanticHonesty?.state==='degraded'?'· lexical fallback':''}</span>${u.semantic.slice(0,12).map(x=>`<p><b>${esc(x.type)}</b> · ${esc(x.label||'')}</p>`).join('')}<p class="muted">${esc(u.semanticHonesty?.note||'')}</p></div>`;}document.querySelector('#results').innerHTML=html}}
 
 async function renderExploreReference(){
-  app.innerHTML=`<section class="route-hero-row compact explore-heading"><div><span class="status-pill status-pill--violet">${referenceIcon('search')} UNIVERSAL DISCOVERY</span><h1>Знайди своє наступне.</h1><p>Люди, відео, LIVE, спільноти, навчання й бізнес — один пошук, один router, чесні результати.</p></div></section>
-  <form id="search" class="explore-search"><span>${referenceIcon('search')}</span><input name="q" minlength="2" placeholder="Кого або що шукаємо у SYLORA?" autocomplete="off" autofocus><button type="submit">${referenceIcon('sparkles')} Знайти</button></form>
+  app.innerHTML=`<section class="route-hero-row compact explore-heading"><div><span class="status-pill status-pill--violet">${referenceIcon('search')} ${esc(t('universalDiscovery'))}</span><h1>${esc(t('exploreHero'))}</h1><p>${esc(t('exploreIntro'))}</p></div></section>
+  <form id="search" class="explore-search"><span>${referenceIcon('search')}</span><input name="q" minlength="2" aria-label="${esc(t('searchQuery'))}" placeholder="${esc(t('searchQuery'))}" autocomplete="off" autofocus><button type="submit">${referenceIcon('sparkles')} ${esc(t('search'))}</button></form>
   <section id="discoveryDefault" class="discovery-grid">
-    <article class="glass-card discovery-hero"><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><span class="live-stage-shade"></span><div><span class="status-pill status-pill--gold">LIVING HORIZON</span><h2>Світ, який відповідає.</h2><p>Відкривайте реальних авторів, голоси й ідеї — без вигаданих профілів.</p></div></article>
+    <article class="glass-card discovery-hero"><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><span class="live-stage-shade"></span><div><span class="status-pill status-pill--gold">LIVING HORIZON</span><h2>${esc(t('responsiveWorld'))}</h2><p>${esc(t('responsiveWorldIntro'))}</p></div></article>
     ${[
-      ['users','Люди','Автори, дослідники й ведучі','creator'],
-      ['live','LIVE зараз','Живі ефіри та події','live'],
-      ['learning','Навчання','Курси, science circles, tutor','course'],
-      ['business','Бізнес','Команди, проєкти й компанії','company']
-    ].map(([icon,title,description,query],index)=>`<article class="glass-card discovery-card"><span class="discovery-icon nav-icon-plate">${referenceIcon(icon)}</span><span class="status-pill ${index===1?'status-pill--rose':index===2?'status-pill--success':'status-pill--violet'}">${index===1?'REALTIME':'DISCOVER'}</span><h3>${title}</h3><p>${description}</p><button type="button" data-discovery-query="${query}">Дослідити ${referenceIcon('arrow')}</button></article>`).join('')}
+      ['users',t('people'),t('creatorsResearchers'),'creator'],
+      ['live',t('liveNow'),t('liveEvents'),'live'],
+      ['learning',t('learning'),t('coursesCircles'),'course'],
+      ['business',t('business'),t('teamsProjects'),'company']
+    ].map(([icon,title,description,query],index)=>`<article class="glass-card discovery-card"><span class="discovery-icon nav-icon-plate">${referenceIcon(icon)}</span><span class="status-pill ${index===1?'status-pill--rose':index===2?'status-pill--success':'status-pill--violet'}">${index===1?'REALTIME':'DISCOVER'}</span><h3>${esc(title)}</h3><p>${esc(description)}</p><button type="button" data-discovery-query="${query}">${esc(t('discoverAction'))} ${referenceIcon('arrow')}</button></article>`).join('')}
   </section>
   <section id="results" class="discovery-results reference-search-results" aria-live="polite"></section>`;
   const form=document.querySelector('#search'),input=form.elements.q,defaultGrid=document.querySelector('#discoveryDefault'),results=document.querySelector('#results');
   const runSearch=async query=>{
     const q=String(query||'').trim();if(q.length<2)return;
-    results.innerHTML='<div class="glass-card discovery-loading"><span class="runtime-core">✦</span><b>SYLORA шукає…</b></div>';
+    results.innerHTML=`<div class="glass-card discovery-loading"><span class="runtime-core">✦</span><b>${esc(t('searching'))}</b></div>`;
     const [found,universal]=await Promise.all([api(`/api/search?q=${encodeURIComponent(q)}`),state.me?api(`/api/search/universal?q=${encodeURIComponent(q)}`).catch(()=>null):null]);
     const sections=[
-      ['Люди',found.users,x=>`@${esc(x.username)} · ${esc(x.displayName)}`,'users'],
-      ['Публікації',found.posts,item=>`${esc(item.author?.username||'')}: ${esc(item.text)}`,'clip'],
-      ['Спільноти',found.communities,item=>esc(item.name),'users'],
-      ['Курси',found.courses,item=>esc(item.title),'learning'],
-      ['Бізнес',found.businesses,item=>esc(item.name),'business'],
+      [t('people'),found.users,x=>`@${esc(x.username)} · ${esc(x.displayName)}`,'users'],
+      [t('posts'),found.posts,item=>`${esc(item.author?.username||'')}: ${esc(item.text)}`,'clip'],
+      [t('communities'),found.communities,item=>esc(item.name),'users'],
+      [t('courses'),found.courses,item=>esc(item.title),'learning'],
+      [t('business'),found.businesses,item=>esc(item.name),'business'],
       ['LIVE',found.lives||[],item=>esc(item.title),'live'],
-      ['Agents',found.agents||[],item=>esc(item.name),'sparkles']
+      [t('agents'),found.agents||[],item=>esc(item.name),'sparkles']
     ];
-    let html=sections.map(([name,items,format,icon],index)=>`<article class="glass-card discovery-card search-result-card"><span class="discovery-icon nav-icon-plate">${referenceIcon(icon)}</span><span class="status-pill ${index===5?'status-pill--rose':'status-pill--violet'}">${(items||[]).length} результатів</span><h3>${name}</h3><div class="result-lines">${(items||[]).slice(0,8).map(item=>`<p>${format(item)}</p>`).join('')||'<p class="muted">Нічого не знайдено</p>'}</div></article>`).join('');
-    if(universal?.semantic?.length)html+=`<article class="glass-card discovery-card search-result-card semantic-result"><span class="discovery-icon nav-icon-plate">${referenceIcon('sparkles')}</span><span class="status-pill status-pill--success">SEMANTIC</span><h3>Розумний пошук</h3><div class="result-lines">${universal.semantic.slice(0,12).map(item=>`<p><b>${esc(item.type)}</b> · ${esc(item.label||'')}</p>`).join('')}</div><small>${esc(universal.semanticHonesty?.note||'')}</small></article>`;
+    let html=sections.map(([name,items,format,icon],index)=>`<article class="glass-card discovery-card search-result-card"><span class="discovery-icon nav-icon-plate">${referenceIcon(icon)}</span><span class="status-pill ${index===5?'status-pill--rose':'status-pill--violet'}">${(items||[]).length} ${esc(t('resultsLabel'))}</span><h3>${esc(name)}</h3><div class="result-lines">${(items||[]).slice(0,8).map(item=>`<p>${format(item)}</p>`).join('')||`<p class="muted">${esc(t('nothingFound'))}</p>`}</div></article>`).join('');
+    if(universal?.semantic?.length)html+=`<article class="glass-card discovery-card search-result-card semantic-result"><span class="discovery-icon nav-icon-plate">${referenceIcon('sparkles')}</span><span class="status-pill status-pill--success">SEMANTIC</span><h3>${esc(t('smartSearch'))}</h3><div class="result-lines">${universal.semantic.slice(0,12).map(item=>`<p><b>${esc(item.type)}</b> · ${esc(item.label||'')}</p>`).join('')}</div><small>${esc(universal.semanticHonesty?.note||'')}</small></article>`;
     defaultGrid.hidden=true;results.innerHTML=html;
   };
-  form.onsubmit=event=>{event.preventDefault();runSearch(new FormData(form).get('q')).catch(error=>{results.innerHTML=`<div class="glass-card empty">${esc(error.message)}</div>`})};
-  document.querySelectorAll('[data-discovery-query]').forEach(button=>button.onclick=()=>{input.value=button.dataset.discoveryQuery;runSearch(input.value).catch(error=>toast(error.message))});
+  form.onsubmit=event=>{event.preventDefault();runSearch(new FormData(form).get('q')).catch(error=>{results.innerHTML=`<div class="glass-card empty">${esc(humanError(error.message))}</div>`})};
+  document.querySelectorAll('[data-discovery-query]').forEach(button=>button.onclick=()=>{input.value=button.dataset.discoveryQuery;runSearch(input.value).catch(error=>toast(humanError(error.message)))});
 }
 
 async function renderLive(){
