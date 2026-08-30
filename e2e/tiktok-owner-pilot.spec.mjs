@@ -27,6 +27,7 @@ test('owner can connect the local bridge and inspect chat, gift and host events 
   await registerViaUi(page,uniqueAccount('tiktok'));
   let copilotRequests=0;page.on('request',request=>{if(request.url().endsWith('/api/ai/live-copilot/respond'))copilotRequests+=1});
   await page.locator('button[data-view="live"]:visible').first().click();
+  await page.locator('button[data-live-tab="create"]:visible').first().click();
   await expect(page.locator('.tiktok-owner-pilot')).toBeVisible();
   await page.locator('#tiktokBridgeForm [name="token"]').fill(token);
   await page.locator('#tiktokBridgeForm button[type="submit"]').click();
