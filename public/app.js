@@ -370,21 +370,21 @@ async function renderWalletReference(){
   app.innerHTML=`<div class="wallet-layout">
     <main class="wallet-main">
       <section class="wallet-balance">
-        <div><span class="status-pill status-pill--gold">${referenceIcon('wallet')} SYLORA WALLET</span><small>ДОСТУПНИЙ БАЛАНС</small><h1>${balance.toLocaleString()} <span>LUMEN</span></h1><p>${state.me?'Ваші LUMEN, подарунки й creator-заробіток в одному захищеному просторі.':'Увійдіть, щоб побачити баланс і надсилати живі подарунки.'}</p>${state.me?'':'<button id="giftLogin" class="depth-button" type="button">Увійти в гаманець</button>'}</div>
+        <div><span class="status-pill status-pill--gold">${referenceIcon('wallet')} SYLORA WALLET</span><small>${esc(t('availableBalance'))}</small><h1>${balance.toLocaleString()} <span>LUMEN</span></h1><p>${esc(t(state.me?'walletSignedIntro':'walletGuestIntro'))}</p>${state.me?'':`<button id="giftLogin" class="depth-button" type="button">${esc(t('openWallet'))}</button>`}</div>
         <span class="lumen-core" aria-hidden="true"><b>✦</b></span>
       </section>
       <section class="metric-grid wallet-metrics">
-        <article class="glass-card metric-card"><span>${referenceIcon('wallet')}</span><small>БАЛАНС</small><b>${balance.toLocaleString()}</b><em>LUMEN</em></article>
-        <article class="glass-card metric-card"><span>${referenceIcon('sparkles')}</span><small>ПОДАРУНКИ</small><b>${gifts.length}</b><em>живих ефектів</em></article>
-        <article class="glass-card metric-card"><span>${referenceIcon('activity')}</span><small>CREATOR SHARE</small><b>${(creatorShareBps/100).toFixed(0)}%</b><em>тестова економіка</em></article>
+        <article class="glass-card metric-card"><span>${referenceIcon('wallet')}</span><small>${esc(t('balance'))}</small><b>${balance.toLocaleString()}</b><em>LUMEN</em></article>
+        <article class="glass-card metric-card"><span>${referenceIcon('sparkles')}</span><small>${esc(t('gifts').toUpperCase())}</small><b>${gifts.length}</b><em>${esc(t('giftEffects'))}</em></article>
+        <article class="glass-card metric-card"><span>${referenceIcon('activity')}</span><small>CREATOR SHARE</small><b>${(creatorShareBps/100).toFixed(0)}%</b><em>${esc(t('testEconomy'))}</em></article>
       </section>
-      ${state.me?`<section class="glass-card wallet-send-card"><div class="card-top"><div><small>НАДІСЛАТИ ПОДАРУНОК</small><h3>Створіть живий момент.</h3></div></div><div class="wallet-send-controls"><label>Отримувач<select id="giftRecipient"><option value="">Оберіть користувача</option>${users.map(u=>`<option value="${u.id}">@${esc(u.username)} — ${esc(u.displayName)}</option>`).join('')}</select></label><label>Combo<select id="giftQuantity"><option value="1">×1</option><option value="5">×5</option><option value="10">×10</option></select></label></div></section>`:''}
-      <section class="gifts gift-constellation wallet-gifts">${gifts.map((gift,index)=>`<button class="glass-card gift" type="button" data-gift="${gift.id}" style="--gift-index:${index}"><span class="gift-orb" style="background:${gift.color};color:${gift.color}"><i>${liveGiftGlyph(gift.id)}</i></span><strong>${esc(gift.name)}</strong><small>${gift.tier} · ◈ ${gift.price}</small></button>`).join('')||'<div class="glass-card empty">Колекція подарунків готується.</div>'}</section>
-      <section class="glass-card transactions-card"><div class="card-top"><div><small>РУХ LUMEN</small><h3>Останні транзакції</h3></div></div>${entries.slice(0,7).map(entry=>`<div class="transaction"><span class="transaction-icon">${referenceIcon(entry.amount>=0?'sparkles':'wallet')}</span><span><b>${esc(entry.type)}</b><small>${new Date(entry.createdAt).toLocaleString()}</small></span><b class="${entry.amount>=0?'positive':''}">${entry.amount>=0?'+':''}${entry.amount}</b></div>`).join('')||'<p class="muted">Транзакцій поки немає.</p>'}</section>
+      ${state.me?`<section class="glass-card wallet-send-card"><div class="card-top"><div><small>${esc(t('sendGift'))}</small><h3>${esc(t('createLiveMoment'))}</h3></div></div><div class="wallet-send-controls"><label>${esc(t('recipient'))}<select id="giftRecipient"><option value="">${esc(t('chooseUser'))}</option>${users.map(u=>`<option value="${esc(u.id)}">@${esc(u.username)} — ${esc(u.displayName)}</option>`).join('')}</select></label><label>Combo<select id="giftQuantity"><option value="1">×1</option><option value="5">×5</option><option value="10">×10</option></select></label></div></section>`:''}
+      <section class="gifts gift-constellation wallet-gifts">${gifts.map((gift,index)=>`<button class="glass-card gift" type="button" data-gift="${esc(gift.id)}" style="--gift-index:${index}"><span class="gift-orb" style="background:${gift.color};color:${gift.color}"><i>${liveGiftGlyph(gift.id)}</i></span><strong>${esc(gift.name)}</strong><small>${gift.tier} · ◈ ${gift.price}</small></button>`).join('')||`<div class="glass-card empty">${esc(t('giftCollectionPending'))}</div>`}</section>
+      <section class="glass-card transactions-card"><div class="card-top"><div><small>${esc(t('lumenActivity'))}</small><h3>${esc(t('recentTransactions'))}</h3></div></div>${entries.slice(0,7).map(entry=>`<div class="transaction"><span class="transaction-icon">${referenceIcon(entry.amount>=0?'sparkles':'wallet')}</span><span><b>${esc(entry.type)}</b><small>${new Date(entry.createdAt).toLocaleString(getLocale()==='uk'?'uk-UA':getLocale())}</small></span><b class="${entry.amount>=0?'positive':''}">${entry.amount>=0?'+':''}${entry.amount}</b></div>`).join('')||`<p class="muted">${esc(t('noTransactions'))}</p>`}</section>
     </main>
     <aside class="context-stack">
-      <section class="glass-card gift-preview"><span class="status-pill status-pill--gold">LIVE GIFTS</span><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><h3>Кінематографічні подарунки</h3><p>Світло, звук і рух запускаються лише у справжньому LIVE.</p><button type="button" data-wallet-live>Відкрити LIVE ${referenceIcon('arrow')}</button></section>
-      <section class="glass-card security-mini">${referenceIcon('shield')}<div><b>Захищений гаманець</b><small>Баланс і журнал підтверджуються сервером.</small></div>${referenceIcon('chevron')}</section>
+      <section class="glass-card gift-preview"><span class="status-pill status-pill--gold">LIVE GIFTS</span><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><h3>${esc(t('cinematicGifts'))}</h3><p>${esc(t('cinematicGiftsIntro'))}</p><button type="button" data-wallet-live>${esc(t('openLive'))} ${referenceIcon('arrow')}</button></section>
+      <section class="glass-card security-mini">${referenceIcon('shield')}<div><b>${esc(t('secureWallet'))}</b><small>${esc(t('secureWalletIntro'))}</small></div>${referenceIcon('chevron')}</section>
     </aside>
   </div>`;
   document.querySelector('#giftLogin')?.addEventListener('click',renderAuth);
@@ -392,11 +392,11 @@ async function renderWalletReference(){
   document.querySelectorAll('.gift').forEach(button=>button.onclick=async()=>{
     if(!state.me)return renderAuth();
     const recipientId=document.querySelector('#giftRecipient')?.value,quantity=Number(document.querySelector('#giftQuantity')?.value||1);
-    if(!recipientId)return toast('Спочатку оберіть отримувача');
+    if(!recipientId)return toast(t('chooseRecipientFirst'));
     try{
       const out=await api('/api/gifts/send',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({giftId:button.dataset.gift,recipientId,quantity})});
       if(state.wallet){state.wallet.balance=out.balance;account()}
-      refreshRailProgress();toast(`Надіслано ×${quantity} · баланс ◈ ${out.balance}`);await renderWalletReference();
+      refreshRailProgress();toast(`${t('giftSent')} ×${quantity} · ${t('balance').toLocaleLowerCase()} ◈ ${out.balance}`);await renderWalletReference();
     }catch(error){toast(error.message)}
   });
 }
@@ -407,37 +407,37 @@ async function renderProfileReference(){
   const level=progress.orbitLevel||1,xp=Number(progress.donorXp)||0,start=120*(level-1)**2,next=120*level**2,pct=Math.max(2,Math.min(100,Math.round((xp-start)/Math.max(1,next-start)*100)));
   const initial=esc((me.user.displayName||me.user.username||'S').slice(0,1).toUpperCase());
   app.innerHTML=`<section class="profile-page">
-    <div class="profile-cover"><span class="cover-ribbons"></span><button type="button" id="profileCoverAction">${referenceIcon('camera')} Оновити простір</button></div>
+    <div class="profile-cover"><span class="cover-ribbons"></span><button type="button" id="profileCoverAction">${referenceIcon('camera')} ${esc(t('updateSpace'))}</button></div>
     <div class="profile-identity">
       <span class="profile-avatar">${initial}<i></i></span>
-      <div><div><h1>${esc(me.user.displayName)} ${referenceIcon('sparkles')}</h1><span>@${esc(me.user.username)}</span></div><p>${esc(me.user.bio||'Ваш живий простір у SYLORA.')}</p><div class="profile-meta"><span>${referenceIcon('sparkles')} ORBIT ${level}</span><span>${referenceIcon('wallet')} ${me.wallet.balance.toLocaleString()} LUMEN</span><span>${referenceIcon('check')} ${xp.toLocaleString()} XP</span></div></div>
-      <div class="profile-buttons"><button type="button" class="depth-button" id="profileEdit">Редагувати профіль</button><button type="button" id="profileMenu" aria-label="Меню профілю">•••</button></div>
+      <div><div><h1>${esc(me.user.displayName)} ${referenceIcon('sparkles')}</h1><span>@${esc(me.user.username)}</span></div><p>${esc(me.user.bio||t('profileLivingSpace'))}</p><div class="profile-meta"><span>${referenceIcon('sparkles')} ORBIT ${level}</span><span>${referenceIcon('wallet')} ${me.wallet.balance.toLocaleString()} LUMEN</span><span>${referenceIcon('check')} ${xp.toLocaleString()} XP</span></div></div>
+      <div class="profile-buttons"><button type="button" class="depth-button" id="profileEdit">${esc(t('editProfile'))}</button><button type="button" id="profileMenu" aria-label="${esc(t('profileMenu'))}">•••</button></div>
     </div>
-    <div class="profile-stats"><span><b>${stats.followers.toLocaleString()}</b><small>ПІДПИСНИКІВ</small></span><span><b>${stats.posts.toLocaleString()}</b><small>ПУБЛІКАЦІЙ</small></span><span><b>${stats.creatorEarnings.toLocaleString()}</b><small>ЗАРОБЛЕНО</small></span><span><b>${level}</b><small>ORBIT РІВЕНЬ</small></span></div>
+    <div class="profile-stats"><span><b>${stats.followers.toLocaleString()}</b><small>${esc(t('followersLabel'))}</small></span><span><b>${stats.posts.toLocaleString()}</b><small>${esc(t('postsLabel'))}</small></span><span><b>${stats.creatorEarnings.toLocaleString()}</b><small>${esc(t('earnedLabel'))}</small></span><span><b>${level}</b><small>${esc(t('orbitLevel'))}</small></span></div>
     <div class="profile-content">
       <main>
-        <div class="segmented profile-tabs"><button class="active" type="button">Мій простір</button><button type="button" data-profile-go="clips">Clips</button><button type="button" data-profile-go="live">LIVE</button></div>
+        <div class="segmented profile-tabs"><button class="active" type="button">${esc(t('mySpace'))}</button><button type="button" data-profile-go="clips">Clips</button><button type="button" data-profile-go="live">LIVE</button></div>
         <div class="profile-grid">
-          <article class="profile-portal profile-portal--clips" data-profile-go="clips"><span><small>CREATOR WORKFLOW</small><b>Мої Clips і відео</b></span></article>
-          <article class="profile-portal profile-portal--studio" data-profile-go="studio"><span><small>SYLORA STUDIO</small><b>Створити нове</b></span></article>
-          <article class="profile-portal profile-portal--live" data-profile-go="live"><span><small>LIVE</small><b>Вийти в ефір</b></span></article>
+          <article class="profile-portal profile-portal--clips" data-profile-go="clips"><span><small>CREATOR WORKFLOW</small><b>${esc(t('myClipsVideos'))}</b></span></article>
+          <article class="profile-portal profile-portal--studio" data-profile-go="studio"><span><small>SYLORA STUDIO</small><b>${esc(t('createNew'))}</b></span></article>
+          <article class="profile-portal profile-portal--live" data-profile-go="live"><span><small>LIVE</small><b>${esc(t('goLive'))}</b></span></article>
         </div>
         <section class="glass-card profile-editor" id="profileEditor">
-          <div class="card-top"><div><small>ПЕРСОНАЛЬНИЙ ПРОСТІР</small><h3>Профіль</h3></div><span class="status-pill status-pill--success">${pct}% до ORBIT ${level+1}</span></div>
-          <form id="profile" class="fields"><label>Ім’я<input name="displayName" value="${esc(me.user.displayName)}" maxlength="60"></label><label>Про себе<textarea name="bio" maxlength="240" placeholder="Про себе">${esc(me.user.bio)}</textarea></label><label>Мова інтерфейсу<select name="locale"><option value="uk">Українська</option><option value="en">English</option><option value="pl">Polski</option><option value="de">Deutsch</option><option value="ru">Русский</option></select></label><button class="depth-button">Зберегти зміни</button></form>
+          <div class="card-top"><div><small>${esc(t('personalSpace'))}</small><h3>${esc(t('profile'))}</h3></div><span class="status-pill status-pill--success">${pct}% · ORBIT ${level+1}</span></div>
+          <form id="profile" class="fields"><label>${esc(t('name'))}<input name="displayName" value="${esc(me.user.displayName)}" maxlength="60"></label><label>${esc(t('about'))}<textarea name="bio" maxlength="240" placeholder="${esc(t('about'))}">${esc(me.user.bio)}</textarea></label><label>${esc(t('interfaceLanguageLabel'))}<select name="locale"><option value="uk">Українська</option><option value="en">English</option><option value="pl">Polski</option><option value="de">Deutsch</option><option value="ru">Русский</option></select></label><button class="depth-button">${esc(t('saveChanges'))}</button></form>
         </section>
       </main>
       <aside class="context-stack">
         <section class="glass-card"><div class="profile-completion"><span><b>ORBIT ${level}</b><small>${xp.toLocaleString()} / ${next.toLocaleString()} XP</small></span><b>${pct}%</b></div><div class="progress-track"><i style="width:${pct}%"></i></div></section>
-        <section class="glass-card"><div class="card-top"><div><small>АКТИВНІСТЬ</small><h3>Останні події</h3></div></div>${notes.notifications.slice(0,5).map(item=>`<div class="achievement-row"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></div>`).join('')||'<p class="muted">Поки тихо.</p>'}</section>
-        <section class="glass-card"><div class="card-top"><div><small>LUMEN</small><h3>Останні рухи</h3></div></div>${ledger.entries.slice(0,4).map(entry=>`<div class="achievement-row"><span>◈</span><div><b>${esc(entry.type)} · ${entry.amount}</b><small>${new Date(entry.createdAt).toLocaleString()}</small></div></div>`).join('')||'<p class="muted">Транзакцій немає.</p>'}<button id="profileLogout" class="plain-action" type="button">${esc(t('signout'))} ${referenceIcon('arrow')}</button></section>
+        <section class="glass-card"><div class="card-top"><div><small>${esc(t('activity'))}</small><h3>${esc(t('recentEvents'))}</h3></div></div>${notes.notifications.slice(0,5).map(item=>`<div class="achievement-row"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></div>`).join('')||`<p class="muted">${esc(t('quietNow'))}</p>`}</section>
+        <section class="glass-card"><div class="card-top"><div><small>LUMEN</small><h3>${esc(t('recentMovements'))}</h3></div></div>${ledger.entries.slice(0,4).map(entry=>`<div class="achievement-row"><span>◈</span><div><b>${esc(entry.type)} · ${entry.amount}</b><small>${new Date(entry.createdAt).toLocaleString(getLocale()==='uk'?'uk-UA':getLocale())}</small></div></div>`).join('')||`<p class="muted">${esc(t('noTransactions'))}</p>`}<button id="profileLogout" class="plain-action" type="button">${esc(t('signout'))} ${referenceIcon('arrow')}</button></section>
       </aside>
     </div>
   </section>`;
   document.querySelector('#profile select[name="locale"]').value=me.user.locale;
-  document.querySelector('#profile').onsubmit=async event=>{event.preventDefault();const input=Object.fromEntries(new FormData(event.currentTarget));const out=await api('/api/me',{method:'PATCH',body:JSON.stringify(input)});state.me=out.user;setLocale(out.user.locale);applyShellLanguage();account();toast('Профіль оновлено');await renderProfileReference()};
+  document.querySelector('#profile').onsubmit=async event=>{event.preventDefault();const input=Object.fromEntries(new FormData(event.currentTarget));const out=await api('/api/me',{method:'PATCH',body:JSON.stringify(input)});state.me=out.user;setLocale(out.user.locale);applyShellLanguage();account();toast(t('profileUpdated'));await renderProfileReference()};
   document.querySelector('#profileEdit')?.addEventListener('click',()=>document.querySelector('#profileEditor')?.scrollIntoView({behavior:'smooth',block:'center'}));
-  document.querySelector('#profileCoverAction')?.addEventListener('click',()=>toast('Обкладинка профілю буде доступна після вибору медіа'));
+  document.querySelector('#profileCoverAction')?.addEventListener('click',()=>toast(t('coverAfterMedia')));
   document.querySelectorAll('[data-profile-go]').forEach(element=>element.addEventListener('click',()=>nav(element.dataset.profileGo)));
   document.querySelector('#profileLogout')?.addEventListener('click',logout);
 }
