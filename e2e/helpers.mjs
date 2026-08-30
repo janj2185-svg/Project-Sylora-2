@@ -14,9 +14,17 @@ export function uniqueAccount(prefix = 'user') {
 export async function registerViaUi(page, account) {
   await page.goto('/');
   await page.locator('#signin').click();
-  await page.locator('#authForm [name="username"]').fill(account.username);
-  await page.locator('#authForm [name="email"]').fill(account.email);
-  await page.locator('#authForm [name="password"]').fill(account.password);
+  // The application can finish its initial session render while a very fast CI
+  // browser is filling the form. Refill a replaced input before submitting so
+  // credentials cannot be combined into a flaky invalid username.
+  await expect(async () => {
+    await page.locator('#authForm [name="username"]').fill(account.username);
+    await page.locator('#authForm [name="email"]').fill(account.email);
+    await page.locator('#authForm [name="password"]').fill(account.password);
+    await expect(page.locator('#authForm [name="username"]')).toHaveValue(account.username);
+    await expect(page.locator('#authForm [name="email"]')).toHaveValue(account.email);
+    await expect(page.locator('#authForm [name="password"]')).toHaveValue(account.password);
+  }).toPass();
   const responsePromise = page.waitForResponse(response =>
     response.url().endsWith('/api/auth/register') && response.request().method() === 'POST'
   );
