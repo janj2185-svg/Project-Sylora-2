@@ -18,7 +18,9 @@ body[data-view="studio"] .studio-stage{
   background:radial-gradient(circle at 75% 20%,rgba(138,187,178,.18),transparent 26%),radial-gradient(circle at 20% 90%,rgba(117,98,170,.14),transparent 34%),linear-gradient(145deg,#111719,#263033 68%,#46453f);
   border:1px solid rgba(255,255,255,.11);box-shadow:0 38px 110px rgba(18,25,27,.25),inset 0 1px 0 rgba(255,255,255,.12)
 }
-body[data-view="studio"] .studio-stage:before{content:"PROGRAM PREVIEW  •  READY";position:absolute;left:20px;top:18px;z-index:4;font-size:9px;font-weight:800;letter-spacing:.18em;color:rgba(255,255,255,.68)}
+body[data-view="studio"] .studio-stage:before{content:"PROGRAM PREVIEW  •  WAITING";position:absolute;left:20px;top:18px;z-index:4;font-size:9px;font-weight:800;letter-spacing:.18em;color:rgba(255,255,255,.68)}
+body[data-view="studio"] .studio-stage[data-source-state="ready"]:before{content:"PROGRAM PREVIEW  •  READY";color:#bff8e5}
+body[data-view="studio"] .studio-stage[data-source-state="error"]:before{content:"PROGRAM PREVIEW  •  SOURCE ERROR";color:#ffc6cd}
 body[data-view="studio"] .studio-stage:after{content:"";position:absolute;left:9%;right:9%;bottom:8%;height:1px;background:linear-gradient(90deg,transparent,rgba(205,230,225,.34),rgba(213,180,126,.22),transparent);pointer-events:none}
 body[data-view="studio"] .studio-stage canvas,body[data-view="studio"] .studio-stage video{max-width:100%;max-height:calc(100vh - var(--sy-header-h) - 82px);height:auto;border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.22);background:#0d1112}
 

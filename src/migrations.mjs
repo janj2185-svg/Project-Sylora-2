@@ -23,8 +23,32 @@ export const MIGRATION_FILES = Object.freeze([
   ['013_dm_attachments_gift_refund', 'infra/postgres/migrations/013_dm_attachments_gift_refund.sql'],
   ['013_phase1_identity_auth', 'infra/postgres/migrations/013_phase1_identity_auth.sql'],
   ['014_session_status_invalidation', 'infra/postgres/migrations/014_session_status_invalidation.sql'],
-  ['015_live_distribution', 'infra/postgres/migrations/015_live_distribution.sql']
+  ['015_live_distribution', 'infra/postgres/migrations/015_live_distribution.sql'],
+  ['016_studio_scenes', 'infra/postgres/migrations/016_studio_scenes.sql']
 ]);
+
+function hashMigrationSource(sql) {
+  return createHash('sha256').update(String(sql)).digest('hex');
+}
+
+function normalizeMigrationLineEndings(sql) {
+  return String(sql).replace(/\r\n?/g, '\n');
+}
+
+export function migrationChecksum(sql) {
+  return hashMigrationSource(normalizeMigrationLineEndings(sql));
+}
+
+function migrationChecksumVariants(sql) {
+  const source = String(sql);
+  const normalized = normalizeMigrationLineEndings(source);
+  return new Set([
+    hashMigrationSource(normalized),
+    hashMigrationSource(source),
+    hashMigrationSource(normalized.replaceAll('\n', '\r\n')),
+    hashMigrationSource(normalized.replaceAll('\n', '\r'))
+  ]);
+}
 
 export function loadMigrations() {
   return MIGRATION_FILES.map(([name, relativeFile]) => {
@@ -34,7 +58,7 @@ export function loadMigrations() {
       name,
       file,
       sql,
-      checksum: createHash('sha256').update(sql).digest('hex')
+      checksum: migrationChecksum(sql)
     };
   });
 }
@@ -47,7 +71,20 @@ export async function applyMigrations(client, { log = () => {} } = {}) {
     for (const migration of loadMigrations()) {
       const existing = await client.query('SELECT checksum FROM _sylora_migrations WHERE name=$1', [migration.name]);
       if (existing.rowCount) {
-        if (existing.rows[0].checksum !== migration.checksum) throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${migration.name}`);
+        const storedChecksum = existing.rows[0].checksum;
+        if (!migrationChecksumVariants(migration.sql).has(storedChecksum)) {
+          throw new Error(`MIGRATION_CHECKSUM_MISMATCH:${migration.name}`);
+        }
+        if (storedChecksum !== migration.checksum) {
+          const canonicalized = await client.query(
+            'UPDATE _sylora_migrations SET checksum=$2 WHERE name=$1 AND checksum=$3',
+            [migration.name, migration.checksum, storedChecksum]
+          );
+          if (canonicalized.rowCount !== 1) {
+            throw new Error(`MIGRATION_CHECKSUM_CANONICALIZATION_FAILED:${migration.name}`);
+          }
+          log(`${migration.name}: checksum canonicalized`);
+        }
         log(`${migration.name}: already applied`);
         continue;
       }

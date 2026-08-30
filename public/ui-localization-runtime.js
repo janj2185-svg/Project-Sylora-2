@@ -1,5 +1,5 @@
-import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js?v=20260829-live5';
-import {uiCopy} from './locales/ui-runtime.js?v=20260829-live5';
+import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js?v=20260830-studio2';
+import {uiCopy} from './locales/ui-runtime.js?v=20260830-studio2';
 
 // Temporary bridge for the legacy monolithic renderer. It translates only known UI literals.
 // User-generated content is explicitly protected and never rewritten.

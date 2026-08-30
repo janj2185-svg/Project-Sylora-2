@@ -1,5 +1,5 @@
-import {getLocale} from './i18n.js?v=20260829-live5';
-import {uiCopy} from './locales/ui-runtime.js?v=20260826-ui5';
+import {getLocale} from './i18n.js?v=20260830-studio2';
+import {uiCopy} from './locales/ui-runtime.js?v=20260830-studio2';
 
 const TOOL_KEYS={
   sources:'sources',
@@ -131,6 +131,10 @@ function boot(){
   cleanupIfNeeded();
   window.addEventListener('keydown',event=>{if(event.key==='Escape')closeSheets()});
   document.addEventListener('sylora:localechange',updateToolLabels);
+  document.addEventListener('sylora:studio-open-panel',event=>{
+    const panel=event.detail?.panel;
+    if(typeof panel==='string')openSheet(panel);
+  });
   document.addEventListener('sylora:studio-panels-changed',()=>{
     if(document.body.dataset.view!=='studio')return;
     mountedControls=null;

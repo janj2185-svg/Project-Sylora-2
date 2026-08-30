@@ -54,6 +54,7 @@ test('primary navigation labels participate in runtime localization', () => {
 test('LIVE setup reports real TikTok readiness instead of decorative integrations', () => {
   assert.match(app, /item\.enabled&&item\.provider==='tiktok'/);
   assert.match(app, /distribution\?\.configuration\?\.configured/);
+  assert.match(app, /t\('tiktokStepLaunch'\)/);
   assert.match(app, /u\('liveStepTitle'\)/);
   assert.match(app, /u\('signInToConfigure'\)/);
   assert.match(app, /if\(state\.me&&tab==='create'\)tiktokPilotCleanup=/);

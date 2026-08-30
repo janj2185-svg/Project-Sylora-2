@@ -8,6 +8,7 @@ This document describes runtime environment variables for SYLORA core. Do not co
 |----------|----------|-----|------|------------|-------|
 | `NODE_ENV` | Optional | `development` | `test` | `production` | Controls boot guards and degraded-capability labeling |
 | `PORT` | Optional | `8787` | `8787` | Set by platform | HTTP listen port (1–65535) |
+| `SYLORA_TRUSTED_PROXY_HOPS` | Optional | `0` | `1` behind the bundled nginx | Set to the exact trusted reverse-proxy hop count | Resolves the client IP from the right side of `X-Forwarded-For`; keep `0` when the app is directly exposed |
 
 ## Data / sessions
 

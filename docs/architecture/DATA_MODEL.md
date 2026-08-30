@@ -82,7 +82,7 @@ The schema includes UUID primary keys, ownership foreign keys, targeted unique c
 ## Verification evidence
 
 - `tests/migrations.test.mjs`: ordered manifest, fixed checksums, required schema/constraints, transactional application, idempotency, and drift rejection.
-- `tests/phase1-postgres.integration.mjs`: fresh PostgreSQL schema, all 16 manifest migrations with concurrent runners, legacy disabled-session upgrade cleanup, atomic registration/wallet provisioning, concurrent account/profile/control patches, status/logout revocation, profile/home/API-key/AI-control persistence across instances and restart, provider-context memory gating, and proof that the configured JSON path is never created.
+- `tests/phase1-postgres.integration.mjs`: fresh PostgreSQL schema, all 18 manifest migrations with concurrent runners, legacy disabled-session upgrade cleanup, atomic registration/wallet provisioning, concurrent account/profile/control patches, status/logout revocation, profile/home/API-key/AI-control persistence across instances and restart, provider-context memory gating, and proof that the configured JSON path is never created.
 - `tests/postgres-*.test.mjs`: repository-level behavior under `pg-mem`; these complement but do not replace the PostgreSQL 16 integration test.
 
 ## Open persistence gaps

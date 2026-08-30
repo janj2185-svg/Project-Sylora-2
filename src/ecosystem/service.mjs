@@ -283,6 +283,8 @@ export class EcosystemService {
       searchPosts: null,
       createClipJob: null,
       updateClipJob: null,
+      createStudioScene: null,
+      createStudioSceneOnce: null,
       getClipJob: null,
       aiComplete: null,
       postgresLiveState: false
@@ -603,15 +605,15 @@ export class EcosystemService {
   }
 
   // —— Action Engine ——
-  proposeAction(user, input) {
-    const agent = this.ensurePersonalAgent(user);
+  async proposeAction(user, input) {
+    const agent = await this.ensurePersonalAgentAsync(user);
     if (agent.privacyControls?.aiActions === false) {
       throw new Error('AI_ACTIONS_DISABLED');
     }
     const type = input.type;
     const toolCheck = getTool(type) ? validateToolInput(type, input.input || {}) : { ok: true };
     if (!toolCheck.ok) throw new Error(toolCheck.error || 'VALIDATION_FAILED');
-    const action = createActionRecord({
+    let action = createActionRecord({
       id: this.store.id(),
       userId: user.id,
       agentId: agent.id,
@@ -621,6 +623,11 @@ export class EcosystemService {
       permission: input.permission || null,
       context: input.context || 'command_center'
     });
+    if (this.pg) {
+      const persisted = await this.pg.createEcosystemAction(action);
+      if (!persisted) throw new Error('ACTION_PERSIST_FAILED');
+      action = { ...action, ...persisted, auditTrail: action.auditTrail };
+    }
     this.store.data.ecosystemActions.push(action);
     this.store.data.toolAudit.unshift({
       id: this.store.id(),
@@ -827,30 +834,55 @@ export class EcosystemService {
     }
   }
 
-  async confirmEcosystemAction(user, id) {
-    const action = this.store.data.ecosystemActions.find(a => a.id === id && a.userId === user.id);
-    if (!action) return { ok: false, error: 'ACTION_NOT_FOUND' };
+  async confirmEcosystemAction(user, id, {
+    expectedType = null,
+    expectedContext = null,
+    notFoundError = 'ACTION_NOT_FOUND'
+  } = {}) {
+    const localAction = this.store.data.ecosystemActions.find(a => a.id === id && a.userId === user.id);
+    const persistentAction = this.pg ? await this.pg.findEcosystemAction(user.id, id) : null;
+    let action = persistentAction || localAction;
+    if (!action || (expectedType && action.type !== expectedType) || (expectedContext && action.context !== expectedContext)) {
+      return { ok: false, error: notFoundError };
+    }
     if (action.status === 'completed') return { ok: true, action, already: true };
     if (new Date(action.expiresAt).getTime() <= Date.now()) {
       action.status = 'expired';
+      if (persistentAction) action = { ...action, ...(await this.pg.saveEcosystemAction(action)) };
+      if (localAction) Object.assign(localAction, action);
       this.store.save();
       return { ok: false, error: 'ACTION_EXPIRED' };
     }
-    Object.assign(action, markConfirmed(action));
+    const confirmed = markConfirmed(action, this.store.now());
+    if (persistentAction) {
+      const claimed = await this.pg.claimEcosystemAction(user.id, id, confirmed.confirmedAt);
+      if (!claimed) {
+        const current = await this.pg.findEcosystemAction(user.id, id);
+        if (current?.status === 'completed') return { ok: true, action: current, already: true };
+        return { ok: false, error: current?.status === 'confirmed' ? 'ACTION_IN_PROGRESS' : 'ACTION_NOT_ACTIVE', action: current || action };
+      }
+      action = { ...confirmed, ...claimed, auditTrail: confirmed.auditTrail };
+    } else Object.assign(action, confirmed);
     const gate = canExecute(action, ACTION_LEVELS.EXECUTE_ALLOWED);
     if (!gate.ok) {
       Object.assign(action, markFailed(action, gate.error));
+      if (persistentAction) action = { ...action, ...(await this.pg.saveEcosystemAction(action)), auditTrail: action.auditTrail };
+      if (localAction) Object.assign(localAction, action);
       this.store.save();
       return { ok: false, error: gate.error, action, gate };
     }
     const executed = await this.executeTool(user, action.type, action.input || {});
     if (!executed.ok) {
       Object.assign(action, markFailed(action, executed.error));
+      if (persistentAction) action = { ...action, ...(await this.pg.saveEcosystemAction(action)), auditTrail: action.auditTrail };
+      if (localAction) Object.assign(localAction, action);
       this.store.save();
       audit(this.store, user.id, 'action.failed', 'ecosystem_action', id, { type: action.type, error: executed.error });
       return { ok: false, error: executed.error, action };
     }
     Object.assign(action, markCompleted(action, executed.result));
+    if (persistentAction) action = { ...action, ...(await this.pg.saveEcosystemAction(action)), auditTrail: action.auditTrail };
+    if (localAction) Object.assign(localAction, action);
     this.store.data.toolAudit.unshift({
       id: this.store.id(), userId: user.id, tool: action.type, event: 'executed',
       actionId: id, createdAt: this.store.now()
@@ -867,8 +899,12 @@ export class EcosystemService {
     return { ok: true, action, result: executed.result, gate };
   }
 
-  listActions(user) {
-    return this.store.data.ecosystemActions.filter(a => a.userId === user.id).slice(-50);
+  async listActions(user) {
+    const local = this.store.data.ecosystemActions.filter(a => a.userId === user.id).slice(-50);
+    if (!this.pg) return local;
+    const persistent = await this.pg.listEcosystemActions(user.id, 50), merged = new Map(persistent.map(action => [action.id, action]));
+    for (const action of local) if (!merged.has(action.id)) merged.set(action.id, action);
+    return [...merged.values()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,50);
   }
 
   // —— Universal Command ——
@@ -916,7 +952,7 @@ export class EcosystemService {
       return { plan, status: executed.ok ? 'executed' : 'failed', orchestration, ...executed };
     }
 
-    const action = this.proposeAction(user, {
+    const action = await this.proposeAction(user, {
       type: plan.tool,
       level: tool?.level,
       input: plan.slots || {},
@@ -1860,9 +1896,9 @@ export class EcosystemService {
     return { analysis, contentPack: buildCreatorContentPack({ topic: room.title, analysis, locale: user.locale || 'uk' }) };
   }
 
-  creatorContentPack(user, { topic, analysis } = {}) {
+  async creatorContentPack(user, { topic, analysis } = {}) {
     const pack = buildCreatorContentPack({ topic, analysis, locale: user.locale || 'uk' });
-    const action = this.proposeAction(user, {
+    const action = await this.proposeAction(user, {
       type: 'prepare_content_pack',
       level: ACTION_LEVELS.REQUEST_CONFIRMATION,
       context: 'studio',
@@ -1879,14 +1915,16 @@ export class EcosystemService {
     return { action, pack };
   }
 
-  creatorStudioPlan(user, topic) {
-    const pack = buildCreatorContentPack({ topic, locale: user.locale || 'uk' });
+  async creatorStudioPlan(user, topic) {
+    const normalizedTopic = String(topic || '').trim().slice(0, 200);
+    if ([...normalizedTopic].length < 2) throw new Error('TOPIC_REQUIRED');
+    const pack = buildCreatorContentPack({ topic: normalizedTopic, locale: user.locale || 'uk' });
     const plan = {
-      topic: String(topic || '').slice(0, 200),
+      topic: normalizedTopic,
       structure: ['Hook', 'Core value', 'Interactive mid', 'CTA', 'Outro'],
       scenes: ['Intro', 'Demo', 'Q&A'],
       overlays: ['Lower-third title', 'Poll', 'Gift goal'],
-      questions: [`What is your experience with ${topic}?`, 'What should we deep-dive next?'],
+      questions: [`What is your experience with ${normalizedTopic}?`, 'What should we deep-dive next?'],
       interactives: ['Poll', 'Q&A', 'Resonance invite'],
       moderation: 'Suggest only — host confirms',
       clips: pack.clipCandidates,
@@ -1896,7 +1934,7 @@ export class EcosystemService {
       subtitlePlan: pack.subtitles.plan,
       status: 'proposal'
     };
-    const action = this.proposeAction(user, {
+    const action = await this.proposeAction(user, {
       type: 'prepare_live',
       level: ACTION_LEVELS.REQUEST_CONFIRMATION,
       context: 'studio',
@@ -1916,27 +1954,47 @@ export class EcosystemService {
   }
 
   async confirmCreatorStudioPlan(user, actionId) {
-    const out = await this.confirmEcosystemAction(user, actionId);
+    const out = await this.confirmEcosystemAction(user, actionId, {
+      expectedType: 'prepare_live',
+      expectedContext: 'studio',
+      notFoundError: 'STUDIO_PLAN_NOT_FOUND'
+    });
     if (!out.ok) return out;
     const saved = this.store.data.studioAiPlans.find(p => p.id === actionId && p.userId === user.id);
     if (saved) saved.status = 'confirmed';
     const plan = saved?.plan || out.action?.input?.plan || {};
+    const rawSceneTopic = String(plan.topic || '').trim();
+    const sceneTopic = [...rawSceneTopic].length >= 2
+      ? [...rawSceneTopic].slice(0, 60).join('')
+      : 'AI LIVE Plan';
     const scene = {
-      id: this.store.id(),
+      id: actionId,
       userId: user.id,
-      name: String(plan.topic || 'AI LIVE Plan').slice(0, 60),
-      overlayTitle: String(plan.topic || 'SYLORA LIVE').slice(0, 60),
+      name: sceneTopic,
+      overlayTitle: rawSceneTopic ? [...rawSceneTopic].slice(0, 60).join('') : 'SYLORA LIVE',
       overlayStyle: 'violet',
       profileId: 'vertical1080',
       micGain: 100,
       micMuted: false,
+      actionId,
       aiPlan: plan,
       createdAt: this.store.now(),
       updatedAt: this.store.now()
     };
-    this.store.data.studioScenes.push(scene);
-    this.store.save();
-    this.recordActivity(user, {
+    const persistedScene = this.hooks.createStudioSceneOnce
+      ? await this.hooks.createStudioSceneOnce(scene)
+      : this.hooks.createStudioScene
+        ? await this.hooks.createStudioScene(scene)
+        : null;
+    if (persistedScene) {
+      Object.assign(scene, persistedScene);
+    } else {
+      const existing = this.store.data.studioScenes.find(item => item.id === scene.id && item.userId === user.id);
+      if (existing) Object.assign(scene, existing);
+      else this.store.data.studioScenes.push(scene);
+      this.store.save();
+    }
+    if (!out.already) this.recordActivity(user, {
       kind: 'studio_plan_confirmed',
       summary: `Confirmed AI LIVE plan: ${scene.name}`,
       dataUsed: ['creator_studio', 'action_engine'],
@@ -2017,8 +2075,8 @@ export class EcosystemService {
     };
   }
 
-  startNegotiation(user, input) {
-    const personal = this.ensurePersonalAgent(user);
+  async startNegotiation(user, input) {
+    const personal = await this.ensurePersonalAgentAsync(user);
     const target = this.store.data.agentCatalog.find(a => a.id === input.toAgentId);
     if (!target) return { ok: false, error: 'AGENT_NOT_FOUND' };
     if (!this.store.data.agentInstalls.find(x => x.userId === user.id && x.agentId === target.id && !x.removedAt)
@@ -2040,14 +2098,14 @@ export class EcosystemService {
       return { ok: false, error: e.message };
     }
     negotiation.reply = draftBusinessReply(negotiation, target);
-    this.store.data.agentNegotiations.push(negotiation);
-    const action = this.proposeAction(user, {
+    const action = await this.proposeAction(user, {
       type: 'agent_negotiation',
       level: ACTION_LEVELS.REQUEST_CONFIRMATION,
       context: 'business',
       reason: 'AI-to-AI proposal requires human confirmation before any binding step',
       input: { negotiationId: negotiation.id, topic: negotiation.topic, toAgentId: target.id }
     });
+    this.store.data.agentNegotiations.push(negotiation);
     this.recordActivity(user, {
       kind: 'ai_to_ai_proposed',
       summary: `Personal AI proposed ${negotiation.topic} to ${target.name}`,
@@ -2912,7 +2970,7 @@ export class EcosystemService {
     };
   }
 
-  creatorPipeline(user, input = {}) {
+  async creatorPipeline(user, input = {}) {
     const plan = creatorPipelinePlan({
       liveId: input.liveId,
       title: input.title,
@@ -2923,7 +2981,7 @@ export class EcosystemService {
       subtitleLanguages: input.subtitleLanguages || ['pl', 'en', 'de', 'es'],
       audioLanguages: input.audioLanguages || []
     });
-    const action = this.proposeAction(user, {
+    const action = await this.proposeAction(user, {
       type: 'prepare_content_pack',
       context: 'studio',
       reason: 'Creator AI pipeline drafted — publish requires confirmation',

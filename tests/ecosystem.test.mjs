@@ -236,6 +236,34 @@ test('ecosystem APIs: identity, kg, agents, developer keys, translate, orgs', as
     assert.equal(plane.status, 200);
     assert.equal(plane.data.plane.killSwitch, false);
 
+    const shortPlan = await req(base, '/api/studio/ai/plan', { method: 'POST', token, body: { topic: 'x' } });
+    assert.equal(shortPlan.status, 400);
+    assert.equal(shortPlan.data.error, 'TOPIC_REQUIRED');
+    const singleEmojiPlan = await req(base, '/api/studio/ai/plan', { method: 'POST', token, body: { topic: '😀' } });
+    assert.equal(singleEmojiPlan.status, 400);
+    assert.equal(singleEmojiPlan.data.error, 'TOPIC_REQUIRED');
+    const unrelatedAction = await req(base, '/api/actions', {
+      method: 'POST', token, body: { type: 'prepare_content_pack', context: 'studio', input: { topic: 'Not a LIVE plan' } }
+    });
+    assert.equal(unrelatedAction.status, 201);
+    const wrongPlanConfirmation = await req(base, `/api/studio/ai/plan/${unrelatedAction.data.action.id}/confirm`, {
+      method: 'POST', token, body: {}
+    });
+    assert.equal(wrongPlanConfirmation.status, 404);
+    assert.equal(wrongPlanConfirmation.data.error, 'STUDIO_PLAN_NOT_FOUND');
+    const actionsAfterWrongConfirmation = await req(base, '/api/actions', { token });
+    assert.equal(actionsAfterWrongConfirmation.data.actions.find(action => action.id === unrelatedAction.data.action.id).status, 'pending');
+
+    const craftedShortPlan = await req(base, '/api/actions', {
+      method: 'POST', token, body: { type: 'prepare_live', context: 'studio', input: { plan: { topic: 'x' } } }
+    });
+    assert.equal(craftedShortPlan.status, 201);
+    const craftedShortConfirmation = await req(base, `/api/studio/ai/plan/${craftedShortPlan.data.action.id}/confirm`, {
+      method: 'POST', token, body: {}
+    });
+    assert.equal(craftedShortConfirmation.status, 200);
+    assert.equal(craftedShortConfirmation.data.scene.name, 'AI LIVE Plan');
+
     const plan = await req(base, '/api/studio/ai/plan', { method: 'POST', token, body: { topic: 'Flutter in Poland' } });
     assert.equal(plan.status, 200);
     assert.ok(plan.data.plan.structure.length >= 3);

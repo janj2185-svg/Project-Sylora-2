@@ -244,3 +244,10 @@ body[data-view="learning"] .glass-card{box-shadow:0 16px 34px #356c5d12,inset 0 
 .live-setup-step.is-ready>span:first-child{background:#dceee3;color:#34704c}.live-setup-step.is-ready>i{color:#34704c}
 .live-chat-panel .panel-tabs>span{display:block;padding:11px 13px;color:#262225;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
 @media (max-width:767px){.live-setup-grid{display:flex;overflow-x:auto;scroll-snap-type:x mandatory}.live-setup-step{flex:0 0 230px;scroll-snap-align:start}}
+
+@media (max-width:900px){
+  body[data-view="studio"] .studio-reference-layout{display:flex!important;grid-template-columns:none!important;flex-direction:column!important}
+  .studio-reference-layout .inspector-panel.studio-controls{max-height:none;padding:0!important;overflow:visible!important}
+  .studio-reference-layout .studio-controls>.card{display:none!important}
+  .studio-reference-layout .studio-controls>.card[data-studio-open="true"]{display:grid!important;padding:20px 16px!important;background:rgba(34,35,41,.97)!important;border:1px solid #ffffff24!important;border-radius:24px!important;box-shadow:0 28px 90px #15171d5e!important}
+}

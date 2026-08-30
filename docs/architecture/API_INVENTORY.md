@@ -6,13 +6,13 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 
 | Metric | Count |
 |---|---:|
-| Total unique endpoints | 317 |
-| Active | 263 |
+| Total unique endpoints | 318 |
+| Active | 266 |
 | Legacy | 0 |
 | Dead | 0 |
 | Duplicate | 0 |
-| Unverified | 54 |
-| Frontend-used | 195 |
+| Unverified | 52 |
+| Frontend-used | 196 |
 | Backend-only | 122 |
 
 ## Status contract
@@ -38,8 +38,8 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | METHOD | PATH | AUTH | FRONTEND USED | STATUS | ACTION |
 |---|---|---|---|---|---|
 | GET | `/api/achievements` | AUTHENTICATED | YES | ACTIVE | KEEP |
-| GET | `/api/actions` | AUTHENTICATED | NO | UNVERIFIED | VERIFY_BEFORE_PHASE_2 |
-| POST | `/api/actions` | AUTHENTICATED | NO | UNVERIFIED | VERIFY_BEFORE_PHASE_2 |
+| GET | `/api/actions` | AUTHENTICATED | NO | ACTIVE | KEEP |
+| POST | `/api/actions` | AUTHENTICATED | NO | ACTIVE | KEEP |
 | POST | `/api/actions/:id/confirm` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/activity-graph` | AUTHENTICATED | NO | UNVERIFIED | VERIFY_BEFORE_PHASE_2 |
 | GET | `/api/admin/audit` | ADMIN | YES | ACTIVE | KEEP |
@@ -232,6 +232,7 @@ This inventory is generated deterministically from `src/server.mjs` and `src/eco
 | POST | `/api/live/:id/resonance` | OWNER_OR_HOST | YES | ACTIVE | KEEP |
 | POST | `/api/live/:id/room-kind` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
 | POST | `/api/live/:id/signal` | AUTHENTICATED | YES | ACTIVE | KEEP |
+| GET | `/api/live/:id/signals` | AUTHENTICATED | YES | ACTIVE | KEEP |
 | GET | `/api/live/:id/stage` | PUBLIC | NO | ACTIVE | KEEP |
 | POST | `/api/live/:id/stage` | OWNER_OR_HOST | NO | ACTIVE | KEEP |
 | GET | `/api/live/:id/world` | PUBLIC | NO | ACTIVE | KEEP |

@@ -88,7 +88,7 @@ test('spaces adapter unifies conferences and orgs', () => {
 test('shell wires command palette, memory center, ask sylora, events', () => {
   const app = fs.readFileSync('public/app.js', 'utf8');
   const palette = fs.readFileSync('public/command-palette.js', 'utf8');
-  assert.match(app, /MEMORY CENTER/);
+  assert.match(app, /t\('memoryCenter'\)/);
   assert.match(app, /\/api\/ai\/ask/);
   assert.match(app, /\/api\/platform-events/);
   assert.match(app, /Ask Sylora/);

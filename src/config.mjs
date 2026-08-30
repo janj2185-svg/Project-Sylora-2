@@ -45,6 +45,12 @@ function parseSessionTtlDays(raw) {
   return value;
 }
 
+function parseTrustedProxyHops(raw){
+  const value=Number(raw??0);
+  if(!Number.isInteger(value)||value<0||value>5)throw new Error('Invalid SYLORA_TRUSTED_PROXY_HOPS configuration; expected an integer from 0 to 5.');
+  return value;
+}
+
 function isValidDatabaseUrl(url) {
   if (!url) return false;
   return /^postgres(ql)?:\/\//i.test(url);
@@ -101,6 +107,7 @@ export function loadRuntimeConfig(env = process.env) {
     port: parsePort(env.PORT),
     dataFile: get('SYLORA_DATA_FILE'),
     sessionTtlDays: parseSessionTtlDays(env.SESSION_TTL_DAYS),
+    trustedProxyHops: parseTrustedProxyHops(env.SYLORA_TRUSTED_PROXY_HOPS),
     creatorGiftShareBps: Math.max(0, Math.min(10000, Number(env.CREATOR_GIFT_SHARE_BPS || 7000))),
     database: {
       configured: isValidDatabaseUrl(databaseUrl)
