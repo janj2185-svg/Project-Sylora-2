@@ -1046,43 +1046,39 @@ async function renderSecurityCenter(){
   const ai=security.aiControl||{};
   const controls=ai.privacyControls||{};
   const controlKeys=['memory','microphone','camera','location','contacts','files','notifications','personalization','aiActions','voice','translation'];
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">PRIVACY & AI CONTROL</span><h1>Trust Center</h1><p>Одна Sylora · прозорі дозволи · твій контроль.</p></div>
-  <section class="card"><span class="eyebrow">CONTROLS</span><div class="privacy-grid">${controlKeys.map(k=>`<label class="privacy-toggle"><input type="checkbox" data-privacy="${k}" ${controls[k]!==false?'checked':''}> ${esc(k)}</label>`).join('')}</div>
-  <div class="row" style="margin-top:12px"><label>Proactive <select id="privacyProactive"><option value="OFF">OFF</option><option value="IMPORTANT_ONLY">IMPORTANT ONLY</option><option value="NORMAL">NORMAL</option><option value="PROACTIVE">PROACTIVE</option></select></label><button class="primary" id="savePrivacyControls">Save controls</button></div></section>
-  <section class="card"><span class="eyebrow">WHAT SYLORA CAN SEE</span><p>${(ai.canSee||[]).map(esc).join(' · ')||'—'}</p>
-  <span class="eyebrow">MEMORY</span><div class="stack">${(ai.remembers||[]).map(m=>`<div class="item"><b>${esc(m.label)}</b><small class="muted">${esc(m.source||'')}</small></div>`).join('')||'<p class="muted">—</p>'}</div>
-  <span class="eyebrow">INTEGRATIONS</span><div class="stack">${(ai.integrations||[]).map(i=>`<div class="item row"><b>${esc(i.name)}</b><button class="ghost revoke-agent" data-id="${i.agentId}">Disconnect</button></div>`).join('')||'<p class="muted">—</p>'}</div></section>
-  <section class="card"><span class="eyebrow">ACTIVITY LOG</span><div class="stack">${(activity.activity||ai.activity||[]).slice().reverse().slice(0,30).map(a=>`<div class="item"><b>${esc(a.summary||a.kind)}</b><p class="muted">${esc(a.reason||'')} · ${esc(a.context||'')} · ${a.createdAt?new Date(a.createdAt).toLocaleString():''}</p></div>`).join('')||'<p class="muted">Поки немає дій Sylora.</p>'}</div></section>
-  <div class="grid2"><div class="card item"><span class="eyebrow">DATA</span>
-  <button class="ghost" id="exportMemory">Export my data</button>
-  <button class="ghost" id="clearMemory">Delete memories</button>
-  <button class="ghost" id="clearHistory">Delete conversation history</button>
-  <button class="ghost" id="privacyExport">Export account request</button>
-  <button class="ghost" id="disablePersonalization">Disable personalization</button></div>
-  <div class="card item"><span class="eyebrow">REPUTATION</span>${Object.entries(reputation.reputation?.dimensions||{}).map(([k,v])=>`<div><b>${esc(k)}</b>: ${Number(v.score||0)}</div>`).join('')}<button class="ghost" id="disputeRep">Dispute</button>
-  <p class="muted">Capabilities: AI ${ai.capabilities?.aiText?'on':'off'} · Voice ${ai.capabilities?.aiRealtimeVoice?'on':'off'} · LUMEN ${esc(caps?.honesty?.lumenWallet?.label||'TEST / DEMO')}</p></div></div>
-  <section class="card"><span class="eyebrow">MEMORY CENTER</span><h3>Контрольована пам’ять</h3>
-  <p class="muted">${esc(memoryCenter.honesty||'AI does not secretly accumulate personal data.')}</p>
-  <label class="privacy-toggle"><input type="checkbox" id="memoryEnabled" ${memoryCenter.enabled!==false?'checked':''}> Memory enabled</label>
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">${esc(t('privacyAiControl'))}</span><h1>${esc(t('trustCenter'))}</h1><p>${esc(t('trustIntro'))}</p></div>
+  <section class="card"><span class="eyebrow">${esc(t('controls'))}</span><div class="privacy-grid">${controlKeys.map(k=>`<label class="privacy-toggle"><input type="checkbox" data-privacy="${k}" ${controls[k]!==false?'checked':''}> ${esc(t(`control${k[0].toUpperCase()+k.slice(1)}`))}</label>`).join('')}</div>
+  <div class="row" style="margin-top:12px"><label>${esc(t('proactive'))} <select id="privacyProactive"><option value="OFF">${esc(t('off'))}</option><option value="IMPORTANT_ONLY">${esc(t('importantOnly'))}</option><option value="NORMAL">${esc(t('normal'))}</option><option value="PROACTIVE">${esc(t('proactive'))}</option></select></label><button class="primary" id="savePrivacyControls">${esc(t('saveControls'))}</button></div></section>
+  <section class="card"><span class="eyebrow">${esc(t('whatSyloraCanSee'))}</span><p>${(ai.canSee||[]).map(esc).join(' · ')||'—'}</p>
+  <span class="eyebrow">${esc(t('memory'))}</span><div class="stack">${(ai.remembers||[]).map(m=>`<div class="item"><b>${esc(m.label)}</b><small class="muted">${esc(m.source||'')}</small></div>`).join('')||'<p class="muted">—</p>'}</div>
+  <span class="eyebrow">${esc(t('integrations'))}</span><div class="stack">${(ai.integrations||[]).map(i=>`<div class="item row"><b>${esc(i.name)}</b><button class="ghost revoke-agent" data-id="${esc(i.agentId)}">${esc(t('disconnect'))}</button></div>`).join('')||'<p class="muted">—</p>'}</div></section>
+  <section class="card"><span class="eyebrow">${esc(t('activityLog'))}</span><div class="stack">${(activity.activity||ai.activity||[]).slice().reverse().slice(0,30).map(a=>`<div class="item"><b>${esc(a.summary||a.kind)}</b><p class="muted">${esc(a.reason||'')} · ${esc(a.context||'')} · ${a.createdAt?new Date(a.createdAt).toLocaleString(getLocale()==='uk'?'uk-UA':getLocale()):''}</p></div>`).join('')||`<p class="muted">${esc(t('noSyloraActivity'))}</p>`}</div></section>
+  <div class="grid2"><div class="card item"><span class="eyebrow">${esc(t('data'))}</span>
+  <button class="ghost" id="exportMemory">${esc(t('exportMyData'))}</button><button class="ghost" id="clearMemory">${esc(t('deleteMemories'))}</button><button class="ghost" id="clearHistory">${esc(t('deleteHistory'))}</button><button class="ghost" id="privacyExport">${esc(t('requestAccountExport'))}</button><button class="ghost" id="disablePersonalization">${esc(t('disablePersonalization'))}</button></div>
+  <div class="card item"><span class="eyebrow">${esc(t('reputation'))}</span>${Object.entries(reputation.reputation?.dimensions||{}).map(([k,v])=>`<div><b>${esc(k)}</b>: ${Number(v.score||0)}</div>`).join('')}<button class="ghost" id="disputeRep">${esc(t('dispute'))}</button>
+  <p class="muted">${esc(t('capabilities'))}: AI ${esc(t(ai.capabilities?.aiText?'on':'off'))} · ${esc(t('voice'))} ${esc(t(ai.capabilities?.aiRealtimeVoice?'on':'off'))} · LUMEN ${esc(caps?.honesty?.lumenWallet?.label||'TEST / DEMO')}</p></div></div>
+  <section class="card"><span class="eyebrow">${esc(t('memoryCenter'))}</span><h3>${esc(t('controlledMemory'))}</h3>
+  <p class="muted">${esc(memoryCenter.honesty||t('memoryHonesty'))}</p>
+  <label class="privacy-toggle"><input type="checkbox" id="memoryEnabled" ${memoryCenter.enabled!==false?'checked':''}> ${esc(t('memoryEnabled'))}</label>
   <div class="stack">${(memoryCenter.categories||[]).map(cat=>{const items=(memoryCenter.byCategory&&memoryCenter.byCategory[cat])||[];return `<div class="item"><b>${esc(cat)}</b><p class="muted">${items.length?items.map(m=>esc(m.label)).join(' · '):'—'}</p></div>`;}).join('')}</div>
-  <div class="stack">${(memoryCenter.memories||[]).slice(0,20).map(m=>`<div class="item row"><div><b>${esc(m.label)}</b><p class="muted">${esc(m.value)} · ${esc(m.category||'preferences')}</p></div><button class="ghost edit-mem" data-id="${m.id}">Edit</button><button class="ghost del-mem" data-id="${m.id}">Delete</button></div>`).join('')||'<p class="muted">Порожньо</p>'}</div></section>`;
+  <div class="stack">${(memoryCenter.memories||[]).slice(0,20).map(m=>`<div class="item row"><div><b>${esc(m.label)}</b><p class="muted">${esc(m.value)} · ${esc(m.category||'preferences')}</p></div><button class="ghost edit-mem" data-id="${esc(m.id)}">${esc(t('edit'))}</button><button class="ghost del-mem" data-id="${esc(m.id)}">${esc(t('delete'))}</button></div>`).join('')||`<p class="muted">${esc(t('empty'))}</p>`}</div></section>`;
   document.querySelector('#privacyProactive').value=ai.proactiveLevel||intel.proactive||'IMPORTANT_ONLY';
   document.querySelector('#savePrivacyControls').onclick=async()=>{
     const patch={};document.querySelectorAll('[data-privacy]').forEach(el=>{patch[el.dataset.privacy]=el.checked});
     patch.proactiveLevel=document.querySelector('#privacyProactive').value;
     await api('/api/ai/privacy-controls',{method:'PATCH',body:JSON.stringify(patch)});
-    toast('OK');renderSecurityCenter();
+    toast(t('controlsSaved'));renderSecurityCenter();
   };
-  document.querySelector('#exportMemory').onclick=async()=>{const out=await api('/api/ai/memory/export');const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sylora-ai-memory.json';a.click();toast('Export ready')};
-  document.querySelector('#clearMemory').onclick=async()=>{if(!confirm('Delete all AI memories?'))return;await api('/api/ai/memory',{method:'DELETE'});toast('Memories cleared');renderSecurityCenter()};
-  document.querySelector('#clearHistory').onclick=async()=>{if(!confirm('Delete conversation history?'))return;await api('/api/ai/history',{method:'DELETE'});toast('History cleared');renderSecurityCenter()};
-  document.querySelector('#privacyExport').onclick=async()=>{await api('/api/privacy/requests',{method:'POST',body:JSON.stringify({type:'export',details:'User requested account data export'})});toast('Request queued')};
-  document.querySelector('#disablePersonalization').onclick=async()=>{await api('/api/ai/privacy-controls',{method:'PATCH',body:JSON.stringify({personalization:false,proactiveLevel:'OFF'})});toast('Personalization off');renderSecurityCenter()};
-  document.querySelectorAll('.revoke-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'DELETE'});toast('Disconnected');renderSecurityCenter()});
-  document.querySelector('#disputeRep').onclick=async()=>{await api('/api/reputation/dispute',{method:'POST',body:JSON.stringify({dimension:'trust',reason:'User disputes trust score accuracy'})});toast('Dispute opened');renderSecurityCenter()};
-  document.querySelector('#memoryEnabled')?.addEventListener('change',async e=>{await api('/api/ai/memory/enabled',{method:'PATCH',body:JSON.stringify({enabled:e.target.checked})});toast(e.target.checked?'Memory on':'Memory off')});
-  document.querySelectorAll('.edit-mem').forEach(b=>b.onclick=async()=>{const value=prompt('New value');if(value==null)return;const category=prompt('Category (preferences/people/projects/professional/learning/conversation)','preferences');await api(`/api/ai/memory/${b.dataset.id}`,{method:'PATCH',body:JSON.stringify({value,category})});toast('Updated');renderSecurityCenter()});
-  document.querySelectorAll('.del-mem').forEach(b=>b.onclick=async()=>{await api(`/api/ai/memory/${b.dataset.id}`,{method:'DELETE'});toast('Deleted');renderSecurityCenter()});
+  document.querySelector('#exportMemory').onclick=async()=>{const out=await api('/api/ai/memory/export');const blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='sylora-ai-memory.json';a.click();toast(t('exportReady'))};
+  document.querySelector('#clearMemory').onclick=async()=>{if(!confirm(t('confirmDeleteMemories')))return;await api('/api/ai/memory',{method:'DELETE'});toast(t('memoriesCleared'));renderSecurityCenter()};
+  document.querySelector('#clearHistory').onclick=async()=>{if(!confirm(t('confirmDeleteHistory')))return;await api('/api/ai/history',{method:'DELETE'});toast(t('historyCleared'));renderSecurityCenter()};
+  document.querySelector('#privacyExport').onclick=async()=>{await api('/api/privacy/requests',{method:'POST',body:JSON.stringify({type:'export',details:'User requested account data export'})});toast(t('requestQueued'))};
+  document.querySelector('#disablePersonalization').onclick=async()=>{await api('/api/ai/privacy-controls',{method:'PATCH',body:JSON.stringify({personalization:false,proactiveLevel:'OFF'})});toast(t('personalizationOff'));renderSecurityCenter()};
+  document.querySelectorAll('.revoke-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'DELETE'});toast(t('disconnected'));renderSecurityCenter()});
+  document.querySelector('#disputeRep').onclick=async()=>{await api('/api/reputation/dispute',{method:'POST',body:JSON.stringify({dimension:'trust',reason:'User disputes trust score accuracy'})});toast(t('disputeOpened'));renderSecurityCenter()};
+  document.querySelector('#memoryEnabled')?.addEventListener('change',async e=>{await api('/api/ai/memory/enabled',{method:'PATCH',body:JSON.stringify({enabled:e.target.checked})});toast(t(e.target.checked?'memoryOn':'memoryOff'))});
+  document.querySelectorAll('.edit-mem').forEach(b=>b.onclick=async()=>{const value=prompt(t('newValue'));if(value==null)return;const category=prompt(t('memoryCategory'),'preferences');await api(`/api/ai/memory/${b.dataset.id}`,{method:'PATCH',body:JSON.stringify({value,category})});toast(t('updated'));renderSecurityCenter()});
+  document.querySelectorAll('.del-mem').forEach(b=>b.onclick=async()=>{await api(`/api/ai/memory/${b.dataset.id}`,{method:'DELETE'});toast(t('deleted'));renderSecurityCenter()});
 }
 
 async function renderPersonalDashboard(){

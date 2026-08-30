@@ -26,7 +26,7 @@ async function req(base, pathname, { method = 'GET', token, body } = {}) {
 
 test('shell keeps one Sylora and privacy center entry', () => {
   const app = fs.readFileSync('public/app.js', 'utf8');
-  assert.match(app, /PRIVACY & AI CONTROL/);
+  assert.match(app, /t\('privacyAiControl'\)/);
   assert.match(app, /\/api\/home\/hub/);
   assert.match(app, /CREATOR INTELLIGENCE/);
   assert.match(app, /lesson-quiz/);
