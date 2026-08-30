@@ -137,3 +137,15 @@ test('Business metrics, workspaces, assistant and action states are localized',(
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Identity profile, privacy vocabulary and knowledge graph states are localized',()=>{
+  const appSource=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  const source=appSource.split('async function renderIdentity(){')[1].split('async function renderAgents(){')[0];
+  for(const literal of ['Не сторінка соцмережі','placeholder="Посада"','placeholder="Навички через кому"','ПРИВАТНІСТЬ ПОЛІВ','>Зберегти Identity</button>','Що Sylora може знати з твого дозволу','>Додати вузол</button>',"toast('Вузол додано')"]){
+    assert.ok(!source.includes(literal),`hard-coded Identity copy remains: ${literal}`);
+  }
+  for(const key of ['identityHeroCopy','professionalUpper','jobTitle','skillsCommaSeparated','fieldPrivacyUpper','privacyPublic','privacyAiOnly','saveIdentity','knowledgePermissionTitle','addNode','knowledgeGraphEmpty','identityUpdated','nodeDeleted']){
+    assert.ok(source.includes(`u('${key}')`)||source.includes(`'${key}'`),`Identity route is not using ${key}`);
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+});

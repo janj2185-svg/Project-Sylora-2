@@ -981,21 +981,23 @@ async function renderIdentity(){
   const [{identity},kg]=await Promise.all([api('/api/identity'),api('/api/kg').catch(()=>({nodes:[],edges:[]}))]);
   const p=identity.privacy||{};
   const nodes=Array.isArray(kg.nodes)?kg.nodes:[];
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA IDENTITY</span><h1>${esc(identity.displayName||state.me.displayName)}</h1><p>Не сторінка соцмережі — цифрова ідентичність із контрольованою приватністю.</p></div>
-  <form id="identityForm" class="card fields"><span class="eyebrow">ПРОФЕСІЙНЕ</span>
-  <input name="title" placeholder="Посада" value="${esc(identity.professional?.title||'')}">
-  <input name="company" placeholder="Компанія" value="${esc(identity.professional?.company||'')}">
-  <input name="skills" placeholder="Навички через кому" value="${esc((identity.professional?.skills||[]).join(', '))}">
-  <input name="interests" placeholder="Інтереси через кому" value="${esc((identity.interests||[]).join(', '))}">
-  <input name="headline" placeholder="Creator headline" value="${esc(identity.creatorPersona?.headline||'')}">
-  <span class="eyebrow">ПРИВАТНІСТЬ ПОЛІВ</span>
-  ${['profile','professional','portfolio','skills','interests','reputation','agent','assets'].map(k=>`<label>${k}<select name="privacy_${k}">${['public','followers','connections','business','private','ai_only'].map(v=>`<option value="${v}" ${p[k]===v?'selected':''}>${v}</option>`).join('')}</select></label>`).join('')}
-  <button class="primary">Зберегти Identity</button></form>
-  <section class="card"><span class="eyebrow">KNOWLEDGE GRAPH</span><h3>Що Sylora може знати з твого дозволу</h3>
-  <form id="kgForm" class="fields"><input name="label" maxlength="120" placeholder="Напр. Улюблена мова" required><input name="value" maxlength="1000" placeholder="Значення" required>
-  <select name="privacy"><option value="private">private</option><option value="ai_only">ai_only</option><option value="connections">connections</option><option value="public">public</option></select>
-  <button class="ghost">Додати вузол</button></form>
-  <div class="stack">${nodes.slice(-20).reverse().map(n=>`<div class="item row"><div><b>${esc(n.label||n.type||'node')}</b><p class="muted">${esc(n.data?.value||n.data?.summary||n.type||'')} · ${esc(n.privacy||'private')}</p></div><button class="ghost kg-del" data-id="${esc(n.id)}">Видалити</button></div>`).join('')||'<p class="muted">Граф поки порожній.</p>'}</div></section>`;
+  const fieldKeys={profile:'identityFieldProfile',professional:'identityFieldProfessional',portfolio:'identityFieldPortfolio',skills:'identityFieldSkills',interests:'identityFieldInterests',reputation:'identityFieldReputation',agent:'identityFieldAgent',assets:'identityFieldAssets'};
+  const privacyKeys={public:'privacyPublic',followers:'privacyFollowers',connections:'privacyConnections',business:'privacyBusiness',private:'privacyPrivate',ai_only:'privacyAiOnly'};
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">SYLORA IDENTITY</span><h1>${esc(identity.displayName||state.me.displayName)}</h1><p>${u('identityHeroCopy')}</p></div>
+  <form id="identityForm" class="card fields"><span class="eyebrow">${u('professionalUpper')}</span>
+  <input name="title" placeholder="${u('jobTitle')}" value="${esc(identity.professional?.title||'')}">
+  <input name="company" placeholder="${u('company')}" value="${esc(identity.professional?.company||'')}">
+  <input name="skills" placeholder="${u('skillsCommaSeparated')}" value="${esc((identity.professional?.skills||[]).join(', '))}">
+  <input name="interests" placeholder="${u('interestsCommaSeparated')}" value="${esc((identity.interests||[]).join(', '))}">
+  <input name="headline" placeholder="${u('creatorHeadline')}" value="${esc(identity.creatorPersona?.headline||'')}">
+  <span class="eyebrow">${u('fieldPrivacyUpper')}</span>
+  ${['profile','professional','portfolio','skills','interests','reputation','agent','assets'].map(k=>`<label>${u(fieldKeys[k])}<select name="privacy_${k}">${['public','followers','connections','business','private','ai_only'].map(v=>`<option value="${v}" ${p[k]===v?'selected':''}>${u(privacyKeys[v])}</option>`).join('')}</select></label>`).join('')}
+  <button class="primary">${u('saveIdentity')}</button></form>
+  <section class="card"><span class="eyebrow">KNOWLEDGE GRAPH</span><h3>${u('knowledgePermissionTitle')}</h3>
+  <form id="kgForm" class="fields"><input name="label" maxlength="120" placeholder="${u('favoriteLanguageExample')}" required><input name="value" maxlength="1000" placeholder="${u('value')}" required>
+  <select name="privacy" aria-label="${u('privacy')}"><option value="private">${u('privacyPrivate')}</option><option value="ai_only">${u('privacyAiOnly')}</option><option value="connections">${u('privacyConnections')}</option><option value="public">${u('privacyPublic')}</option></select>
+  <button class="ghost">${u('addNode')}</button></form>
+  <div class="stack">${nodes.slice(-20).reverse().map(n=>`<div class="item row"><div><b>${esc(n.label||n.type||u('node'))}</b><p class="muted">${esc(n.data?.value||n.data?.summary||n.type||'')} · ${u(privacyKeys[n.privacy]||'privacyPrivate')}</p></div><button class="ghost kg-del" data-id="${esc(n.id)}">${u('delete')}</button></div>`).join('')||`<p class="muted">${u('knowledgeGraphEmpty')}</p>`}</div></section>`;
   document.querySelector('#identityForm').onsubmit=async e=>{
     e.preventDefault();
     const fd=new FormData(e.currentTarget);
@@ -1006,15 +1008,15 @@ async function renderIdentity(){
       interests:String(fd.get('interests')||'').split(',').map(x=>x.trim()).filter(Boolean),
       privacy
     })});
-    toast('Identity оновлено');renderIdentity();
+    toast(u('identityUpdated'));renderIdentity();
   };
   document.querySelector('#kgForm')?.addEventListener('submit',async e=>{
     e.preventDefault();
     const fd=new FormData(e.currentTarget);
     await api('/api/kg/nodes',{method:'POST',body:JSON.stringify({label:fd.get('label'),privacy:fd.get('privacy'),type:'knowledge',data:{value:String(fd.get('value')||'')}})});
-    toast('Вузол додано');renderIdentity();
+    toast(u('nodeAdded'));renderIdentity();
   });
-  document.querySelectorAll('.kg-del').forEach(b=>b.onclick=async()=>{await api(`/api/kg/nodes/${b.dataset.id}`,{method:'DELETE'});toast('Вузол видалено');renderIdentity()});
+  document.querySelectorAll('.kg-del').forEach(b=>b.onclick=async()=>{await api(`/api/kg/nodes/${b.dataset.id}`,{method:'DELETE'});toast(u('nodeDeleted'));renderIdentity()});
 }
 async function renderAgents(){
   const [{agents},{installs}]=await Promise.all([api('/api/agents'),api('/api/agents/installed')]);
