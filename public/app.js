@@ -656,27 +656,27 @@ function rememberDistributionSelection(){try{localStorage.setItem('sylora_distri
 function distributionErrorText(error){
   const code=String(error?.message||'LIVE_DISTRIBUTION_ERROR'),reasons=error?.data?.details?.reasons;
   const labels={
-    MEDIA_ROUTER_NOT_CONFIGURED:'Media router ще не підключено на сервері.',
-    MEDIA_ROUTER_CONTROL_CREDENTIALS_INVALID:'Перевір серверні credentials для Control API media router.',
-    MEDIA_ROUTER_UNAVAILABLE:'Media router зараз недоступний.',
-    STREAM_SECRET_STORAGE_NOT_CONFIGURED:'На сервері не налаштоване шифрування stream keys.',
-    STREAM_SECRET_KEY_INVALID:'Ключ шифрування stream keys має неправильний формат.',
-    PUBLIC_RTMP_INGEST_NOT_CONFIGURED:'Не налаштовано публічний OBS ingest URL.',
-    RTMPS_INGEST_REQUIRED_IN_PRODUCTION:'Production ingest мусить працювати через RTMPS.',
-    RTMPS_REQUIRED_IN_PRODUCTION:'Цей напрямок має використовувати RTMPS.',
-    STREAM_DESTINATION_REQUIRED:'Оберіть хоча б один напрямок.',
-    STREAM_DESTINATION_LIMIT:'За один ефір дозволено максимум 8 напрямків.',
-    STREAM_DESTINATION_NOT_FOUND:'Один із напрямків більше не існує.',
-    STREAM_DESTINATION_NOT_READY:'Один із напрямків вимкнений або не має ключа.',
-    STREAM_DESTINATION_SECRET_UNREADABLE:'Stream key напрямку не розшифровується — перевір стабільність master key.',
-    STREAM_DESTINATION_HOST_NOT_ALLOWED:'Цей RTMP host не дозволений політикою сервера.',
-    PRIVATE_STREAM_DESTINATION_FORBIDDEN:'Приватні та локальні RTMP-адреси заборонені.',
-    RTMP_SERVER_URL_INVALID:'Перевір RTMP server URL.',
-    RTMP_PROTOCOL_REQUIRED:'Потрібна адреса rtmp:// або rtmps://.',
-    STREAM_KEY_INVALID:'Stream key має неправильний формат.',
-    DISTRIBUTION_ALREADY_ACTIVE:'Для цього LIVE multistream уже активний.',
-    STREAM_DESTINATION_IN_ACTIVE_SESSION:'Спочатку зупини multistream — активний напрямок не можна змінювати.',
-    DISTRIBUTION_SESSION_NOT_ACTIVE:'Активного multistream немає.'
+    MEDIA_ROUTER_NOT_CONFIGURED:t('distRouterNotConfigured'),
+    MEDIA_ROUTER_CONTROL_CREDENTIALS_INVALID:t('distRouterCredentials'),
+    MEDIA_ROUTER_UNAVAILABLE:t('distRouterUnavailable'),
+    STREAM_SECRET_STORAGE_NOT_CONFIGURED:t('distSecretStorage'),
+    STREAM_SECRET_KEY_INVALID:t('distSecretInvalid'),
+    PUBLIC_RTMP_INGEST_NOT_CONFIGURED:t('distPublicIngest'),
+    RTMPS_INGEST_REQUIRED_IN_PRODUCTION:t('distRtmpsIngest'),
+    RTMPS_REQUIRED_IN_PRODUCTION:t('distRtmpsDestination'),
+    STREAM_DESTINATION_REQUIRED:t('distDestinationRequired'),
+    STREAM_DESTINATION_LIMIT:t('distDestinationLimit'),
+    STREAM_DESTINATION_NOT_FOUND:t('distNotFound'),
+    STREAM_DESTINATION_NOT_READY:t('distNotReady'),
+    STREAM_DESTINATION_SECRET_UNREADABLE:t('distSecretUnreadable'),
+    STREAM_DESTINATION_HOST_NOT_ALLOWED:t('distHostNotAllowed'),
+    PRIVATE_STREAM_DESTINATION_FORBIDDEN:t('distPrivateForbidden'),
+    RTMP_SERVER_URL_INVALID:t('distUrlInvalid'),
+    RTMP_PROTOCOL_REQUIRED:t('distProtocolRequired'),
+    STREAM_KEY_INVALID:t('distKeyInvalid'),
+    DISTRIBUTION_ALREADY_ACTIVE:t('distAlreadyActive'),
+    STREAM_DESTINATION_IN_ACTIVE_SESSION:t('distActiveLocked'),
+    DISTRIBUTION_SESSION_NOT_ACTIVE:t('distNotActive')
   };
   if(Array.isArray(reasons)&&reasons.length)return reasons.map(x=>labels[x]||x).join(' · ');
   return labels[code]||code;
