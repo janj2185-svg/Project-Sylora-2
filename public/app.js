@@ -382,14 +382,14 @@ async function renderWalletReference(){
       <section class="metric-grid wallet-metrics">
         <article class="glass-card metric-card"><span>${referenceIcon('wallet')}</span><small>${esc(t('balance'))}</small><b>${balance.toLocaleString()}</b><em>LUMEN</em></article>
         <article class="glass-card metric-card"><span>${referenceIcon('sparkles')}</span><small>${esc(t('gifts').toUpperCase())}</small><b>${gifts.length}</b><em>${esc(t('giftEffects'))}</em></article>
-        <article class="glass-card metric-card"><span>${referenceIcon('activity')}</span><small>CREATOR SHARE</small><b>${(creatorShareBps/100).toFixed(0)}%</b><em>${esc(t('testEconomy'))}</em></article>
+        <article class="glass-card metric-card"><span>${referenceIcon('activity')}</span><small>${esc(t('creatorShare'))}</small><b>${(creatorShareBps/100).toFixed(0)}%</b><em>${esc(t('testEconomy'))}</em></article>
       </section>
-      ${state.me?`<section class="glass-card wallet-send-card"><div class="card-top"><div><small>${esc(t('sendGift'))}</small><h3>${esc(t('createLiveMoment'))}</h3></div></div><div class="wallet-send-controls"><label>${esc(t('recipient'))}<select id="giftRecipient"><option value="">${esc(t('chooseUser'))}</option>${users.map(u=>`<option value="${esc(u.id)}">@${esc(u.username)} — ${esc(u.displayName)}</option>`).join('')}</select></label><label>Combo<select id="giftQuantity"><option value="1">×1</option><option value="5">×5</option><option value="10">×10</option></select></label></div></section>`:''}
-      <section class="gifts gift-constellation wallet-gifts">${gifts.map((gift,index)=>`<button class="glass-card gift" type="button" data-gift="${esc(gift.id)}" style="--gift-index:${index}"><span class="gift-orb" style="background:${gift.color};color:${gift.color}"><i>${liveGiftGlyph(gift.id)}</i></span><strong>${esc(gift.name)}</strong><small>${gift.tier} · ◈ ${gift.price}</small></button>`).join('')||`<div class="glass-card empty">${esc(t('giftCollectionPending'))}</div>`}</section>
+      ${state.me?`<section class="glass-card wallet-send-card"><div class="card-top"><div><small>${esc(t('sendGift'))}</small><h3>${esc(t('createLiveMoment'))}</h3></div></div><div class="wallet-send-controls"><label>${esc(t('recipient'))}<select id="giftRecipient"><option value="">${esc(t('chooseUser'))}</option>${users.map(u=>`<option value="${esc(u.id)}">@${esc(u.username)} — ${esc(u.displayName)}</option>`).join('')}</select></label><label>${esc(t('combo'))}<select id="giftQuantity"><option value="1">×1</option><option value="5">×5</option><option value="10">×10</option></select></label></div></section>`:''}
+      <section class="gifts gift-constellation wallet-gifts">${gifts.map((gift,index)=>`<button class="glass-card gift" type="button" data-gift="${esc(gift.id)}" style="--gift-index:${index}"><span class="gift-orb" style="background:${gift.color};color:${gift.color}"><i>${liveGiftGlyph(gift.id)}</i></span><strong>${esc(gift.name)}</strong><small>${esc(gift.tier)} · ◈ ${gift.price}</small></button>`).join('')||`<div class="glass-card empty">${esc(t('giftCollectionPending'))}</div>`}</section>
       <section class="glass-card transactions-card"><div class="card-top"><div><small>${esc(t('lumenActivity'))}</small><h3>${esc(t('recentTransactions'))}</h3></div></div>${entries.slice(0,7).map(entry=>`<div class="transaction"><span class="transaction-icon">${referenceIcon(entry.amount>=0?'sparkles':'wallet')}</span><span><b>${esc(entry.type)}</b><small>${new Date(entry.createdAt).toLocaleString(getLocale()==='uk'?'uk-UA':getLocale())}</small></span><b class="${entry.amount>=0?'positive':''}">${entry.amount>=0?'+':''}${entry.amount}</b></div>`).join('')||`<p class="muted">${esc(t('noTransactions'))}</p>`}</section>
     </main>
     <aside class="context-stack">
-      <section class="glass-card gift-preview"><span class="status-pill status-pill--gold">LIVE GIFTS</span><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><h3>${esc(t('cinematicGifts'))}</h3><p>${esc(t('cinematicGiftsIntro'))}</p><button type="button" data-wallet-live>${esc(t('openLive'))} ${referenceIcon('arrow')}</button></section>
+      <section class="glass-card gift-preview"><span class="status-pill status-pill--gold">${esc(t('liveGifts'))}</span><div class="living-stage-art" aria-hidden="true"><i></i><i></i><i></i></div><h3>${esc(t('cinematicGifts'))}</h3><p>${esc(t('cinematicGiftsIntro'))}</p><button type="button" data-wallet-live>${esc(t('openLive'))} ${referenceIcon('arrow')}</button></section>
       <section class="glass-card security-mini">${referenceIcon('shield')}<div><b>${esc(t('secureWallet'))}</b><small>${esc(t('secureWalletIntro'))}</small></div>${referenceIcon('chevron')}</section>
     </aside>
   </div>`;
@@ -403,7 +403,7 @@ async function renderWalletReference(){
       const out=await api('/api/gifts/send',{method:'POST',headers:{'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({giftId:button.dataset.gift,recipientId,quantity})});
       if(state.wallet){state.wallet.balance=out.balance;account()}
       refreshRailProgress();toast(`${t('giftSent')} ×${quantity} · ${t('balance').toLocaleLowerCase()} ◈ ${out.balance}`);await renderWalletReference();
-    }catch(error){toast(error.message)}
+    }catch(error){toast(humanError(error.message))}
   });
 }
 
@@ -424,7 +424,7 @@ async function renderProfileReference(){
       <main>
         <div class="segmented profile-tabs"><button class="active" type="button">${esc(t('mySpace'))}</button><button type="button" data-profile-go="clips">Clips</button><button type="button" data-profile-go="live">LIVE</button></div>
         <div class="profile-grid">
-          <article class="profile-portal profile-portal--clips" data-profile-go="clips"><span><small>CREATOR WORKFLOW</small><b>${esc(t('myClipsVideos'))}</b></span></article>
+          <article class="profile-portal profile-portal--clips" data-profile-go="clips"><span><small>${esc(t('creatorWorkflow'))}</small><b>${esc(t('myClipsVideos'))}</b></span></article>
           <article class="profile-portal profile-portal--studio" data-profile-go="studio"><span><small>SYLORA STUDIO</small><b>${esc(t('createNew'))}</b></span></article>
           <article class="profile-portal profile-portal--live" data-profile-go="live"><span><small>LIVE</small><b>${esc(t('goLive'))}</b></span></article>
         </div>
