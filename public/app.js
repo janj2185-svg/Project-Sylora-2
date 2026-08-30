@@ -1042,6 +1042,15 @@ function localizeSettingsLanguageCenter(){
   if(card){const title=card.querySelector('.card-top>span');if(title)title.textContent=t('interfaceLanguage').toUpperCase();card.querySelectorAll('.language-option').forEach(button=>{const detail=button.querySelector('small'),action=button.querySelector('i');if(detail)detail.textContent=`${button.dataset.settingsLocale.toUpperCase()} · ${t('fullInterface')}`;if(action)action.textContent=t(button.classList.contains('active')?'active':'select')})}
   const preview=document.querySelector('.translation-preview');
   if(preview){const copy=preview.querySelector('div');if(copy){const label=copy.querySelector('small'),title=copy.querySelector('b'),text=copy.querySelector('p');if(label)label.textContent=t('interfaceTranslation');if(title)title.textContent=t('menusErrorsHints');if(text)text.textContent=t('userContentOriginalSync')}const status=preview.querySelector('.status-pill');if(status)status.textContent=`${getLocale().toUpperCase()} ${t('active')}`}
+  const setHeading=(selector,titleKey,introKey,statusKey)=>{const section=document.querySelector(selector);if(!section)return null;const title=section.querySelector('h1'),intro=section.querySelector('p'),status=section.querySelector('.locale-orbit small');if(title)title.textContent=t(titleKey);if(intro)intro.textContent=t(introKey);if(status)status.textContent=t(statusKey);return section};
+  const setRows=(card,values)=>{if(!card)return;card.querySelectorAll('.setting-row').forEach((row,index)=>{const value=values[index];if(!value)return;const title=row.querySelector('span:nth-child(2)>b'),copy=row.querySelector('span:nth-child(2)>small'),action=row.querySelector('button'),status=row.querySelector('.status-pill');if(title&&value[0])title.textContent=t(value[0]);if(copy&&value[1])copy.textContent=t(value[1]);if(action&&value[2])action.textContent=t(value[2]);if(status&&value[3])status.textContent=t(value[3])})};
+  const live=setHeading('#liveSettings','broadcastsWithoutChaos','broadcastsSettingsIntro','safe');
+  setRows(live?.nextElementSibling,[['weakNetworkMode','adaptiveRecovery',null,'automatic'],[null,'localCompanionPairing',null,'local'],[null,'protectedStreamKeys','openStudio',null],[null,'controlledDestinations',null,'featureFlag']]);
+  const sylora=setHeading('#syloraSettings','aliveControlled','syloraSettingsIntro','voice');
+  setRows(sylora?.nextElementSibling,[['naturalVoice','voiceStateCycle',null,'readyLabel'],['doNotCoverMain','availableOnRequest',null,'onRequest'],['memoryPermissions','importantActionsConfirm','openSylora',null]]);
+  const system=document.querySelector('#systemSettings');
+  if(system){const pill=system.querySelector('.status-pill'),status=system.querySelector('.flag-vault small');if(pill)pill.textContent=t('safeFeatureFlags');if(status)status.textContent=t('flags')}
+  document.querySelectorAll('.settings-group-head .eyebrow').forEach(label=>{label.textContent=t('controlGroup')});
 }
 
 function renderMore(){
