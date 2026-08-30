@@ -1,5 +1,5 @@
-import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js?v=20260829-reference2';
-import {uiCopy} from './locales/ui-runtime.js?v=20260826-ui5';
+import {getLocale,SUPPORTED_UI_LOCALES} from './i18n.js?v=20260829-live5';
+import {uiCopy} from './locales/ui-runtime.js?v=20260829-live5';
 
 // Temporary bridge for the legacy monolithic renderer. It translates only known UI literals.
 // User-generated content is explicitly protected and never rewritten.
@@ -19,8 +19,44 @@ const SOURCE_ALIASES=new Map(Object.entries({
   'Close':'close','Закрити':'close'
 }));
 
+for(const [source,key] of Object.entries({
+  'Навчайся й досліджуй разом.':'scienceTitle','Керуй роботою без хаосу.':'businessTitle','← Назад':'conferenceBack','ПІДКЛЮЧЕННЯ':'conferenceConnecting','учасн.':'conferenceParticipants','Камера':'conferenceCamera','Мікрофон':'conferenceMic','Вийти':'conferenceLeave','Запитати Sylora…':'conferenceAsk','тільки за запитом':'conferenceOnRequest','очікуємо':'conferenceWaiting','В ЕФІРІ':'conferenceLive','Власник кімнати ще не увімкнув Sylora':'conferenceOwnerOff','Потрібен доступ до камери й мікрофона':'conferencePermission','Потрібен доступ до мікрофона':'conferenceMicPermission','Не вдалося підключити конференцію':'conferenceConnectionError','ЗАПУСК У TIKTOK · ПО КРОКАХ':'liveStepTitle','НАЛАШТУВАННЯ НЕ ЗАВЕРШЕНО':'liveNotFinished','Нічого не запускається без твоєї явної дії':'liveNoAutoStart','Відкрити Studio':'studioOpen'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'учасників':'communityMembers','у колі':'inCircle','Спільнота SYLORA':'communityFallback','Відкрити простір':'openSpace','Приєднатися':'join','Будуй коло своїх.':'communityHero','Живі спільноти, безпечне відкриття, події й приватні канали — без глобального рейтингу та примусових подарунків.':'communityHeroCopy','＋ Створити спільноту':'createCommunity','Перше коло чекає':'firstCircleWaiting','Створіть спільноту з реальними каналами та приватністю.':'firstCircleCopy','НОВА СПІЛЬНОТА':'newCommunity','Відкрийте власний простір.':'openOwnSpace','Створити':'createGeneric','ЖИВІ ФОРМАТИ':'livingFormats','Створити подію':'createEvent','вільна розмова':'freeConversation','спільний quiz engine':'sharedQuizEngine','подія + таймер + LIVE':'eventTimerLive','Знайди своїх.':'findYourPeople','Безпечний opt-in підбір за мовами й інтересами. Жодного анонімного відеочату.':'safeDiscoveryCopy','Увімкнути discovery':'enableDiscovery','Ваше коло поруч.':'yourCircleNearby','Увійдіть, щоб створювати простори, приєднуватися й писати у приватних каналах.':'communityGuestCopy','МОЇ ДОСЯГНЕННЯ':'myAchievements','Без глобального рейтингу':'noGlobalRanking','Досягнення спільноти':'communityAchievement','Досягнення з’являться від реальної участі.':'achievementsRealParticipation','Ви у спільноті':'communityJoined','Канали':'channel','Додати канал':'addChannel','Тут ще тихо. Почни розмову.':'channelQuiet','Опублікувати':'publish','Приєднайся до спільноти, щоб писати.':'joinToWrite'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Розділи налаштувань':'settingsSections','5 повних локалізацій':'fullLocalizations','голос, пам’ять, дозволи':'voiceMemoryPermissions','Безпека':'security','сесії та приватність':'sessionsPrivacy','Система':'system','повний інтерфейс':'fullInterface','SELECT':'select','ПЕРЕКЛАД ІНТЕРФЕЙСУ':'interfaceTranslation','Меню, системні кнопки, помилки й підказки':'translatedUiParts','Контент користувачів залишається мовою оригіналу; вибір синхронізується з профілем.':'userContentOriginal','Трансляції без хаосу.':'broadcastNoChaos','Слабка мережа, reconnect, OBS, TikFinity та зовнішні платформи видно в одному місці.':'broadcastOverview','Режим слабкої мережі':'weakNetworkMode','adaptive quality і автоматичне відновлення':'adaptiveRecovery','локальний SYLORA Companion, pairing у LIVE':'companionLocalPairing','захищені stream keys через RTMP(S) router':'protectedStreamKeys','додаються як окремі контрольовані напрямки':'controlledDestinations','Жива, але під контролем.':'aliveControlled','Natural Luna voice, емоційна українська інтонація, lip-sync, пам’ять і прозорі дозволи.':'syloraVoiceSummary','Природний голос':'naturalVoice','Не перекривати головний екран':'dontCoverHome','Sylora доступна за запитом, голосом і через mobile dock':'syloraOnRequest','Пам’ять і дозволи':'memoryPermissions','важливі дії завжди потребують підтвердження':'criticalConfirm','Відкрити Sylora':'openSylora','CONTROL GROUP':'controlGroup'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'ДОСТУПНИЙ БАЛАНС':'balanceUpper','Ваші LUMEN, подарунки й creator-заробіток в одному захищеному просторі.':'walletAuthedCopy','Увійдіть, щоб побачити баланс і надсилати живі подарунки.':'walletGuestCopy','Увійти в гаманець':'signInWallet','БАЛАНС':'balanceLabel','ПОДАРУНКИ':'giftsUpper','живих ефектів':'livingEffects','тестова економіка':'testEconomy','НАДІСЛАТИ ПОДАРУНОК':'sendGiftUpper','Створіть живий момент.':'createLivingMoment','Колекція подарунків готується.':'giftCollectionPreparing','РУХ LUMEN':'lumenMovement','Останні транзакції':'recentTransactions','Транзакцій поки немає.':'noTransactionsYet','Кінематографічні подарунки':'cinematicGifts','Світло, звук і рух запускаються лише у справжньому LIVE.':'giftsOnlyRealLive','Відкрити LIVE':'openLive','Захищений гаманець':'protectedWallet','Баланс і журнал підтверджуються сервером.':'walletServerVerified','Спочатку оберіть отримувача':'chooseRecipientFirst'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Оновити простір':'updateSpace','Ваш живий простір у SYLORA.':'livingSpaceFallback','Редагувати профіль':'editProfile','Меню профілю':'profileMenuLabel','ПІДПИСНИКІВ':'audienceUpper','ПУБЛІКАЦІЙ':'postsUpper','ЗАРОБЛЕНО':'earnedUpper','ORBIT РІВЕНЬ':'orbitLevel','Мій простір':'mySpace','Мої Clips і відео':'myClipsVideos','Створити нове':'createNew','Вийти в ефір':'goLive','ПЕРСОНАЛЬНИЙ ПРОСТІР':'personalSpace','Мова інтерфейсу':'interfaceLanguage','до ORBIT':'untilOrbit','Останні події':'latestEvents','Останні рухи':'latestMovements','Транзакцій немає.':'noTransactions','Профіль оновлено':'profileUpdated','Обкладинка профілю буде доступна після вибору медіа':'coverMediaRequired'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Показати Sylora':'showSylora','Сховати Sylora':'hideSylora','Я ПОРУЧ':'nearbyUpper','Говори природно. Можеш перебити мене у будь-який момент.':'speakNaturallyInterrupt','Мікрофон':'microphone','Завершити':'end','Завершити LIVE':'endLive','ПОТРІБНЕ ТВОЄ РІШЕННЯ':'decisionRequired','Дії SYLORA AI':'syloraActions','Підтвердити':'confirm','Скасувати':'cancel','ЩО SYLORA ЗНАЄ І МОЖЕ':'syloraKnowsCan','Прозорість Personal AI':'personalAiTransparency','Один асистент · один граф пам’яті · різні контексти.':'oneAssistantGraph','Знає':'knows','Доступ':'access','Останні дії':'recentActions','Ще немає дій':'noActionsYet','Експорт пам’яті':'exportMemory','ТИ':'you','Я слухаю.':'listening','Напиши або натисни «Жива розмова» і говори природно.':'writeOrTalk','Говорити з Sylora':'speakToSylora','Озвучення':'voicePlayback','Озвучення увімкнено':'voiceEnabled','Озвучення вимкнено':'voiceDisabled','Голос':'voiceLabel','Автоматично':'automatic','Постійних спогадів поки немає.':'persistentMemoryEmpty','Напр. Мова':'memoryExample'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  'Чати':'chats','Події':'events','Запрошення':'invites','Дзвінки':'calls','Priority':'priority','Нова розмова':'newConversation','Оберіть людину':'choosePerson','Розмов ще немає.':'noConversations','Усі важливі стани залишаються видимими.':'importantVisible','Оберіть розмову':'chooseConversation','Приватні повідомлення, голосові й відеодзвінки — в одному потоці.':'inboxUnified','Контекст розмови з’явиться після вибору контакту.':'conversationContext','ПРИВАТНІСТЬ':'privacy','Повідомлення й дзвінки доступні лише учасникам розмови.':'conversationPrivacy','оновлюються наживо':'updatesLive','Нових подій немає.':'noNewEvents','кімнати та події':'roomsEvents','Активних запрошень немає.':'noActiveInvites','Бізнес-кімнати':'businessRooms','Science circles':'scienceCircles','WebRTC voice & video':'webrtcVoiceVideo','Почніть розмову.':'startConversationTitle','Голос':'voice','Відео':'video','пропущено':'missed','нічого не приховано':'nothingHidden','Важливе в одному місці':'priorityFallback','AI лише групує потік — повна історія залишається доступною у вкладках.':'priorityExplanation','Порожньо':'empty','Розмова':'conversation','Вкладення':'attachment','Контакт':'contact','Ця розмова доступна лише її учасникам.':'conversationParticipantsOnly','Потрібен співрозмовник':'peerRequired'
+}))SOURCE_ALIASES.set(source,key);
+
+for(const [source,key] of Object.entries({
+  '♢ Подарунок':'gift','Подарунки SYLORA':'syloraGifts',' · 10 живих ефектів':'tenLivingEffects',
+  'Лайки додають імпульс · подарунки підсилюють Resonance.':'resonanceHelp',
+  'TURN relay готовий · P2P transport із NAT fallback.':'turnReadyHelp',
+  'P2P development transport · для стабільної роботи через NAT налаштуй TURN.':'turnMissingHelp',
+  'LIVE VIDEO':'liveVideo','LIVE P2P LIMIT':'liveP2pLimit','HOST UNAVAILABLE':'hostUnavailable'
+}))SOURCE_ALIASES.set(source,key);
+
 const PLACEHOLDER_ALIASES=new Map(Object.entries({
-  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description'
+  'Назва scene':'sceneName','OBS scenes…':'obsScenes','URL з’явиться тут':'urlAppears','Event title':'eventTitle','Starts (e.g. tomorrow 20:00)':'startsWhen','Написати в LIVE…':'writeLive','Коментар...':'comment','Коментар…':'comment','Про себе':'about','Написати повідомлення…':'writeMessage','Поговорити з Sylora…':'talkToSylora','Що запам’ятати':'whatRemember','Назва':'title','Опис':'description','Пошук у розмовах':'searchConversations','Напр. Мова':'memoryExample','Назва спільноти':'communityName','Про що вона?':'communityAbout','Новий канал':'newChannel','Написати в канал…':'writeChannel'
 }));
 
 const PROTECTED='[data-user-content],.post-text,.comment-zone p,#liveMessages p,.message-bubble p,.ai-conversation p,.realtime-transcript p,.conference-sylora-messages,.creatorIntelOut,pre,code';
@@ -76,14 +112,23 @@ function translateTextNode(node){
 }
 
 function translateAttributes(root){
-  const nodes=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
-  for(const el of nodes){
+  const fields=root.matches?.('input,textarea')?[root]:[...(root.querySelectorAll?.('input,textarea')||[])];
+  for(const el of fields){
     const current=String(el.getAttribute('placeholder')||'').trim();
     const key=el.dataset.syloraPlaceholder||PLACEHOLDER_ALIASES.get(current);
     if(!key)continue;
     el.dataset.syloraPlaceholder=key;
     const next=uiCopy(getLocale(),key);
     if(next&&next!==current)el.setAttribute('placeholder',next);
+  }
+  const labelled=root.matches?.('[aria-label]')?[root]:[...(root.querySelectorAll?.('[aria-label]')||[])];
+  for(const el of labelled){
+    const current=String(el.getAttribute('aria-label')||'').trim();
+    const key=el.dataset.syloraAria||SOURCE_ALIASES.get(current);
+    if(!key)continue;
+    el.dataset.syloraAria=key;
+    const next=uiCopy(getLocale(),key);
+    if(next&&next!==current)el.setAttribute('aria-label',next);
   }
 }
 

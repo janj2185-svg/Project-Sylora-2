@@ -27,6 +27,7 @@ test('owner can connect the local bridge and inspect chat, gift and host events 
   await registerViaUi(page,uniqueAccount('tiktok'));
   let copilotRequests=0;page.on('request',request=>{if(request.url().endsWith('/api/ai/live-copilot/respond'))copilotRequests+=1});
   await page.locator('button[data-view="live"]:visible').first().click();
+  await page.locator('.live-tabs [data-live-tab="create"]').click();
   await expect(page.locator('.tiktok-owner-pilot')).toBeVisible();
   await page.locator('#tiktokBridgeForm [name="token"]').fill(token);
   await page.locator('#tiktokBridgeForm button[type="submit"]').click();
@@ -51,10 +52,10 @@ test('owner can connect the local bridge and inspect chat, gift and host events 
   const hostEvent=page.locator('.tiktok-event-external').filter({hasText:'Co-host · linkMicBattle'});
   await hostEvent.getByRole('button',{name:'Відповісти'}).click();
   await expect.poll(()=>copilotRequests).toBe(1);
-  await expect(page.locator('.tiktok-event-sylora')).toContainText('Вітаю співведучого. · LOCAL VOICE ONLY');
+  await expect(page.locator('.tiktok-event-sylora')).toContainText('Вітаю співведучого. · ОЗВУЧЕННЯ ВИМКНЕНО');
 
   await page.locator('#tiktokResponseMode').selectOption('mentions');
   await page.locator('[data-tiktok-sim="chat"]').click();
   await expect.poll(()=>copilotRequests,{timeout:8_000}).toBe(2);
-  await expect(page.locator('.tiktok-event-sylora').first()).toContainText('Привіт! Я поруч у цьому LIVE. · LOCAL VOICE ONLY');
+  await expect(page.locator('.tiktok-event-sylora').first()).toContainText('Привіт! Я поруч у цьому LIVE. · ОЗВУЧЕННЯ ВИМКНЕНО');
 });

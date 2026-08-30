@@ -193,3 +193,10 @@ body[data-view="feed"] .post .actions button{min-height:38px;padding:0 12px;bord
 @media(prefers-reduced-motion:reduce){
   body[data-view="feed"] .living-horizon.home-compact:after{animation:none!important}
 }
+.living-stage-art{position:absolute;inset:0;overflow:hidden;background:radial-gradient(circle at 68% 42%,rgba(238,203,133,.48),transparent 13%),radial-gradient(circle at 34% 64%,rgba(139,216,195,.34),transparent 24%),linear-gradient(145deg,#ece8f5 0%,#f8f2e7 46%,#dceee9 100%)}
+.living-stage-art:before,.living-stage-art:after{content:"";position:absolute;border-radius:50%;filter:blur(1px);border:1px solid rgba(255,255,255,.72);box-shadow:0 0 70px rgba(216,175,101,.24)}
+.living-stage-art:before{width:52%;aspect-ratio:1;right:5%;top:8%;background:conic-gradient(from 20deg,rgba(255,255,255,.08),rgba(226,190,125,.4),rgba(160,222,207,.18),rgba(255,255,255,.08));animation:livingStageOrbit 16s linear infinite}
+.living-stage-art:after{width:38%;aspect-ratio:1;left:8%;bottom:-10%;background:linear-gradient(145deg,rgba(255,255,255,.68),rgba(218,205,239,.26));animation:livingStageFloat 8s ease-in-out infinite}
+.living-stage-art i{position:absolute;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 24px 8px rgba(244,211,147,.46)}
+.living-stage-art i:nth-child(1){left:22%;top:24%}.living-stage-art i:nth-child(2){left:62%;top:64%;animation-delay:-2s}.living-stage-art i:nth-child(3){right:15%;top:20%;animation-delay:-4s}
+@keyframes livingStageOrbit{to{transform:rotate(360deg)}}@keyframes livingStageFloat{50%{transform:translate3d(12px,-10px,0) scale(1.04)}}

@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#f6f2ed">
   <title>SYLORA</title>
   <link rel="preload" as="image" href="/assets/brand/sylora-canonical-lockup.png" fetchpriority="high">
-  <link rel="preload" as="image" href="/assets/reference/phoenix-master.png">
   <link rel="icon" type="image/png" href="/assets/brand/sylora-canonical-symbol.png">
   <link rel="stylesheet" href="/styles.css?v=20260811-consol1">
   <link rel="stylesheet" href="/modules.css?v=20260827-dedupe1">
@@ -22,7 +21,7 @@
   <link rel="stylesheet" href="/design-studio-2026.css?v=20260826-value11">
   <link rel="stylesheet" href="/design-account-2026.css?v=20260828-mobilelogout1">
   <link rel="stylesheet" href="/design-avatar-assembled.css?v=20260826-avatar4">
-  <link rel="stylesheet" href="/design-living-horizon-v3.css?v=20260829-reference2">
+  <link rel="stylesheet" href="/design-living-horizon-v3.css?v=20260829-live5">
   <link rel="stylesheet" href="/living-horizon-reference.css?v=20260829-reference2">
   <link rel="stylesheet" href="/living-horizon-bridge.css?v=20260829-reference4">
   <script type="importmap">{"imports":{"three":"/vendor/three/three.module.js"}}</script>
@@ -50,14 +49,15 @@
             <img class="brand-lockup-full" src="/assets/brand/sylora-canonical-lockup.png" width="976" height="569" alt="SYLORA — YOUR AI. YOUR WORLD. YOUR LEGACY." data-brand-sha256="061430e7d2fceefb660d049838603cffc0f30433a704dd3eb239b9f59e57fa50" decoding="sync" loading="eager" fetchpriority="high">
             <img class="brand-lockup-symbol" src="/assets/brand/sylora-canonical-symbol.png" width="310" height="395" alt="" data-brand-sha256="9975f9f178eee4cf747f258e68d268ef512b4786342aee45bf932e8a2f941df1" aria-hidden="true">
           </a>
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="Згорнути бічну панель" aria-expanded="true">‹</button>
         </div>
 
         <div class="sidebar-scroll" data-sidebar="content">
           <section class="sidebar-group">
-            <div data-sidebar="group-label">Головне</div>
+            <div data-sidebar="group-label" data-i18n="navMain">Головне</div>
             <nav class="side-nav" data-sidebar="menu">
               <button class="nav sylora-nav-button active" data-view="feed" data-active="true" type="button"><span class="nav-icon-plate">⌂</span><span data-i18n="home">Головна</span></button>
-              <button class="nav sylora-nav-button" data-view="live" data-active="false" type="button"><span class="nav-icon-plate">◉</span><span data-i18n="live">LIVE</span><em class="nav-count">12</em></button>
+              <button class="nav sylora-nav-button" data-view="live" data-active="false" type="button"><span class="nav-icon-plate">◉</span><span data-i18n="live">LIVE</span></button>
               <button class="nav sylora-nav-button" data-view="clips" data-active="false" type="button"><span class="nav-icon-plate">▷</span><span data-i18n="clips">Clips</span></button>
               <button class="nav sylora-nav-button" data-view="studio" data-active="false" type="button"><span class="nav-icon-plate">▣</span><span data-i18n="studio">Studio</span></button>
               <button class="nav sylora-nav-button" data-view="ai" data-active="false" type="button"><span class="nav-icon-plate">✦</span><span data-i18n="ai">Sylora AI</span></button>
@@ -65,36 +65,36 @@
           </section>
 
           <section class="sidebar-group">
-            <div data-sidebar="group-label">Простори</div>
+            <div data-sidebar="group-label" data-i18n="navSpaces">Простори</div>
             <nav class="side-nav" data-sidebar="menu">
               <button class="nav sylora-nav-button" data-view="explore" data-active="false" type="button"><span class="nav-icon-plate">◈</span><span data-i18n="explore">Відкриття</span></button>
               <button class="nav sylora-nav-button" data-view="communities" data-active="false" type="button"><span class="nav-icon-plate">♧</span><span data-i18n="communities">Спільноти</span></button>
-              <button class="nav sylora-nav-button" data-view="learning" data-active="false" type="button"><span class="nav-icon-plate">⌬</span><span>Навчання</span></button>
+              <button class="nav sylora-nav-button" data-view="learning" data-active="false" type="button"><span class="nav-icon-plate">⌬</span><span data-i18n="learning">Навчання</span></button>
               <button class="nav sylora-nav-button" data-view="business" data-active="false" type="button"><span class="nav-icon-plate">▱</span><span data-i18n="business">Бізнес</span></button>
             </nav>
           </section>
 
           <section class="sidebar-group">
-            <div data-sidebar="group-label">Особисте</div>
+            <div data-sidebar="group-label" data-i18n="navPersonal">Особисте</div>
             <nav class="side-nav secondary-nav" data-sidebar="menu">
-              <button class="nav sylora-nav-button" data-view="messages" data-active="false" type="button"><span class="nav-icon-plate">✉</span><span data-i18n="inbox">Inbox</span><em class="nav-count">4</em></button>
+              <button class="nav sylora-nav-button" data-view="messages" data-active="false" type="button"><span class="nav-icon-plate">✉</span><span data-i18n="inbox">Inbox</span></button>
               <button class="nav sylora-nav-button" data-view="profile" data-active="false" type="button"><span class="nav-icon-plate">○</span><span data-i18n="profile">Профіль</span></button>
-              <button class="nav sylora-nav-button" data-view="gifts" data-active="false" type="button"><span class="nav-icon-plate">▤</span><span>Гаманець</span></button>
-              <button class="nav sylora-nav-button" data-view="more" data-active="false" type="button"><span class="nav-icon-plate">⚙</span><span>Налаштування</span></button>
+              <button class="nav sylora-nav-button" data-view="gifts" data-active="false" type="button"><span class="nav-icon-plate">▤</span><span data-i18n="wallet">Гаманець</span></button>
+              <button class="nav sylora-nav-button" data-view="more" data-active="false" type="button"><span class="nav-icon-plate">⚙</span><span data-i18n="settings">Налаштування</span></button>
             </nav>
           </section>
         </div>
 
         <div class="sidebar-footer" data-sidebar="footer">
           <div id="railProgress"></div>
-          <button class="plan-card" type="button" data-rail-view="gifts">
+          <button class="plan-card" type="button" data-rail-view="gifts" hidden>
             <span class="plan-gem">♕</span>
             <span class="plan-copy"><b>SYLORA PRO</b><small>Розкрити весь потенціал</small></span>
             <span>↗</span>
           </button>
-          <button class="account-row" type="button" data-rail-view="profile">
-            <span class="avatar avatar--ivan">IK</span>
-            <span><b>Ivan K.</b><small>@kvasnytsiaivan</small></span>
+          <button class="account-row" type="button" data-rail-view="profile" hidden>
+            <span class="avatar avatar--ivan"></span>
+            <span><b></b><small></small></span>
             <span>•••</span>
           </button>
         </div>
@@ -131,12 +131,12 @@
   <div id="gift-stage"></div>
   <div id="toast"></div>
   <script src="/bootstrap-diagnostics.js?v=20260811-consol1"></script>
-  <script type="module" src="/i18n-runtime.js?v=20260829-reference2"></script>
-  <script type="module" src="/ui-localization-runtime.js?v=20260829-reference2"></script>
+  <script type="module" src="/i18n-runtime.js?v=20260829-live5"></script>
+  <script type="module" src="/ui-localization-runtime.js?v=20260829-live5"></script>
   <script type="module" src="/home-runtime.js?v=20260829-reference3"></script>
-  <script type="module" src="/studio-mobile-runtime.js?v=20260829-reference2"></script>
-  <script type="module" src="/live-runtime.js?v=20260829-reference2"></script>
-  <script type="module" src="/ai-presence-runtime.js?v=20260829-reference2"></script>
-  <script type="module" src="/app.js?v=20260829-reference2"></script>
+  <script type="module" src="/studio-mobile-runtime.js?v=20260829-live5"></script>
+  <script type="module" src="/live-runtime.js?v=20260829-live5"></script>
+  <script type="module" src="/ai-presence-runtime.js?v=20260829-live5"></script>
+  <script type="module" src="/app.js?v=20260829-live5"></script>
 </body>
 </html>
