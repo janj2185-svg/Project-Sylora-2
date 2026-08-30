@@ -1,0 +1,12 @@
+{
+  "name": "SYLORA",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "sylora-dev",
+      "command": "DATABASE_URL=postgresql://sylora:sylora_dev_only@127.0.0.1:5432/sylora REDIS_URL=redis://127.0.0.1:6379 PORT=8787 NODE_ENV=development npm run dev"
+    }
+  ],
+  "ports": [{ "name": "sylora-web", "port": 8787 }]
+}
