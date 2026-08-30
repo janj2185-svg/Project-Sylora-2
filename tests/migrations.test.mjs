@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyMigrations, loadMigrations, MIGRATION_FILES } from '../src/migrations.mjs';
+import { createHash } from 'node:crypto';
+import { applyMigrations, loadMigrations, migrationChecksum, MIGRATION_FILES } from '../src/migrations.mjs';
 
 const EXPECTED_CHECKSUMS = Object.freeze({
   '001_initial_schema': '19d20cc466ca7b7a76ceadf491f4c4d1312fd3b9cb6d059d8cf135ab5602e9a7',
@@ -19,15 +20,22 @@ const EXPECTED_CHECKSUMS = Object.freeze({
   '013_dm_attachments_gift_refund': 'eebbc74b83f9ff53489f868711a4cdeff1f627609cd97a97662589ece95be3c0',
   '013_phase1_identity_auth': 'e735b7e71e50d889a3b040f3ac18b4e7de44dffe64b2709a2b5840c2e4173960',
   '014_session_status_invalidation': '85b51cdf8872c12f0a90a41fb240d528d200703f2fd7ff4f67d7cfa7493a6740',
-  '015_live_distribution': '3a9de8c0f26b3329099fc66b0c64cd6867f53b86f9cba5128eccbf8d68f91c22'
+  '015_live_distribution': '3a9de8c0f26b3329099fc66b0c64cd6867f53b86f9cba5128eccbf8d68f91c22',
+  '016_studio_scenes': '7d13968a273c8518ca99d417d26a0ae0d25c4a534978b55d6e50090bcb5f4583'
 });
 
 test('migration manifest is ordered, immutable, and complete through Phase 1', () => {
   const migrations = loadMigrations();
-  assert.equal(migrations.length, 17);
+  assert.equal(migrations.length, 18);
   assert.deepEqual(migrations.map(item => item.name), MIGRATION_FILES.map(([name]) => name));
   assert.deepEqual(Object.fromEntries(migrations.map(item => [item.name, item.checksum])), EXPECTED_CHECKSUMS);
   assert.deepEqual(migrations.map(item => item.name), Object.keys(EXPECTED_CHECKSUMS));
+});
+
+test('migration checksums are stable across LF and CRLF checkouts', () => {
+  const sourceLf = 'CREATE TABLE example (\n  id uuid PRIMARY KEY\n);\n';
+  const sourceCrlf = sourceLf.replaceAll('\n', '\r\n');
+  assert.equal(migrationChecksum(sourceCrlf), migrationChecksum(sourceLf));
 });
 
 test('fresh schema defines critical keys, ownership cascades, identity uniqueness, timestamps, and indexes', () => {
@@ -51,6 +59,11 @@ test('fresh schema defines critical keys, ownership cascades, identity uniquenes
   assert.match(sql, /CREATE TABLE IF NOT EXISTS live_stream_destinations/i);
   assert.match(sql, /CREATE TABLE IF NOT EXISTS live_distribution_sessions/i);
   assert.match(sql, /live_distribution_sessions_one_active_idx/i);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS studio_scenes/i);
+  assert.match(sql, /studio_scenes_user_updated_idx/i);
+  assert.match(sql, /UNIQUE\(id,user_id\)/i);
+  assert.match(sql, /FOREIGN KEY\(action_id,action_user_id\)[\s\S]*REFERENCES ecosystem_actions\(id,user_id\) ON DELETE SET NULL/i);
+  assert.match(sql, /action_id IS NOT NULL AND action_user_id IS NOT NULL AND action_user_id=user_id/i);
 });
 
 test('migration runner applies every migration transactionally and is idempotent', async () => {
@@ -68,11 +81,11 @@ test('migration runner applies every migration transactionally and is idempotent
     }
   };
   await applyMigrations(client);
-  assert.equal(applied.size, 17);
+  assert.equal(applied.size, 18);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_lock($1)').length, 1);
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 1);
-  assert.equal(commands.filter(command => command === 'BEGIN').length, 17);
-  assert.equal(commands.filter(command => command === 'COMMIT').length, 17);
+  assert.equal(commands.filter(command => command === 'BEGIN').length, 18);
+  assert.equal(commands.filter(command => command === 'COMMIT').length, 18);
   const before = commands.length;
   await applyMigrations(client);
   assert.equal(commands.slice(before).some(command => command === 'BEGIN'), false);
@@ -80,14 +93,45 @@ test('migration runner applies every migration transactionally and is idempotent
   assert.equal(commands.filter(command => command === 'SELECT pg_advisory_unlock($1)').length, 2);
 });
 
-test('migration runner fails closed when an applied checksum differs', async () => {
+test('migration runner canonicalizes a legacy raw CRLF checksum under its advisory lock', async () => {
+  const migrations = loadMigrations();
+  const first = migrations[0];
+  const crlfSource = first.sql.replace(/\r\n?/g, '\n').replaceAll('\n', '\r\n');
+  const legacyChecksum = createHash('sha256').update(crlfSource).digest('hex');
+  const applied = new Map(migrations.map(migration => [migration.name, migration.checksum]));
+  const commands = [];
+  applied.set(first.name, legacyChecksum);
+  assert.notEqual(legacyChecksum, first.checksum);
+  const client = {
+    async query(sql, params = []) {
+      if (/^SELECT pg_advisory_lock/i.test(sql)) commands.push('lock');
+      if (/^SELECT checksum FROM _sylora_migrations/i.test(sql)) {
+        return { rowCount: 1, rows: [{ checksum: applied.get(params[0]) }] };
+      }
+      if (/^UPDATE _sylora_migrations SET checksum/i.test(sql)) {
+        commands.push('canonicalize');
+        assert.equal(applied.get(params[0]), params[2]);
+        applied.set(params[0], params[1]);
+        return { rowCount: 1, rows: [] };
+      }
+      if (/^SELECT pg_advisory_unlock/i.test(sql)) commands.push('unlock');
+      return { rowCount: 0, rows: [] };
+    }
+  };
+  await applyMigrations(client);
+  assert.equal(applied.get(first.name), first.checksum);
+  assert.deepEqual(commands, ['lock', 'canonicalize', 'unlock']);
+});
+
+test('migration runner fails closed when applied SQL content differs', async () => {
   const first = loadMigrations()[0];
+  const changedChecksum = createHash('sha256').update(`${first.sql}\n-- changed`).digest('hex');
   let unlocked = false;
   const client = {
     async query(sql, params = []) {
       if (/^SELECT pg_advisory_unlock/i.test(sql)) unlocked = true;
       if (/^SELECT checksum FROM _sylora_migrations/i.test(sql) && params[0] === first.name) {
-        return { rowCount: 1, rows: [{ checksum: '0'.repeat(64) }] };
+        return { rowCount: 1, rows: [{ checksum: changedChecksum }] };
       }
       return { rowCount: 0, rows: [] };
     }

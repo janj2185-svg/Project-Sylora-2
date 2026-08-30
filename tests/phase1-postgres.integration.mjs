@@ -214,7 +214,7 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
       migrationClient.release();
       concurrentMigrationClient.release();
     }
-    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 17);
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM _sylora_migrations')).rows[0].count), 18);
 
     provider = await startProviderStub();
     firstServer = await startProductionServer({ databaseUrl, dataFile, openaiBaseUrl: provider.baseUrl, openaiApiKey: 'phase1-provider-test-key' });
@@ -260,6 +260,52 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
     assert.equal(login.status, 200, JSON.stringify(login.body));
     const token = login.body.token;
     assert.equal((await request(firstServer.base, '/api/me', { token })).status, 200);
+
+    const studioScene = await request(firstServer.base, '/api/studio/scenes', {
+      method: 'POST',
+      token,
+      payload: {
+        name: 'Restart-proof Studio',
+        overlayTitle: 'POSTGRES LIVE',
+        overlayStyle: 'cyan',
+        profileId: 'square1080',
+        micGain: 118,
+        micMuted: true
+      }
+    });
+    assert.equal(studioScene.status, 201, JSON.stringify(studioScene.body));
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM studio_scenes WHERE id=$1 AND user_id=$2', [studioScene.body.scene.id, alice.body.user.id])).rows[0].count), 1);
+    const bobScenes = await request(firstServer.base, '/api/studio/scenes', { token: bob.body.token });
+    assert.equal(bobScenes.status, 200, JSON.stringify(bobScenes.body));
+    assert.deepEqual(bobScenes.body.scenes, []);
+    const updatedStudioScene = await request(firstServer.base, `/api/studio/scenes/${studioScene.body.scene.id}`, {
+      method: 'PATCH',
+      token,
+      payload: {
+        name: 'Restart-proof Studio 2',
+        overlayTitle: 'POSTGRES PRIME',
+        overlayStyle: 'clean',
+        profileId: 'portrait4x5',
+        micGain: 75,
+        micMuted: false
+      }
+    });
+    assert.equal(updatedStudioScene.status, 200, JSON.stringify(updatedStudioScene.body));
+    const studioPlan = await request(firstServer.base, '/api/studio/ai/plan', { method: 'POST', token, payload: { topic: 'PostgreSQL AI Studio' } });
+    assert.equal(studioPlan.status, 200, JSON.stringify(studioPlan.body));
+    const confirmedStudioPlan = await request(firstServer.base, `/api/studio/ai/plan/${studioPlan.body.action.id}/confirm`, { method: 'POST', token, payload: {} });
+    assert.equal(confirmedStudioPlan.status, 200, JSON.stringify(confirmedStudioPlan.body));
+    assert.equal(confirmedStudioPlan.body.scene.name, 'PostgreSQL AI Studio');
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM studio_scenes WHERE id=$1 AND user_id=$2', [confirmedStudioPlan.body.scene.id, alice.body.user.id])).rows[0].count), 1);
+    const repeatedStudioPlan = await request(firstServer.base, `/api/studio/ai/plan/${studioPlan.body.action.id}/confirm`, { method: 'POST', token, payload: {} });
+    assert.equal(repeatedStudioPlan.status, 200, JSON.stringify(repeatedStudioPlan.body));assert.equal(repeatedStudioPlan.body.scene.id,confirmedStudioPlan.body.scene.id);
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM studio_scenes WHERE action_id=$1', [studioPlan.body.action.id])).rows[0].count), 1);
+    const pendingStudioPlan = await request(firstServer.base, '/api/studio/ai/plan', { method: 'POST', token, payload: { topic: 'Confirm after restart' } });
+    assert.equal(pendingStudioPlan.status, 200, JSON.stringify(pendingStudioPlan.body));
+    const malformedStudioScene = await request(firstServer.base, '/api/studio/scenes/not-a-uuid', { method: 'DELETE', token });
+    assert.equal(malformedStudioScene.status, 400, JSON.stringify(malformedStudioScene.body));
+    const bobDeleteStudioScene = await request(firstServer.base, `/api/studio/scenes/${studioScene.body.scene.id}`, { method: 'DELETE', token: bob.body.token });
+    assert.equal(bobDeleteStudioScene.status, 404, JSON.stringify(bobDeleteStudioScene.body));
 
     const distributionLive = await request(firstServer.base, '/api/live', {
       method: 'POST', token, payload: { title: 'PostgreSQL distribution contract' }
@@ -449,6 +495,17 @@ test('production PostgreSQL migrations, auth/profile critical path, and restart 
     assert.equal(afterRestart.body.user.id, alice.body.user.id);
     const profileAfterRestart = await request(restartedServer.base, '/api/identity', { token });
     assert.equal(profileAfterRestart.body.identity.professional.title, 'PostgreSQL Architect');
+    const studioScenesAfterRestart = await request(restartedServer.base, '/api/studio/scenes', { token });
+    assert.equal(studioScenesAfterRestart.status, 200, JSON.stringify(studioScenesAfterRestart.body));
+    assert.equal(studioScenesAfterRestart.body.scenes.length, 2);
+    const directSceneAfterRestart=studioScenesAfterRestart.body.scenes.find(item=>item.id===studioScene.body.scene.id),aiSceneAfterRestart=studioScenesAfterRestart.body.scenes.find(item=>item.id===confirmedStudioPlan.body.scene.id);
+    assert.equal(directSceneAfterRestart.name, 'Restart-proof Studio 2');
+    assert.equal(directSceneAfterRestart.profileId, 'portrait4x5');
+    assert.equal(directSceneAfterRestart.micGain, 75);
+    assert.equal(aiSceneAfterRestart.name, 'PostgreSQL AI Studio');
+    const confirmedAfterRestart=await request(restartedServer.base,`/api/studio/ai/plan/${pendingStudioPlan.body.action.id}/confirm`,{method:'POST',token,payload:{}});
+    assert.equal(confirmedAfterRestart.status,200,JSON.stringify(confirmedAfterRestart.body));assert.equal(confirmedAfterRestart.body.scene.name,'Confirm after restart');
+    assert.equal(Number((await pool.query('SELECT count(*) AS count FROM studio_scenes WHERE action_id=$1',[pendingStudioPlan.body.action.id])).rows[0].count),1);
     const memoryCenter = await request(restartedServer.base, '/api/ai/memory/center', { token });
     assert.equal(memoryCenter.status, 200);
     assert.equal(memoryCenter.body.enabled, false);

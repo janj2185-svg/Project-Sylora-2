@@ -15,6 +15,7 @@ services:
       SYLORA_RELEASE_SHA: ${SYLORA_RELEASE_SHA:-unknown}
       SYLORA_RELEASE_REF: ${SYLORA_RELEASE_REF:-unknown}
       SYLORA_RELEASED_AT: ${SYLORA_RELEASED_AT:-}
+      SYLORA_TRUSTED_PROXY_HOPS: 1
     command: ["sh", "-c", "node scripts/migrate.mjs && node src/server.mjs"]
     depends_on:
       postgres:

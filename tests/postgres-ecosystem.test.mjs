@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { newDb } from 'pg-mem';
 import { PostgresEcosystemRepository } from '../src/repositories/postgres-ecosystem.mjs';
+import { EcosystemService } from '../src/ecosystem/service.mjs';
+import { Store } from '../src/store.mjs';
 import fs from 'node:fs';
 
 test('PostgreSQL ecosystem repository persists personal AI, identity, KG and orgs', async () => {
@@ -97,6 +99,14 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
       id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, agent_id uuid,
       kind text NOT NULL, summary text NOT NULL, data_used jsonb NOT NULL DEFAULT '[]', reason text NOT NULL DEFAULT '',
       context text NOT NULL DEFAULT 'command_center', created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE ecosystem_actions (
+      id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, agent_id uuid,
+      actor_type text NOT NULL DEFAULT 'personal_ai', type text NOT NULL, level text NOT NULL,
+      input jsonb NOT NULL DEFAULT '{}', output jsonb, permission text, context text NOT NULL DEFAULT 'command_center',
+      status text NOT NULL, confirmation_required boolean NOT NULL DEFAULT true, result jsonb, error text,
+      created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
+      confirmed_at timestamptz, completed_at timestamptz
     );
   `);
 
@@ -210,6 +220,95 @@ test('PostgreSQL ecosystem repository persists personal AI, identity, KG and org
   });
   assert.equal((await repo.listActivity(userId, 10)).length, 1);
 
+  const actionId=randomUUID(),createdAt=new Date().toISOString();
+  const action=await repo.createEcosystemAction({id:actionId,userId,agentId:agent.id,actorType:'personal_ai',type:'prepare_live',level:'REQUEST_CONFIRMATION',input:{topic:'Persistent Studio'},output:null,permission:null,context:'studio',status:'pending',confirmationRequired:true,result:null,error:null,createdAt,expiresAt:new Date(Date.now()+60_000).toISOString(),confirmedAt:null,completedAt:null});
+  assert.equal(action.input.topic,'Persistent Studio');
+  const claimed=await repo.claimEcosystemAction(userId,actionId,new Date().toISOString());assert.equal(claimed.status,'confirmed');
+  const completed=await repo.saveEcosystemAction({...claimed,status:'completed',result:{accepted:true},output:{accepted:true},completedAt:new Date().toISOString()});
+  assert.equal(completed.result.accepted,true);assert.equal((await repo.listEcosystemActions(userId))[0].id,actionId);
+
   assert.ok(sql010.includes('personal_agents'));
+  await pool.end();
+});
+
+function actionServiceStore() {
+  const store = new Store(null, { persistent: false });
+  // Avoid unrelated catalog seeding while exercising only action persistence.
+  store.data.agentCatalog.push({ id: 'test-catalog-seed' });
+  return store;
+}
+
+test('ecosystem service persists generic actions across restart and claims concurrent confirmation once', async () => {
+  const memory = newDb();
+  memory.public.none(`
+    CREATE TABLE users(id uuid PRIMARY KEY);
+    CREATE TABLE personal_agents (
+      id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name text NOT NULL DEFAULT 'Sylora', kind text NOT NULL DEFAULT 'personal', locale text NOT NULL DEFAULT 'uk',
+      permissions jsonb NOT NULL DEFAULT '{}', contexts jsonb NOT NULL DEFAULT '{}',
+      privacy_controls jsonb NOT NULL DEFAULT '{}', proactive_level text NOT NULL DEFAULT 'IMPORTANT_ONLY',
+      voice_personality text NOT NULL DEFAULT 'warm', created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(), UNIQUE(user_id, kind)
+    );
+    CREATE TABLE ai_activity (
+      id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, agent_id uuid,
+      kind text NOT NULL, summary text NOT NULL, data_used jsonb NOT NULL DEFAULT '[]', reason text NOT NULL DEFAULT '',
+      context text NOT NULL DEFAULT 'command_center', created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE TABLE ecosystem_actions (
+      id uuid PRIMARY KEY, user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE, agent_id uuid,
+      actor_type text NOT NULL DEFAULT 'personal_ai', type text NOT NULL, level text NOT NULL,
+      input jsonb NOT NULL DEFAULT '{}', output jsonb, permission text, context text NOT NULL DEFAULT 'command_center',
+      status text NOT NULL, confirmation_required boolean NOT NULL DEFAULT true, result jsonb, error text,
+      created_at timestamptz NOT NULL DEFAULT now(), expires_at timestamptz NOT NULL,
+      confirmed_at timestamptz, completed_at timestamptz
+    );
+  `);
+  const adapter = memory.adapters.createPg();
+  const pool = new adapter.Pool();
+  const repository = new PostgresEcosystemRepository(pool);
+  const user = { id: randomUUID(), username: 'durable-actions', displayName: 'Durable Actions', locale: 'uk' };
+  const otherUserId = randomUUID();
+  await pool.query('INSERT INTO users(id) VALUES($1),($2)', [user.id, otherUserId]);
+
+  const producer = new EcosystemService(actionServiceStore(), repository);
+  const restartAction = await producer.proposeAction(user, {
+    type: 'prepare_content_pack',
+    context: 'studio',
+    input: { topic: 'survives restart' }
+  });
+  assert.equal(Number((await pool.query('SELECT count(*) AS count FROM ecosystem_actions WHERE id=$1', [restartAction.id])).rows[0].count), 1);
+  assert.equal(await repository.findEcosystemAction(otherUserId, restartAction.id), null);
+
+  const restarted = new EcosystemService(actionServiceStore(), new PostgresEcosystemRepository(pool));
+  const confirmedAfterRestart = await restarted.confirmEcosystemAction(user, restartAction.id);
+  assert.equal(confirmedAfterRestart.ok, true);
+  assert.equal(confirmedAfterRestart.action.status, 'completed');
+
+  const concurrentAction = await producer.proposeAction(user, {
+    type: 'prepare_content_pack',
+    context: 'studio',
+    input: { topic: 'execute once' }
+  });
+  let executions = 0;
+  const executeOnce = async () => {
+    executions += 1;
+    await new Promise(resolve => setTimeout(resolve, 30));
+    return { ok: true, result: { accepted: true } };
+  };
+  const confirmerA = new EcosystemService(actionServiceStore(), new PostgresEcosystemRepository(pool));
+  const confirmerB = new EcosystemService(actionServiceStore(), new PostgresEcosystemRepository(pool));
+  confirmerA.executeTool = executeOnce;
+  confirmerB.executeTool = executeOnce;
+  const confirmations = await Promise.all([
+    confirmerA.confirmEcosystemAction(user, concurrentAction.id),
+    confirmerB.confirmEcosystemAction(user, concurrentAction.id)
+  ]);
+  assert.equal(executions, 1);
+  assert.equal(confirmations.filter(result => result.ok).length, 1);
+  assert.equal(confirmations.some(result => result.error === 'ACTION_IN_PROGRESS'), true);
+  assert.equal((await repository.findEcosystemAction(user.id, concurrentAction.id)).status, 'completed');
+
+  await new Promise(resolve => setTimeout(resolve, 10));
   await pool.end();
 });

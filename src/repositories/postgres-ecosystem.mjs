@@ -90,6 +90,31 @@ function edgeFromRow(row) {
   };
 }
 
+function actionFromRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    agentId: row.agent_id || null,
+    actorType: row.actor_type || 'personal_ai',
+    type: row.type,
+    level: row.level,
+    input: asObject(row.input, {}),
+    output: asObject(row.output, null),
+    permission: row.permission || null,
+    context: row.context || 'command_center',
+    status: row.status,
+    confirmationRequired: !!row.confirmation_required,
+    result: asObject(row.result, null),
+    error: row.error || null,
+    createdAt: iso(row.created_at),
+    expiresAt: iso(row.expires_at),
+    confirmedAt: row.confirmed_at ? iso(row.confirmed_at) : null,
+    completedAt: row.completed_at ? iso(row.completed_at) : null,
+    auditTrail: []
+  };
+}
+
 function catalogFromRow(row) {
   if (!row) return null;
   return {
@@ -312,6 +337,58 @@ export class PostgresEcosystemRepository {
   async listKgEdges(ownerId) {
     const result = await this.pool.query('SELECT * FROM kg_edges WHERE owner_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC', [ownerId]);
     return result.rows.map(edgeFromRow);
+  }
+
+  async createEcosystemAction(action) {
+    await this.pool.query(
+      `INSERT INTO ecosystem_actions(
+        id,user_id,agent_id,actor_type,type,level,input,output,permission,context,status,
+        confirmation_required,result,error,created_at,expires_at,confirmed_at,completed_at
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+      ON CONFLICT(id) DO NOTHING`,
+      [
+        action.id, action.userId, action.agentId || null, action.actorType || 'personal_ai', action.type,
+        action.level, jsonb(action.input, {}), action.output == null ? null : jsonb(action.output, {}),
+        action.permission || null, action.context || 'command_center', action.status,
+        !!action.confirmationRequired, action.result == null ? null : jsonb(action.result, {}), action.error || null,
+        action.createdAt, action.expiresAt, action.confirmedAt || null, action.completedAt || null
+      ]
+    );
+    return this.findEcosystemAction(action.userId, action.id);
+  }
+
+  async findEcosystemAction(userId, id) {
+    const result = await this.pool.query('SELECT * FROM ecosystem_actions WHERE id=$1 AND user_id=$2 LIMIT 1', [id, userId]);
+    return actionFromRow(result.rows[0]);
+  }
+
+  async listEcosystemActions(userId, limit = 50) {
+    const result = await this.pool.query('SELECT * FROM ecosystem_actions WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2', [userId, Math.max(1, Math.min(100, Number(limit) || 50))]);
+    return result.rows.map(actionFromRow);
+  }
+
+  async claimEcosystemAction(userId, id, confirmedAt) {
+    const result = await this.pool.query(
+      `UPDATE ecosystem_actions SET status='confirmed',confirmed_at=$3
+       WHERE id=$1 AND user_id=$2 AND (
+         status IN ('pending','ready') OR (status='confirmed' AND confirmed_at < $3::timestamptz - interval '30 seconds')
+       ) RETURNING *`,
+      [id, userId, confirmedAt]
+    );
+    return actionFromRow(result.rows[0]);
+  }
+
+  async saveEcosystemAction(action) {
+    const result = await this.pool.query(
+      `UPDATE ecosystem_actions SET status=$3,output=$4,result=$5,error=$6,confirmed_at=$7,completed_at=$8
+       WHERE id=$1 AND user_id=$2 RETURNING *`,
+      [
+        action.id, action.userId, action.status, action.output == null ? null : jsonb(action.output, {}),
+        action.result == null ? null : jsonb(action.result, {}), action.error || null,
+        action.confirmedAt || null, action.completedAt || null
+      ]
+    );
+    return actionFromRow(result.rows[0]);
   }
 
   async listAgentCatalog() {

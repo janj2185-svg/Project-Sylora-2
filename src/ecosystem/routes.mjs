@@ -199,12 +199,12 @@ export async function handleEcosystemRoutes(ctx) {
   // —— Action Engine ——
   if (req.method === 'GET' && p === '/api/actions') {
     const user = await requireUser(req, res); if (!user) return true;
-    return json(res, 200, { actions: ecosystem.listActions(user) }), true;
+    return json(res, 200, { actions: await ecosystem.listActions(user) }), true;
   }
   if (req.method === 'POST' && p === '/api/actions') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 201, { action: ecosystem.proposeAction(user, input) }), true;
+    return json(res, 201, { action: await ecosystem.proposeAction(user, input) }), true;
   }
   m = route('/api/actions/:id/confirm', p);
   if (req.method === 'POST' && m) {
@@ -312,8 +312,8 @@ export async function handleEcosystemRoutes(ctx) {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
     const topic = safeText(input.topic, 200);
-    if (!topic) return json(res, 400, { error: 'TOPIC_REQUIRED' }), true;
-    return json(res, 200, ecosystem.creatorStudioPlan(user, topic)), true;
+    if ([...topic].length < 2) return json(res, 400, { error: 'TOPIC_REQUIRED' }), true;
+    return json(res, 200, await ecosystem.creatorStudioPlan(user, topic)), true;
   }
   m = route('/api/studio/ai/plan/:id/confirm', p);
   if (req.method === 'POST' && m) {
@@ -324,7 +324,7 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/studio/ai/content-pack') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 200, ecosystem.creatorContentPack(user, { topic: safeText(input.topic, 200) })), true;
+    return json(res, 200, await ecosystem.creatorContentPack(user, { topic: safeText(input.topic, 200) })), true;
   }
   m = route('/api/orgs/:id/meeting-brief', p);
   if (req.method === 'POST' && m) {
@@ -388,7 +388,7 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/agents/negotiations') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    const out = ecosystem.startNegotiation(user, input);
+    const out = await ecosystem.startNegotiation(user, input);
     return json(res, out.ok ? 201 : 400, out), true;
   }
   m = route('/api/agents/negotiations/:id/confirm', p);
@@ -717,7 +717,7 @@ export async function handleEcosystemRoutes(ctx) {
   if (req.method === 'POST' && p === '/api/studio/ai/pipeline') {
     const user = await requireUser(req, res); if (!user) return true;
     const input = await body(req);
-    return json(res, 200, ecosystem.creatorPipeline(user, input || {})), true;
+    return json(res, 200, await ecosystem.creatorPipeline(user, input || {})), true;
   }
   if (req.method === 'POST' && p === '/api/revenue-split/draft') {
     const user = await requireUser(req, res); if (!user) return true;
