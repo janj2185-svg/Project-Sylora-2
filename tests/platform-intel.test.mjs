@@ -28,7 +28,7 @@ test('shell keeps one Sylora and privacy center entry', () => {
   const app = fs.readFileSync('public/app.js', 'utf8');
   assert.match(app, /t\('privacyAiControl'\)/);
   assert.match(app, /\/api\/home\/hub/);
-  assert.match(app, /CREATOR INTELLIGENCE/);
+  assert.match(app, /t\('creatorIntelligence'\)/);
   assert.match(app, /lesson-quiz/);
   assert.doesNotMatch(app, /Business Bot|Learning Bot/);
   assert.match(fs.readFileSync('public/index.html', 'utf8'), /design-consolidation\.css/);
