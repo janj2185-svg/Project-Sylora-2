@@ -862,16 +862,16 @@ async function renderMessagesReference(){
   const callHistory=tab==='calls'?await api('/api/calls/history').catch(()=>({history:[]})):{history:[]};
   const rows=conversations.map((conversation,index)=>{
     const other=conversation.members.find(member=>member.id!==state.me.id),letter=(other?.displayName||other?.username||'?').slice(0,1).toUpperCase();
-    return `<button class="conversation-row" type="button" data-id="${conversation.id}" data-search="${esc(`${other?.displayName||''} ${other?.username||''}`.toLowerCase())}"><span class="avatar convo-${index%5+1}">${esc(letter)}</span><span><b>${esc(other?.displayName||other?.username||'Розмова')}</b><small>${esc(conversation.lastMessage?.text||'Почніть розмову')}</small></span><span><time>${conversation.lastMessage?.createdAt?new Date(conversation.lastMessage.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</time>${referenceIcon('chevron')}</span></button>`;
+    return `<button class="conversation-row" type="button" data-id="${esc(conversation.id)}" data-search="${esc(`${other?.displayName||''} ${other?.username||''}`.toLowerCase())}"><span class="avatar convo-${index%5+1}">${esc(letter)}</span><span><b>${esc(other?.displayName||other?.username||t('conversation'))}</b><small>${esc(conversation.lastMessage?.text||t('startConversation'))}</small></span><span><time>${conversation.lastMessage?.createdAt?new Date(conversation.lastMessage.createdAt).toLocaleTimeString(getLocale()==='uk'?'uk-UA':getLocale(),{hour:'2-digit',minute:'2-digit'}):''}</time>${referenceIcon('chevron')}</span></button>`;
   }).join('');
   app.innerHTML=`<section class="inbox-layout">
     <aside class="conversation-list">
-      <div class="inbox-heading"><div><h2>Inbox</h2><span class="status-pill status-pill--violet">${conversations.length}</span></div><button type="button" id="newChat" aria-label="Нова розмова">＋</button></div>
-      <div class="inbox-tabs segmented">${[['messages','Чати'],['notifications','Події'],['invites','Запрошення'],['calls','Дзвінки'],['priority','Priority']].map(([value,label])=>`<button type="button" data-inbox-tab="${value}" class="${tab===value?'active':''}">${label}</button>`).join('')}</div>
-      ${tab==='messages'?`<div class="conversation-search">${referenceIcon('search')}<input id="conversationSearch" placeholder="Пошук у розмовах" autocomplete="off"></div><div class="new-chat-select"><select id="newRecipient"><option value="">Оберіть людину</option>${users.map(user=>`<option value="${user.id}">@${esc(user.username)}</option>`).join('')}</select></div><div id="conversationRows">${rows||'<p class="muted conversation-empty">Розмов ще немає.</p>'}</div>`:`<div class="inbox-side-state"><span class="nav-icon-plate">${referenceIcon(tab==='calls'?'mic':tab==='invites'?'calendar':'activity')}</span><b>${tab==='notifications'?'Події':tab==='invites'?'Запрошення':tab==='calls'?'Дзвінки':'Priority'}</b><small>Усі важливі стани залишаються видимими.</small></div>`}
+      <div class="inbox-heading"><div><h2>${esc(t('inbox'))}</h2><span class="status-pill status-pill--violet">${conversations.length}</span></div><button type="button" id="newChat" aria-label="${esc(t('newConversation'))}">＋</button></div>
+      <div class="inbox-tabs segmented">${[['messages',t('chats')],['notifications',t('events')],['invites',t('inboxInvites')],['calls',t('inboxCalls')],['priority',t('priority')]].map(([value,label])=>`<button type="button" data-inbox-tab="${value}" class="${tab===value?'active':''}">${esc(label)}</button>`).join('')}</div>
+      ${tab==='messages'?`<div class="conversation-search">${referenceIcon('search')}<input id="conversationSearch" placeholder="${esc(t('searchConversations'))}" autocomplete="off"></div><div class="new-chat-select"><select id="newRecipient"><option value="">${esc(t('choosePerson'))}</option>${users.map(user=>`<option value="${esc(user.id)}">@${esc(user.username)}</option>`).join('')}</select></div><div id="conversationRows">${rows||`<p class="muted conversation-empty">${esc(t('noConversations'))}</p>`}</div>`:`<div class="inbox-side-state"><span class="nav-icon-plate">${referenceIcon(tab==='calls'?'mic':tab==='invites'?'calendar':'activity')}</span><b>${esc(tab==='notifications'?t('events'):tab==='invites'?t('inboxInvites'):tab==='calls'?t('inboxCalls'):t('priority'))}</b><small>${esc(t('importantVisible'))}</small></div>`}
     </aside>
-    <main id="chat" class="active-chat">${tab==='messages'?'<div class="chat-placeholder"><span class="runtime-core">✦</span><b>Оберіть розмову</b><p>Приватні повідомлення, голосові й відеодзвінки — в одному потоці.</p></div>':renderInboxReferencePanel(tab,{social,invites,calls,callHistory,smartInbox,users})}</main>
-    <aside id="contactPanel" class="contact-panel"><span class="contact-avatar avatar">SY</span><h3>SYLORA Inbox</h3><p>Контекст розмови з’явиться після вибору контакту.</p><div class="contact-details"><small>ПРИВАТНІСТЬ</small><p>Повідомлення й дзвінки доступні лише учасникам розмови.</p></div></aside>
+    <main id="chat" class="active-chat">${tab==='messages'?`<div class="chat-placeholder"><span class="runtime-core">✦</span><b>${esc(t('selectConversation'))}</b><p>${esc(t('inboxFlowIntro'))}</p></div>`:renderInboxReferencePanel(tab,{social,invites,calls,callHistory,smartInbox,users})}</main>
+    <aside id="contactPanel" class="contact-panel"><span class="contact-avatar avatar">SY</span><h3>SYLORA ${esc(t('inbox'))}</h3><p>${esc(t('conversationContext'))}</p><div class="contact-details"><small>${esc(t('privacy'))}</small><p>${esc(t('conversationParticipantsOnly'))}</p></div></aside>
   </section>`;
   document.querySelectorAll('[data-inbox-tab]').forEach(button=>button.onclick=()=>{state.inboxTab=button.dataset.inboxTab;renderMessagesReference()});
   document.querySelectorAll('[data-inbox-go]').forEach(button=>button.onclick=()=>nav(button.dataset.inboxGo));
@@ -884,7 +884,7 @@ async function renderMessagesReference(){
   }else if(tab==='calls'){
     const startCall=async kind=>{
       if(kind==='sylora'){nav('ai');requestAnimationFrame(()=>document.querySelector('#aiRealtime')?.click());return}
-      const userId=document.querySelector('#callRecipient')?.value;if(!userId)return toast('Оберіть отримувача');
+      const userId=document.querySelector('#callRecipient')?.value;if(!userId)return toast(t('selectRecipient'));
       const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId})});await openCallSession(call.id,{asCallee:false,kind});
     };
     document.querySelector('#startVoiceCall')?.addEventListener('click',()=>startCall('voice'));
@@ -894,11 +894,11 @@ async function renderMessagesReference(){
 }
 
 function renderInboxReferencePanel(tab,{social,invites,calls,callHistory,smartInbox,users}){
-  if(tab==='notifications')return `<div class="chat-head"><div><span class="avatar convo-3">✦</span><span><b>Події</b><small><i></i> оновлюються наживо</small></span></div></div><div class="dm-thread inbox-event-thread">${social.map(item=>`<article class="glass-card inbox-event"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')||'<p class="muted">Нових подій немає.</p>'}</div>`;
-  if(tab==='invites')return `<div class="chat-head"><div><span class="avatar convo-4">◇</span><span><b>Запрошення</b><small><i></i> кімнати та події</small></span></div></div><div class="dm-thread inbox-event-thread">${invites.map(item=>`<article class="glass-card inbox-event"><span>◇</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')||'<p class="muted">Активних запрошень немає.</p>'}<div class="inbox-route-actions"><button type="button" data-inbox-go="business">Бізнес-кімнати</button><button type="button" data-inbox-go="learning">Science circles</button></div></div>`;
-  if(tab==='calls')return `<div class="chat-head"><div><span class="avatar convo-5">◉</span><span><b>Дзвінки</b><small><i></i> WebRTC voice & video</small></span></div></div><div class="dm-thread calls-reference"><section class="glass-card call-launcher"><span class="status-pill status-pill--success">REAL WEBRTC</span><h2>Почніть розмову.</h2><select id="callRecipient"><option value="">Оберіть отримувача</option>${users.map(user=>`<option value="${user.id}">@${esc(user.username)}</option>`).join('')}</select><div><button type="button" id="startVoiceCall">${referenceIcon('mic')} Голос</button><button type="button" id="startVideoCall">${referenceIcon('camera')} Відео</button><button type="button" id="startSyloraCall">${referenceIcon('sparkles')} Sylora</button></div></section>${(callHistory.history||[]).map(item=>`<article class="glass-card inbox-event"><span>${referenceIcon(item.kind==='video'?'camera':'mic')}</span><div><b>${esc(item.kind)}</b><small>${esc(item.status)} · ${item.durationSec||0}s${item.missed?' · пропущено':''}</small></div></article>`).join('')}${calls.map(item=>`<article class="glass-card inbox-event"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')}</div>`;
+  if(tab==='notifications')return `<div class="chat-head"><div><span class="avatar convo-3">✦</span><span><b>${esc(t('events'))}</b><small><i></i> ${esc(t('liveUpdates'))}</small></span></div></div><div class="dm-thread inbox-event-thread">${social.map(item=>`<article class="glass-card inbox-event"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')||`<p class="muted">${esc(t('noNewEvents'))}</p>`}</div>`;
+  if(tab==='invites')return `<div class="chat-head"><div><span class="avatar convo-4">◇</span><span><b>${esc(t('inboxInvites'))}</b><small><i></i> ${esc(t('roomsAndEvents'))}</small></span></div></div><div class="dm-thread inbox-event-thread">${invites.map(item=>`<article class="glass-card inbox-event"><span>◇</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')||`<p class="muted">${esc(t('noActiveInvites'))}</p>`}<div class="inbox-route-actions"><button type="button" data-inbox-go="business">${esc(t('businessRooms'))}</button><button type="button" data-inbox-go="learning">${esc(t('scienceCircles'))}</button></div></div>`;
+  if(tab==='calls')return `<div class="chat-head"><div><span class="avatar convo-5">◉</span><span><b>${esc(t('inboxCalls'))}</b><small><i></i> WebRTC · ${esc(t('voiceLabel'))} & ${esc(t('videoLabel'))}</small></span></div></div><div class="dm-thread calls-reference"><section class="glass-card call-launcher"><span class="status-pill status-pill--success">${esc(t('realWebrtc'))}</span><h2>${esc(t('startTalking'))}</h2><select id="callRecipient"><option value="">${esc(t('selectRecipient'))}</option>${users.map(user=>`<option value="${esc(user.id)}">@${esc(user.username)}</option>`).join('')}</select><div><button type="button" id="startVoiceCall">${referenceIcon('mic')} ${esc(t('voiceLabel'))}</button><button type="button" id="startVideoCall">${referenceIcon('camera')} ${esc(t('videoLabel'))}</button><button type="button" id="startSyloraCall">${referenceIcon('sparkles')} Sylora</button></div></section>${(callHistory.history||[]).map(item=>`<article class="glass-card inbox-event"><span>${referenceIcon(item.kind==='video'?'camera':'mic')}</span><div><b>${esc(item.kind)}</b><small>${esc(item.status)} · ${item.durationSec||0}s${item.missed?` · ${esc(t('missed'))}`:''}</small></div></article>`).join('')}${calls.map(item=>`<article class="glass-card inbox-event"><span>✦</span><div><b>${esc(item.actor?.username||'SYLORA')}</b><small>${esc(item.type)}</small></div></article>`).join('')}</div>`;
   const buckets=Object.entries(smartInbox?.inbox?.buckets||{});
-  return `<div class="chat-head"><div><span class="avatar convo-1">AI</span><span><b>Priority Inbox</b><small><i></i> нічого не приховано</small></span></div></div><div class="dm-thread inbox-event-thread"><section class="glass-card priority-summary"><span class="status-pill status-pill--violet">SYLORA AI</span><h2>${esc(smartInbox?.inbox?.summary||'Важливе в одному місці')}</h2><p>AI лише групує потік — повна історія залишається доступною у вкладках.</p></section>${buckets.map(([name,items])=>`<article class="glass-card priority-bucket"><small>${esc(name)}</small>${(items||[]).slice(0,8).map(item=>`<p>${esc(item.preview||item.type||item.kind||item.id)}</p>`).join('')||'<p class="muted">Порожньо</p>'}</article>`).join('')}</div>`;
+  return `<div class="chat-head"><div><span class="avatar convo-1">AI</span><span><b>${esc(t('priorityInbox'))}</b><small><i></i> ${esc(t('nothingHidden'))}</small></span></div></div><div class="dm-thread inbox-event-thread"><section class="glass-card priority-summary"><span class="status-pill status-pill--violet">SYLORA AI</span><h2>${esc(smartInbox?.inbox?.summary||t('importantOnePlace'))}</h2><p>${esc(t('aiGroupsOnly'))}</p></section>${buckets.map(([name,items])=>`<article class="glass-card priority-bucket"><small>${esc(name)}</small>${(items||[]).slice(0,8).map(item=>`<p>${esc(item.preview||item.type||item.kind||item.id)}</p>`).join('')||`<p class="muted">${esc(t('empty'))}</p>`}</article>`).join('')}</div>`;
 }
 
 async function openConversationReference(id){
@@ -906,10 +906,10 @@ async function openConversationReference(id){
   document.querySelectorAll('.conversation-row').forEach(row=>row.classList.toggle('active',row.dataset.id===id));
   const conversation=(convoList.conversations||[]).find(item=>item.id===id),other=(conversation?.members||[]).find(member=>member.id!==state.me.id),box=document.querySelector('#chat');if(!box)return;
   const letter=esc((other?.displayName||other?.username||'?').slice(0,1).toUpperCase());
-  box.innerHTML=`<div class="chat-head"><div><span class="avatar convo-2">${letter}</span><span><b>${esc(other?.displayName||other?.username||'Розмова')}</b><small><i></i> @${esc(other?.username||'user')}</small></span></div><div><button type="button" id="dmVoiceCall" aria-label="Голосовий дзвінок">${referenceIcon('mic')}</button><button type="button" id="dmVideoCall" aria-label="Відеодзвінок">${referenceIcon('camera')}</button></div></div><div class="dm-thread">${messages.map(message=>`<article class="dm ${message.userId===state.me.id?'sent':''}">${esc(message.text)}<small>${new Date(message.createdAt||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}${message.userId===state.me.id?' · ✓':''}</small></article>`).join('')||'<p class="muted chat-empty">Почніть розмову.</p>'}</div><form id="messageForm" class="dm-composer"><button type="button" aria-label="Вкладення">＋</button><input name="text" maxlength="2000" placeholder="Написати повідомлення…" required autocomplete="off"><button type="button" aria-label="Голос">${referenceIcon('mic')}</button><button class="send-button" aria-label="Надіслати">↑</button></form>`;
-  const contact=document.querySelector('#contactPanel');if(contact)contact.innerHTML=`<span class="contact-avatar avatar convo-2">${letter}</span><h3>${esc(other?.displayName||other?.username||'Контакт')}</h3><p>@${esc(other?.username||'user')}</p><div class="contact-actions"><button type="button" id="contactVoice">${referenceIcon('mic')}<small>Голос</small></button><button type="button" id="contactVideo">${referenceIcon('camera')}<small>Відео</small></button><button type="button" data-contact-profile>${referenceIcon('users')}<small>Профіль</small></button></div><div class="contact-details"><small>ПРИВАТНІСТЬ</small><p>Ця розмова доступна лише її учасникам.</p></div>`;
+  box.innerHTML=`<div class="chat-head"><div><span class="avatar convo-2">${letter}</span><span><b>${esc(other?.displayName||other?.username||t('conversation'))}</b><small><i></i> @${esc(other?.username||'user')}</small></span></div><div><button type="button" id="dmVoiceCall" aria-label="${esc(t('voiceCall'))}">${referenceIcon('mic')}</button><button type="button" id="dmVideoCall" aria-label="${esc(t('videoCall'))}">${referenceIcon('camera')}</button></div></div><div class="dm-thread">${messages.map(message=>`<article class="dm ${message.userId===state.me.id?'sent':''}">${esc(message.text)}<small>${new Date(message.createdAt||Date.now()).toLocaleTimeString(getLocale()==='uk'?'uk-UA':getLocale(),{hour:'2-digit',minute:'2-digit'})}${message.userId===state.me.id?' · ✓':''}</small></article>`).join('')||`<p class="muted chat-empty">${esc(t('startTalking'))}</p>`}</div><form id="messageForm" class="dm-composer"><button type="button" aria-label="${esc(t('attachment'))}">＋</button><input name="text" maxlength="2000" placeholder="${esc(t('writeMessage'))}" required autocomplete="off"><button type="button" aria-label="${esc(t('voiceLabel'))}">${referenceIcon('mic')}</button><button class="send-button" aria-label="${esc(t('send'))}">↑</button></form>`;
+  const contact=document.querySelector('#contactPanel');if(contact)contact.innerHTML=`<span class="contact-avatar avatar convo-2">${letter}</span><h3>${esc(other?.displayName||other?.username||t('contact'))}</h3><p>@${esc(other?.username||'user')}</p><div class="contact-actions"><button type="button" id="contactVoice">${referenceIcon('mic')}<small>${esc(t('voiceLabel'))}</small></button><button type="button" id="contactVideo">${referenceIcon('camera')}<small>${esc(t('videoLabel'))}</small></button><button type="button" data-contact-profile>${referenceIcon('users')}<small>${esc(t('profile'))}</small></button></div><div class="contact-details"><small>${esc(t('privacy'))}</small><p>${esc(t('thisConversationOnly'))}</p></div>`;
   document.querySelector('#messageForm').onsubmit=async event=>{event.preventDefault();const text=new FormData(event.currentTarget).get('text');await api(`/api/conversations/${id}/messages`,{method:'POST',body:JSON.stringify({text})});await openConversationReference(id)};
-  const startDmCall=async kind=>{if(!other)return toast('Потрібен співрозмовник');const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});await openCallSession(call.id,{asCallee:false,kind})};
+  const startDmCall=async kind=>{if(!other)return toast(t('selectRecipient'));const {call}=await api('/api/calls',{method:'POST',body:JSON.stringify({kind,userId:other.id,conversationId:id})});await openCallSession(call.id,{asCallee:false,kind})};
   ['#dmVoiceCall','#contactVoice'].forEach(selector=>document.querySelector(selector)?.addEventListener('click',()=>startDmCall('voice')));
   ['#dmVideoCall','#contactVideo'].forEach(selector=>document.querySelector(selector)?.addEventListener('click',()=>startDmCall('video')));
   document.querySelector('[data-contact-profile]')?.addEventListener('click',()=>nav('profile'));
@@ -935,7 +935,7 @@ async function openConversation(id){
 async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
   if(!state.me)return renderAuth();
   if(activeCallCleanup){activeCallCleanup();activeCallCleanup=null}
-  if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)return toast('WebRTC not supported in this browser');
+  if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)return toast(t('webRtcUnsupported'));
   const [{call},rtc]=await Promise.all([
     api(`/api/calls/${callId}`),
     api('/api/calls/rtc-config').catch(()=>liveRtcConfig())
@@ -944,9 +944,9 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
   const peerId=crypto.randomUUID();
   let localStream=null,pc=null,remoteStream=new MediaStream(),closed=false,controller=new AbortController();
   const startedAt=Date.now();
-  app.innerHTML=`<section class="card call-stage" id="callStage"><span class="eyebrow">SYLORA · CALL ENGINE</span><h1>${wantVideo?'Video':'Voice'} call</h1><p class="muted">${esc(call.status)} · shared WebRTC · ${rtc.turnConfigured?'TURN ready':'P2P / configure TURN for NAT'}</p>
+  app.innerHTML=`<section class="card call-stage" id="callStage"><span class="eyebrow">SYLORA · ${esc(t('callEngine'))}</span><h1>${esc(t(wantVideo?'videoCall':'voiceCall'))}</h1><p class="muted">${esc(call.status)} · WebRTC · ${esc(t(rtc.turnConfigured?'turnReadyCall':'p2pConfigureTurn'))}</p>
   <div class="call-media"><video id="callRemote" autoplay playsinline ${wantVideo?'':'hidden'}></video><video id="callLocal" autoplay muted playsinline ${wantVideo?'':'hidden'}></video><audio id="callRemoteAudio" autoplay></audio></div>
-  <div class="row call-controls"><button type="button" class="ghost" id="callMute">Mute</button>${wantVideo?'<button type="button" class="ghost" id="callCam">Camera</button>':''}<button type="button" class="primary" id="callEnd">End</button><span class="badge" id="callNet">CONNECTING</span><span class="badge" id="callTimer">00:00</span></div></section>`;
+  <div class="row call-controls"><button type="button" class="ghost" id="callMute">${esc(t('mute'))}</button>${wantVideo?`<button type="button" class="ghost" id="callCam">${esc(t('camera'))}</button>`:''}<button type="button" class="primary" id="callEnd">${esc(t('endCall'))}</button><span class="badge" id="callNet">${esc(t('connecting').toUpperCase())}</span><span class="badge" id="callTimer">00:00</span></div></section>`;
   state.view='messages';state.inboxTab='calls';
   const tick=()=>{const el=document.querySelector('#callTimer');if(!el)return;const s=Math.floor((Date.now()-startedAt)/1000);el.textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
   const timerIv=setInterval(tick,1000);tick();
@@ -958,7 +958,7 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
     localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:wantVideo});
     const localVideo=document.querySelector('#callLocal');
     if(localVideo&&wantVideo){localVideo.srcObject=localStream;localVideo.hidden=false}
-  }catch{toast('Microphone/camera permission required');cleanup();return renderMessagesReference()}
+  }catch{toast(t('microphoneCameraPermission'));cleanup();return renderMessagesReference()}
   pc=new RTCPeerConnection({iceServers:rtc.iceServers||[]});
   for(const track of localStream.getTracks())pc.addTrack(track,localStream);
   pc.ontrack=e=>{
@@ -966,16 +966,16 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
     const v=document.querySelector('#callRemote'),a=document.querySelector('#callRemoteAudio');
     if(wantVideo&&v){v.srcObject=remoteStream;v.hidden=false}
     if(a)a.srcObject=remoteStream;
-    setNet('CONNECTED');
+    setNet(t('connected').toUpperCase());
   };
   pc.onicecandidate=e=>{if(e.candidate&&window.__syloraCallRemotePeer)sendSignal('ice',window.__syloraCallRemotePeer,e.candidate.toJSON()).catch(()=>{})};
   pc.onconnectionstatechange=()=>setNet((pc.connectionState||'').toUpperCase());
-  document.querySelector('#callMute').onclick=()=>{const t=localStream.getAudioTracks()[0];if(!t)return;t.enabled=!t.enabled;document.querySelector('#callMute').textContent=t.enabled?'Mute':'Unmute'};
+  document.querySelector('#callMute').onclick=()=>{const track=localStream.getAudioTracks()[0];if(!track)return;track.enabled=!track.enabled;document.querySelector('#callMute').textContent=t(track.enabled?'mute':'unmute')};
   document.querySelector('#callCam')?.addEventListener('click',()=>{const t=localStream.getVideoTracks()[0];if(!t)return;t.enabled=!t.enabled});
   document.querySelector('#callEnd').onclick=async()=>{try{await api(`/api/calls/${callId}/end`,{method:'POST',body:'{}'})}catch{}cleanup();renderMessagesReference()};
   const onSignal=async s=>{
     if(closed||s.fromPeerId===peerId)return;
-    if(s.kind==='peer-left'){setNet('PEER LEFT');return}
+    if(s.kind==='peer-left'){setNet(t('peerLeft'));return}
     if(s.kind==='peer-join'){
       window.__syloraCallRemotePeer=s.fromPeerId;
       await refreshRtcPeerConfiguration(pc);
@@ -1002,7 +1002,7 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
     try{
       const response=await fetch(`/api/calls/${callId}/events`,{headers:{authorization:`Bearer ${state.token}`},signal:controller.signal});
       if(!response.ok)throw new Error('CALL_EVENT_STREAM_FAILED');
-      setNet('SIGNALING');
+      setNet(t('signaling'));
       await sendSignal('peer-join',null,{media:wantVideo?'video':'audio'});
       const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
       while(!closed){
@@ -1014,7 +1014,7 @@ async function openCallSession(callId,{asCallee=false,kind='voice'}={}){
           let event='',data='';
           for(const line of raw.split('\n')){if(line.startsWith('event:'))event=line.slice(6).trim();else if(line.startsWith('data:'))data+=line.slice(5).trim()}
           if(event==='signal'&&data)try{await onSignal(JSON.parse(data))}catch{}
-          if(event==='call'&&data){try{const payload=JSON.parse(data);if(['ended','missed'].includes(payload.call?.status)||payload.action==='end'){cleanup();toast('Call ended');renderMessagesReference()}}catch{}}
+          if(event==='call'&&data){try{const payload=JSON.parse(data);if(['ended','missed'].includes(payload.call?.status)||payload.action==='end'){cleanup();toast(t('callEnded'));renderMessagesReference()}}catch{}}
         }
       }
     }catch(e){if(e.name!=='AbortError'){setNet('ERROR');toast(humanError(e.message))}}
