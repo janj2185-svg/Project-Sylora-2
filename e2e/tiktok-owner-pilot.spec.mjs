@@ -52,10 +52,10 @@ test('owner can connect the local bridge and inspect chat, gift and host events 
   const hostEvent=page.locator('.tiktok-event-external').filter({hasText:'Co-host · linkMicBattle'});
   await hostEvent.getByRole('button',{name:'Відповісти'}).click();
   await expect.poll(()=>copilotRequests).toBe(1);
-  await expect(page.locator('.tiktok-event-sylora')).toContainText('Вітаю співведучого. · LOCAL VOICE ONLY');
+  await expect(page.locator('.tiktok-event-sylora')).toContainText('Вітаю співведучого. · ОЗВУЧЕННЯ ВИМКНЕНО');
 
   await page.locator('#tiktokResponseMode').selectOption('mentions');
   await page.locator('[data-tiktok-sim="chat"]').click();
   await expect.poll(()=>copilotRequests,{timeout:8_000}).toBe(2);
-  await expect(page.locator('.tiktok-event-sylora').first()).toContainText('Привіт! Я поруч у цьому LIVE. · LOCAL VOICE ONLY');
+  await expect(page.locator('.tiktok-event-sylora').first()).toContainText('Привіт! Я поруч у цьому LIVE. · ОЗВУЧЕННЯ ВИМКНЕНО');
 });
