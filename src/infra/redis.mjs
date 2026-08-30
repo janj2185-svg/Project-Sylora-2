@@ -20,7 +20,7 @@ export class RedisService {
   async connect() {
     if (!this.client || this.client.isReady) return;
     if (!this.connecting) this.connecting = this.client.connect().finally(() => { this.connecting = null; });
-    let timer;try{await Promise.race([this.connecting,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('REDIS_CONNECT_TIMEOUT')),2_500);timer.unref?.()})])}finally{if(timer)clearTimeout(timer)}
+    let timer;try{await Promise.race([this.connecting,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('REDIS_CONNECT_TIMEOUT')),2_500)})])}finally{if(timer)clearTimeout(timer)}
   }
 
   async command(operation, run) {
@@ -41,7 +41,6 @@ export class RedisService {
             reject(error);
             controller.abort(error);
           }, this.commandTimeoutMs);
-          timer.unref?.();
         })
       ]);
     } finally {
@@ -76,13 +75,13 @@ export class RedisService {
     subscriber.on('end', () => status(false));
     subscriber.on('ready', () => status(true));
     let timer;const opening=(async()=>{await subscriber.connect();await subscriber.subscribe(String(channel),message=>handler(message))})();
-    try{await Promise.race([opening,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('REDIS_SUBSCRIBE_TIMEOUT')),2_500);timer.unref?.()})])}catch(error){opening.catch(()=>{});try{subscriber.destroy()}catch{}throw error}finally{if(timer)clearTimeout(timer)}
+    try{await Promise.race([opening,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('REDIS_SUBSCRIBE_TIMEOUT')),2_500)})])}catch(error){opening.catch(()=>{});try{subscriber.destroy()}catch{}throw error}finally{if(timer)clearTimeout(timer)}
     this.subscribers.add(subscriber);
     status(subscriber.isReady);
     const stop = async () => {
       if (!this.subscribers.delete(subscriber)) return;
       if(!subscriber.isReady){try{subscriber.destroy()}catch{}return}
-      let timer;const closing=(async()=>{try{await subscriber.unsubscribe(String(channel))}catch{}try{if(subscriber.isOpen)await subscriber.quit()}catch{}})();try{await Promise.race([closing,new Promise(resolve=>{timer=setTimeout(resolve,2_500);timer.unref?.()})])}finally{if(timer)clearTimeout(timer);if(subscriber.isOpen)try{subscriber.destroy()}catch{}}
+      let timer;const closing=(async()=>{try{await subscriber.unsubscribe(String(channel))}catch{}try{if(subscriber.isOpen)await subscriber.quit()}catch{}})();try{await Promise.race([closing,new Promise(resolve=>{timer=setTimeout(resolve,2_500)})])}finally{if(timer)clearTimeout(timer);if(subscriber.isOpen)try{subscriber.destroy()}catch{}}
     };
     stop.isReady = () => !!subscriber.isReady;
     return stop;
