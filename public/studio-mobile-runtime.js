@@ -1,5 +1,5 @@
-import {getLocale} from './i18n.js?v=20260830-studio1';
-import {uiCopy} from './locales/ui-runtime.js?v=20260826-ui5';
+import {getLocale} from './i18n.js?v=20260830-studio2';
+import {uiCopy} from './locales/ui-runtime.js?v=20260830-studio2';
 
 const TOOL_KEYS={
   sources:'sources',

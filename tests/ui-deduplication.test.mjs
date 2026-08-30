@@ -55,6 +55,8 @@ test('LIVE setup reports real TikTok readiness instead of decorative integration
   assert.match(app, /item\.enabled&&item\.provider==='tiktok'/);
   assert.match(app, /distribution\?\.configuration\?\.configured/);
   assert.match(app, /t\('tiktokStepLaunch'\)/);
+  assert.match(app, /u\('liveStepTitle'\)/);
+  assert.match(app, /u\('signInToConfigure'\)/);
   assert.match(app, /if\(state\.me&&tab==='create'\)tiktokPilotCleanup=/);
   assert.doesNotMatch(app, /<button class="active" type="button">Живий чат<\/button><button type="button">Гості<\/button><button type="button">Модерація<\/button>/);
   assert.doesNotMatch(app, /<div class="platform-pills"><i>TikTok<\/i><i>YouTube<\/i><i>OBS<\/i><i>TikFinity<\/i><\/div>/);
@@ -95,4 +97,11 @@ test('learning business and settings have distinct depth and reduced-motion-safe
   assert.match(bridge,/body\[data-view="learning"\] \.glass-card/);
   assert.match(bridge,/body\[data-view="business"\] \.glass-card/);
   assert.match(bridge,/body\[data-view="more"\] \.glass-card/);
+});
+
+test('Studio recording and source states use centralized localized copy', () => {
+  for (const key of ['sourceOpenFailed', 'enableCameraOrScreen', 'downloadRecording', 'publishAsClip', 'recordingReady', 'recordingPublished', 'tryAgain', 'obsSceneError', 'virtualCameraError', 'obsStreamError', 'prepareWithSylora', 'confirmPlanToScene', 'livePlanNeedsConfirmation']) {
+    assert.match(app, new RegExp(`u\\('${key}'\\)`));
+  }
+  assert.doesNotMatch(app, /Не вдалося відкрити source|Запис опубліковано у Clips/);
 });
