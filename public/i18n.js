@@ -12,6 +12,7 @@ export const PRIORITY_VOICE_LOCALES=Object.freeze(['uk','en','pl','de','ru','es'
 const supported=new Set(SUPPORTED_UI_LOCALES);
 
 const base={
+  giftConstellation:'SYLORA GIFT CONSTELLATION',giftHero:'Emotion brought to life.',giftGalleryIntro:'Original SYLORA gifts: light, motion, sound and real-time interaction.',collection:'COLLECTION',levels:'LEVELS',effects:'EFFECTS',signinToSend:'Sign in to send',combo:'Combo',creatorShareTest:'Creator share in the test economy',
   home:'Home',live:'LIVE',clips:'Clips',studio:'Studio',ai:'Sylora',profile:'Profile',
   inbox:'Inbox',chat:'Inbox',gifts:'Gifts',more:'Settings',explore:'Discover',
   science:'Learning',learning:'Learning',business:'Business',communities:'Communities',videos:'Videos',
@@ -80,6 +81,7 @@ function dict(overrides={}){return Object.freeze({...base,...overrides})}
 const dictionaries=Object.freeze({
   en:dict(),
   uk:dict({
+    giftConstellation:'СУЗІР’Я ПОДАРУНКІВ SYLORA',giftHero:'Емоція, що оживає.',giftGalleryIntro:'Власні подарунки SYLORA: світло, рух, звук і взаємодія в реальному часі.',collection:'КОЛЕКЦІЯ',levels:'РІВНІ',effects:'ЕФЕКТИ',signinToSend:'Увійти для відправлення',combo:'Комбо',creatorShareTest:'Частка автора в тестовій економіці',
     home:'Головна',profile:'Профіль',inbox:'Вхідні',chat:'Вхідні',gifts:'Подарунки',more:'Налаштування',
     explore:'Відкриття',science:'Навчання',learning:'Навчання',business:'Бізнес',communities:'Спільноти',videos:'Відео',
     navMain:'Головне',navSpaces:'Простори',navPersonal:'Особисте',startLive:'Почати перший LIVE',liveConnected:'Активна справжня LIVE-кімната.',noLiveNow:'Зараз ніхто не в ефірі — без імітації трансляцій.',
@@ -141,6 +143,7 @@ const dictionaries=Object.freeze({
     ,obsLocalOnly:'Дозволено лише локальний OBS (localhost / 127.0.0.1).',obsUrlProtocol:'URL має починатися з ws:// або wss://.',obsPasswordRequired:'Потрібен пароль OBS WebSocket.',obsConnectionFailed:'Не вдалося підключитися — перевір OBS WebSocket Server.',obsTimeout:'OBS не відповідає.',companionLocalOnly:'Companion дозволено лише на цьому ПК.',companionUrlProtocol:'Companion URL має починатися з http://.',pairingTokenRequired:'Введи pairing token із SYLORA Companion.',pairingRequired:'Pairing token відсутній або неправильний.',originNotAllowed:'Цей домен не дозволений у Companion.',connectionError:'Помилка підключення',pause:'Призупинити',encrypting:'Шифрування…',destinationAdded:'Напрямок додано · stream key зашифровано',deleteDestinationConfirm:'Видалити цей напрямок? Stream key буде стерто без можливості відновлення.',destinationDeleted:'Напрямок видалено',liveCreatedEnable:'LIVE створено. Увімкни джерело та трансляцію.'
   }),
   pl:dict({
+    giftConstellation:'KONSTELACJA PREZENTÓW SYLORA',giftHero:'Emocja, która ożywa.',giftGalleryIntro:'Oryginalne prezenty SYLORA: światło, ruch, dźwięk i interakcja w czasie rzeczywistym.',collection:'KOLEKCJA',levels:'POZIOMY',effects:'EFEKTY',signinToSend:'Zaloguj się, aby wysłać',combo:'Combo',creatorShareTest:'Udział twórcy w ekonomii testowej',
     home:'Główna',profile:'Profil',inbox:'Skrzynka',chat:'Skrzynka',gifts:'Prezenty',more:'Ustawienia',
     explore:'Odkrywaj',science:'Nauka',learning:'Nauka',business:'Biznes',communities:'Społeczności',videos:'Wideo',
     navMain:'Główne',navSpaces:'Przestrzenie',navPersonal:'Osobiste',startLive:'Uruchom pierwszy LIVE',liveConnected:'Prawdziwy pokój LIVE jest aktywny.',noLiveNow:'Nikt teraz nie nadaje — bez symulowanych transmisji.',
@@ -202,6 +205,7 @@ const dictionaries=Object.freeze({
     ,pause:'Wstrzymaj',encrypting:'Szyfrowanie…',destinationAdded:'Kierunek dodany · stream key zaszyfrowany',deleteDestinationConfirm:'Usunąć ten kierunek? Stream key zostanie trwale skasowany.',destinationDeleted:'Kierunek usunięty',liveCreatedEnable:'LIVE utworzony. Włącz źródło i transmisję.'
   }),
   de:dict({
+    giftConstellation:'SYLORA GESCHENK-KONSTELLATION',giftHero:'Emotion, die lebendig wird.',giftGalleryIntro:'Eigene SYLORA-Geschenke: Licht, Bewegung, Ton und Interaktion in Echtzeit.',collection:'SAMMLUNG',levels:'LEVEL',effects:'EFFEKTE',signinToSend:'Zum Senden anmelden',combo:'Combo',creatorShareTest:'Creator-Anteil in der Testökonomie',
     home:'Start',profile:'Profil',inbox:'Posteingang',chat:'Posteingang',gifts:'Geschenke',more:'Einstellungen',
     explore:'Entdecken',science:'Lernen',learning:'Lernen',business:'Business',communities:'Communities',videos:'Videos',signin:'Anmelden',signout:'Abmelden',
     navMain:'Hauptbereich',navSpaces:'Räume',navPersonal:'Persönlich',startLive:'Erstes LIVE starten',liveConnected:'Ein echtes LIVE ist aktiv.',noLiveNow:'Gerade ist niemand live — keine simulierten Streams.',
@@ -260,6 +264,7 @@ const dictionaries=Object.freeze({
     ,pause:'Pausieren',encrypting:'Wird verschlüsselt…',destinationAdded:'Ziel hinzugefügt · Stream Key verschlüsselt',deleteDestinationConfirm:'Dieses Ziel löschen? Der Stream Key wird unwiderruflich entfernt.',destinationDeleted:'Ziel gelöscht',liveCreatedEnable:'LIVE erstellt. Quelle und Übertragung aktivieren.'
   }),
   ru:dict({
+    giftConstellation:'СОЗВЕЗДИЕ ПОДАРКОВ SYLORA',giftHero:'Эмоция, которая оживает.',giftGalleryIntro:'Оригинальные подарки SYLORA: свет, движение, звук и взаимодействие в реальном времени.',collection:'КОЛЛЕКЦИЯ',levels:'УРОВНИ',effects:'ЭФФЕКТЫ',signinToSend:'Войти для отправки',combo:'Комбо',creatorShareTest:'Доля автора в тестовой экономике',
     home:'Главная',profile:'Профиль',inbox:'Входящие',chat:'Входящие',gifts:'Подарки',more:'Настройки',explore:'Открытия',science:'Обучение',
     business:'Бизнес',communities:'Сообщества',videos:'Видео',learning:'Обучение',signin:'Войти',signout:'Выйти',create:'Создать аккаунт',register:'Регистрация',login:'Вход',
     navMain:'Главное',navSpaces:'Пространства',navPersonal:'Личное',startLive:'Начать первый LIVE',liveConnected:'Активна настоящая LIVE-комната.',noLiveNow:'Сейчас никто не в эфире — без имитации трансляций.',
