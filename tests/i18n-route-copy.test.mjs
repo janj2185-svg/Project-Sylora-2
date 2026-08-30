@@ -149,3 +149,17 @@ test('Identity profile, privacy vocabulary and knowledge graph states are locali
     for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
   }
 });
+
+test('Agent marketplace permissions, lifecycle and negotiation states are localized',()=>{
+  const appSource=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+  const source=appSource.split('async function renderAgents(){')[1].split('async function renderDeveloper(){')[0];
+  for(const literal of ['<h1>Агенти для твоєї Sylora.</h1>','permissions:','>Видалити</button>','>Встановити</button>',"toast('Агента встановлено')",'Переговори запропоновано — потрібне підтвердження']){
+    assert.ok(!source.includes(literal),`hard-coded Agents copy remains: ${literal}`);
+  }
+  for(const key of ['agentsForSylora','agentPermissionCopy','permissions','uninstall','aiProposal','install','noAgents','agentInstalled','agentUninstalled','negotiationProposed']){
+    assert.ok(source.includes(`u('${key}')`),`Agents route is not using ${key}`);
+    for(const locale of locales)assert.ok(UI_RUNTIME_COPY[locale][key],`missing ${locale}.${key}`);
+  }
+  assert.ok(source.includes('data-user-content'),`agent-provided summary is not protected as external content`);
+  assert.ok(source.includes('humanError(out.error)'),`agent negotiation errors bypass localized safe errors`);
+});

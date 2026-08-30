@@ -1021,11 +1021,11 @@ async function renderIdentity(){
 async function renderAgents(){
   const [{agents},{installs}]=await Promise.all([api('/api/agents'),api('/api/agents/installed')]);
   const installed=new Set(installs.map(i=>i.agentId));
-  app.innerHTML=`<div class="card hero"><span class="eyebrow">AGENT MARKETPLACE</span><h1>Агенти для твоєї Sylora.</h1><p>Установка лише з явними дозволами. Небезпечний execute — тільки після підтвердження.</p></div>
-  <div class="stack">${agents.map(a=>`<div class="card item"><span class="eyebrow">${esc(a.category)} · ${esc(a.pricing?.model||'free')}</span><h3>${esc(a.name)}</h3><p>${esc(a.summary)}</p><small>permissions: ${(a.permissions||[]).map(esc).join(', ')||'—'}</small><div class="row">${installed.has(a.id)?`<button class="ghost uninstall-agent" data-id="${a.id}">Видалити</button><button class="ghost start-negotiate" data-id="${a.id}">AI↔AI пропозиція</button>`:`<button class="primary install-agent" data-id="${a.id}">Встановити</button>`}</div></div>`).join('')}</div>`;
-  document.querySelectorAll('.install-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'POST',body:'{}'});toast('Агента встановлено');renderAgents()});
-  document.querySelectorAll('.uninstall-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'DELETE'});toast('Агента видалено');renderAgents()});
-  document.querySelectorAll('.start-negotiate').forEach(b=>b.onclick=async()=>{const out=await api('/api/agents/negotiations',{method:'POST',body:JSON.stringify({toAgentId:b.dataset.id,topic:'proposal',message:'Запит від Personal AI'})});toast(out.ok?'Переговори запропоновано — потрібне підтвердження':out.error);renderAgents()});
+  app.innerHTML=`<div class="card hero"><span class="eyebrow">AGENT MARKETPLACE</span><h1>${u('agentsForSylora')}</h1><p>${u('agentPermissionCopy')}</p></div>
+  <div class="stack">${agents.map(a=>`<div class="card item"><span class="eyebrow">${esc(a.category)} · ${esc(a.pricing?.model||'free')}</span><h3>${esc(a.name)}</h3><p data-user-content>${esc(a.summary)}</p><small>${u('permissions')}: ${(a.permissions||[]).map(esc).join(', ')||'—'}</small><div class="row">${installed.has(a.id)?`<button class="ghost uninstall-agent" data-id="${a.id}">${u('uninstall')}</button><button class="ghost start-negotiate" data-id="${a.id}">${u('aiProposal')}</button>`:`<button class="primary install-agent" data-id="${a.id}">${u('install')}</button>`}</div></div>`).join('')||`<div class="card empty">${u('noAgents')}</div>`}</div>`;
+  document.querySelectorAll('.install-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'POST',body:'{}'});toast(u('agentInstalled'));renderAgents()});
+  document.querySelectorAll('.uninstall-agent').forEach(b=>b.onclick=async()=>{await api(`/api/agents/${b.dataset.id}/install`,{method:'DELETE'});toast(u('agentUninstalled'));renderAgents()});
+  document.querySelectorAll('.start-negotiate').forEach(b=>b.onclick=async()=>{const out=await api('/api/agents/negotiations',{method:'POST',body:JSON.stringify({toAgentId:b.dataset.id,topic:'proposal',message:u('personalAiRequest')})});toast(out.ok?u('negotiationProposed'):humanError(out.error));renderAgents()});
 }
 async function renderDeveloper(){
   const {apps,oauth}=await api('/api/developer/apps');
