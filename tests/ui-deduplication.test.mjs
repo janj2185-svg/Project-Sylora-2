@@ -54,7 +54,7 @@ test('primary navigation labels participate in runtime localization', () => {
 test('LIVE setup reports real TikTok readiness instead of decorative integrations', () => {
   assert.match(app, /item\.enabled&&item\.provider==='tiktok'/);
   assert.match(app, /distribution\?\.configuration\?\.configured/);
-  assert.match(app, /ЗАПУСК У TIKTOK · ПО КРОКАХ/);
+  assert.match(app, /t\('tiktokStepLaunch'\)/);
   assert.match(app, /if\(state\.me&&tab==='create'\)tiktokPilotCleanup=/);
   assert.doesNotMatch(app, /<button class="active" type="button">Живий чат<\/button><button type="button">Гості<\/button><button type="button">Модерація<\/button>/);
   assert.doesNotMatch(app, /<div class="platform-pills"><i>TikTok<\/i><i>YouTube<\/i><i>OBS<\/i><i>TikFinity<\/i><\/div>/);
